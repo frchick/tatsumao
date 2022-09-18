@@ -5,6 +5,12 @@ import 'package:flutter_map/plugin_api.dart';
 import 'mydragmarker.dart';
 
 //----------------------------------------------------------------------------
+// グローバル変数
+
+// 家アイコンにマウスが乗っているか
+bool hoverHouseIson = false;
+
+//----------------------------------------------------------------------------
 // タツマデータ
 class TatsumaData {
   TatsumaData({
@@ -62,34 +68,6 @@ List<Member> members = [
   Member(name:"りんたろー", iconPath:"assets/member_icon/003.png", pos:LatLng(35.302880, 139.05200)),
 ];
 
-
-//----------------------------------------------------------------------------
-// ドラッグ終了時の処理
-LatLng onDragEndFunc(DragEndDetails details, LatLng point, MapState? mapState) {
-  // タツママーカーにスナップ
-  if (mapState != null) {
-    var pixelPos0 = mapState.project(point);
-    num minDist = (18.0 * 18.0);
-    tatsumas.forEach((element) {
-      var pixelPos1 = mapState.project(element.pos);
-      num dx = (pixelPos0.x - pixelPos1.x).abs();
-      num dy = (pixelPos0.y - pixelPos1.y).abs();
-      if ((dx < 16) && (dy < 16)) {
-        num d = (dx * dx) + (dy * dy);
-        if(d < minDist){
-          minDist = d;
-          point = element.pos;
-        }
-      }
-    });
-    if(minDist < (18.0 * 18.0)){
-      print("Snap!");
-    }
-  }
-  print("End point $point");
-  return point;
-}
-
 //----------------------------------------------------------------------------
 // メンバーマーカーの拡張クラス
 class MyDragMarker2 extends MyDragMarker {
@@ -103,7 +81,7 @@ class MyDragMarker2 extends MyDragMarker {
     super.feedbackOffset = const Offset(0.0, -36.0),
     super.onDragStart,
     super.onDragUpdate,
-    super.onDragEnd = onDragEndFunc,
+    super.onDragEnd,
     super.onTap,
     super.onLongPress,
     super.updateMapNearEdge = false, // experimental
@@ -111,7 +89,80 @@ class MyDragMarker2 extends MyDragMarker {
     super.nearEdgeSpeed = 1.0,
     super.rotateMarker = false,
     AnchorPos? anchorPos,
+    required super.index,
+    super.visible = true,
   }) {
+  }
+}
+
+
+//----------------------------------------------------------------------------
+// 遅延フェードアウト
+class MyFadeOut extends StatefulWidget {
+  final Widget child;
+  
+  // アニメーションの再生が終わったかのフラグ
+  // Widget側のメンバーは、インスタンスを作り直すごとにリセットされる。
+  // State側のメンバーは、インスタンスが作り直されても永続する？
+  bool _completed = false;
+
+  MyFadeOut({
+    required this.child,
+  }){}
+
+  @override
+  _MyFadeOutState createState() => _MyFadeOutState();
+}
+
+class _MyFadeOutState extends State<MyFadeOut>
+    with TickerProviderStateMixin
+{
+  late AnimationController _controller;
+  late Animation<double> _reverse;
+  late Animation<double> _animation;
+
+  @override
+  initState() {
+    super.initState();
+    // 1.5秒のアニメーション
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 1500),
+      vsync: this);
+    // 表示→フェードアウトとなるように、値を逆転
+    _reverse = Tween<double>(begin: 1.0, end: 0.0).animate(_controller);
+    // フェードアウトを遅延させる
+    _animation = CurvedAnimation(
+      parent: _reverse,
+      curve: Interval(0.0, 0.25, curve: Curves.easeIn),
+    );
+    // アニメーション終了時に非表示
+    _controller.addStatusListener((status) {
+      if (status == AnimationStatus.completed) {
+        setState(() {
+          widget._completed = true;
+        });
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // アニメーション開始
+    // アニメーション終了後の更新では、当然アニメーションの開始はしない。
+    if(!widget._completed){
+      _controller.forward(from: 0.0);
+    }
+
+    // アニメーションが終了していたら、Widgetを非表示にする。
+    return Visibility(
+      visible: !widget._completed,
+      child: FadeTransition(opacity: _animation, child: widget.child));
   }
 }
 
@@ -132,6 +183,9 @@ class _TestAppState extends State<TestApp> {
 
   // メンバーのマーカー配列
   List<MyDragMarker> memberMarkers = [];
+
+  // ポップアップメッセージ
+  late MyFadeOut popupMessage;
 
   @override
   void initState() {
@@ -155,14 +209,21 @@ class _TestAppState extends State<TestApp> {
     });
 
     // メンバーデータからマーカー配列を作成
+    int memberIndex = 0;
     members.forEach((element) {
       memberMarkers.add(
         MyDragMarker2(
           point: element.pos,
           builder: (ctx) => Image.asset(element.iconPath),
+          index: memberIndex,
+          onDragEnd: onDragEndFunc,
         )
       );
+      memberIndex++;
     });
+
+    // ポップアップメッセージ
+    popupMessage = MyFadeOut(child: Text(""));
   }
 
   @override
@@ -171,35 +232,110 @@ class _TestAppState extends State<TestApp> {
       home: Scaffold(
         body: Center(
           child: Container(
-            child: FlutterMap(
-              options: MapOptions(
-                allowPanningOnScrollingParent: false,
-                plugins: [
-                  MyDragMarkerPlugin(),
-                ],
-                center: LatLng(35.302894, 139.053848),
-                zoom: 16,
-                maxZoom: 18,
-              ),
-              nonRotatedLayers: [
-                TileLayerOptions(
-                  urlTemplate: "https://cyberjapandata.gsi.go.jp/xyz/hillshademap/{z}/{x}/{y}.png",
+            child: Stack(
+              children: [
+                // 地図
+                FlutterMap(
+                  options: MapOptions(
+                    allowPanningOnScrollingParent: false,
+                    plugins: [
+                      MyDragMarkerPlugin(),
+                    ],
+                    center: LatLng(35.302894, 139.053848),
+                    zoom: 16,
+                    maxZoom: 18,
+                  ),
+                  nonRotatedLayers: [
+                    TileLayerOptions(
+                      urlTemplate: "https://cyberjapandata.gsi.go.jp/xyz/hillshademap/{z}/{x}/{y}.png",
+                    ),
+                    TileLayerOptions(
+                      urlTemplate: "https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png",
+                      opacity: 0.64
+                    ),
+                    MarkerLayerOptions(
+                      markers: tatsumaMarkers
+                    ),
+                    MyDragMarkerPluginOptions(
+                      markers: memberMarkers,
+                    ),
+                  ],
                 ),
-                TileLayerOptions(
-                  urlTemplate: "https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png",
-                  opacity: 0.64
+                // 家アイコン
+                Align(
+                  alignment: Alignment(1.0, 1.0),
+                    child: ElevatedButton(
+                      child: Icon(Icons.home, size: 50),
+                      style: ElevatedButton.styleFrom(
+                        foregroundColor: Colors.grey.shade800,
+                        backgroundColor: Colors.transparent,
+                        shadowColor: Colors.transparent,
+                        fixedSize: Size(80,80),
+                      ),
+                      onPressed: (){},
+                      
+                      // 家アイコンの上でメンバーマーカーをドロップしたら帰宅、のためのフラグ記録
+                      onHover: (value){
+                        hoverHouseIson = value;
+                      }
+                    )
                 ),
-                MarkerLayerOptions(
-                  markers: tatsumaMarkers
+                // ポップアップメッセージ
+                Align(alignment:
+                  Alignment(0.0, 0.0),
+                  child: popupMessage
                 ),
-                MyDragMarkerPluginOptions(
-                  markers: memberMarkers,
-                ),
-              ],
+              ]
             ),
           ),
         ),
       ),
     );
+  }
+
+  // ドラッグ終了時の処理
+  LatLng onDragEndFunc(DragEndDetails details, LatLng point, int index, MapState? mapState) {
+    // 家アイコンに投げ込まれたら削除する
+    if(hoverHouseIson){
+        // メンバーマーカーを非表示にして再描画
+        setState((){
+          memberMarkers[index].visible = false;
+
+          // ポップアップメッセージ
+          String msg = members[index].name + " は家に帰った";
+          popupMessage = MyFadeOut(
+            child: Text(
+              msg,
+              style:TextStyle(fontWeight: FontWeight.bold),
+              textScaleFactor: 1.5,
+            )
+          );
+        });
+        
+        return point;
+    }
+
+    // タツママーカーにスナップ
+    if (mapState != null) {
+      var pixelPos0 = mapState.project(point);
+      num minDist = (18.0 * 18.0);
+      tatsumas.forEach((element) {
+        var pixelPos1 = mapState.project(element.pos);
+        num dx = (pixelPos0.x - pixelPos1.x).abs();
+        num dy = (pixelPos0.y - pixelPos1.y).abs();
+        if ((dx < 16) && (dy < 16)) {
+          num d = (dx * dx) + (dy * dy);
+          if(d < minDist){
+            minDist = d;
+            point = element.pos;
+          }
+        }
+      });
+    }
+    // メンバーデータを更新
+    members[index].pos = point;
+
+    print("End index $index, point $point");
+    return point;
   }
 }

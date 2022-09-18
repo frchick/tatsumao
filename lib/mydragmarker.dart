@@ -19,11 +19,14 @@ class MyDragMarkerPlugin implements MapPlugin {
             for (var marker in options.markers) {
               if (!_boundsContainsMarker(mapState, marker)) continue;
 
-              dragMarkers.add(MyDragMarkerWidget(
-                  mapState: mapState,
-                  marker: marker,
-                  stream: stream,
-                  options: options));
+              // 非表示のマーカーは登録しない！
+              if(marker.visible){
+                dragMarkers.add(MyDragMarkerWidget(
+                    mapState: mapState,
+                    marker: marker,
+                    stream: stream,
+                    options: options));
+              }
             }
             return Stack(children: dragMarkers);
           });
@@ -258,7 +261,8 @@ class _MyDragMarkerWidgetState extends State<MyDragMarkerWidget> {
     if (autoDragTimer != null) autoDragTimer?.cancel();
     if (widget.marker.onDragEnd != null) {
       MapState? mapState = widget.mapState;
-      widget.marker.point = widget.marker.onDragEnd!(details, widget.marker.point, mapState);
+      int index = widget.marker.index;
+      widget.marker.point = widget.marker.onDragEnd!(details, widget.marker.point, index, mapState);
     }
     setState(() {}); // Needed if using a feedback widget
   }
@@ -297,7 +301,7 @@ class MyDragMarker {
   final Offset feedbackOffset;
   final Function(DragStartDetails, LatLng)? onDragStart;
   final Function(DragUpdateDetails, LatLng)? onDragUpdate;
-  final LatLng Function(DragEndDetails, LatLng, MapState?)? onDragEnd;
+  final LatLng Function(DragEndDetails, LatLng, int, MapState?)? onDragEnd;
   final Function(LatLng)? onTap;
   final Function(LatLng)? onLongPress;
   final bool updateMapNearEdge;
@@ -305,6 +309,8 @@ class MyDragMarker {
   final double nearEdgeSpeed;
   final bool rotateMarker;
   late Anchor anchor;
+  final int index;
+  bool visible;
 
   MyDragMarker({
     required this.point,
@@ -324,6 +330,8 @@ class MyDragMarker {
     this.nearEdgeSpeed = 1.0,
     this.rotateMarker = true,
     AnchorPos? anchorPos,
+    required this.index,
+    this.visible = true,
   }) {
     anchor = Anchor.forPos(anchorPos, width, height);
   }
