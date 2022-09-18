@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:flutter_map/plugin_api.dart';
-import 'package:flutter_map_dragmarker/dragmarker.dart';
+import 'mydragmarker.dart';
 
 //----------------------------------------------------------------------------
 // タツマデータ
@@ -62,6 +62,59 @@ List<Member> members = [
   Member(name:"りんたろー", iconPath:"assets/member_icon/003.png", pos:LatLng(35.302880, 139.05200)),
 ];
 
+
+//----------------------------------------------------------------------------
+// ドラッグ終了時の処理
+LatLng onDragEndFunc(DragEndDetails details, LatLng point, MapState? mapState) {
+  // タツママーカーにスナップ
+  if (mapState != null) {
+    var pixelPos0 = mapState.project(point);
+    num minDist = (18.0 * 18.0);
+    tatsumas.forEach((element) {
+      var pixelPos1 = mapState.project(element.pos);
+      num dx = (pixelPos0.x - pixelPos1.x).abs();
+      num dy = (pixelPos0.y - pixelPos1.y).abs();
+      if ((dx < 16) && (dy < 16)) {
+        num d = (dx * dx) + (dy * dy);
+        if(d < minDist){
+          minDist = d;
+          point = element.pos;
+        }
+      }
+    });
+    if(minDist < (18.0 * 18.0)){
+      print("Snap!");
+    }
+  }
+  print("End point $point");
+  return point;
+}
+
+//----------------------------------------------------------------------------
+// メンバーマーカーの拡張クラス
+class MyDragMarker2 extends MyDragMarker {
+  MyDragMarker2({
+    required super.point,
+    super.builder,
+    super.feedbackBuilder,
+    super.width = 64.0,
+    super.height = 72.0,
+    super.offset = const Offset(0.0, -36.0),
+    super.feedbackOffset = const Offset(0.0, -36.0),
+    super.onDragStart,
+    super.onDragUpdate,
+    super.onDragEnd = onDragEndFunc,
+    super.onTap,
+    super.onLongPress,
+    super.updateMapNearEdge = false, // experimental
+    super.nearEdgeRatio = 2.0,
+    super.nearEdgeSpeed = 1.0,
+    super.rotateMarker = false,
+    AnchorPos? anchorPos,
+  }) {
+  }
+}
+
 //----------------------------------------------------------------------------
 
 void main() {
@@ -78,7 +131,7 @@ class _TestAppState extends State<TestApp> {
   List<Marker> tatsumaMarkers = [];
 
   // メンバーのマーカー配列
-  List<DragMarker> memberMarkers = [];
+  List<MyDragMarker> memberMarkers = [];
 
   @override
   void initState() {
@@ -104,23 +157,9 @@ class _TestAppState extends State<TestApp> {
     // メンバーデータからマーカー配列を作成
     members.forEach((element) {
       memberMarkers.add(
-        DragMarker(
+        MyDragMarker2(
           point: element.pos,
-
           builder: (ctx) => Image.asset(element.iconPath),
-          width: 64.0,
-          height: 72.0,
-          offset: const Offset(0.0, -36.0),
-          feedbackOffset: const Offset(0.0, -36.0),
-
-          onDragEnd: (details, point) =>
-              print("End point $point"),
-
-          updateMapNearEdge: true,
-          nearEdgeRatio: 2.0,
-          nearEdgeSpeed: 1.0,
-
-          rotateMarker: false
         )
       );
     });
@@ -136,7 +175,7 @@ class _TestAppState extends State<TestApp> {
               options: MapOptions(
                 allowPanningOnScrollingParent: false,
                 plugins: [
-                  DragMarkerPlugin(),
+                  MyDragMarkerPlugin(),
                 ],
                 center: LatLng(35.302894, 139.053848),
                 zoom: 16,
@@ -153,7 +192,7 @@ class _TestAppState extends State<TestApp> {
                 MarkerLayerOptions(
                   markers: tatsumaMarkers
                 ),
-                DragMarkerPluginOptions(
+                MyDragMarkerPluginOptions(
                   markers: memberMarkers,
                 ),
               ],

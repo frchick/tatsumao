@@ -63,7 +63,7 @@ packages:
     source: hosted
     version: "2.0.1"
   flutter_map:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: flutter_map
       url: "https://pub.dartlang.org"
