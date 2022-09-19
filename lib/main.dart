@@ -3,6 +3,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:flutter_map/plugin_api.dart';
 import 'mydragmarker.dart';
+import 'mydrag_target.dart';
 
 //----------------------------------------------------------------------------
 // グローバル変数
@@ -40,33 +41,47 @@ List<TatsumaData> tatsumas = [
   TatsumaData(pos:LatLng(35.29942, 139.04639), name:"沢の上"),
 ];
 
+// タツマのマーカー配列
+List<Marker> tatsumaMarkers = [];
+
 //----------------------------------------------------------------------------
 // メンバーデータ
 class Member {
   Member({
     required this.name,
     required this.iconPath,
-    required this.pos
+    required this.pos,
+    this.attended = false,
   });
-  late String name;
-  late String iconPath;
-  late LatLng pos;
+  String name;
+  String iconPath;
+  LatLng pos;
+  bool attended;
+  late Image icon0;
 }
 
 List<Member> members = [
-  Member(name:"ママっち", iconPath:"assets/member_icon/000.png", pos:LatLng(35.302880, 139.05200)),
-  Member(name:"パパっち", iconPath:"assets/member_icon/002.png", pos:LatLng(35.302880, 139.05200)),
-  Member(name:"高桑さん", iconPath:"assets/member_icon/006.png", pos:LatLng(35.302880, 139.05200)),
-  Member(name:"今村さん", iconPath:"assets/member_icon/007.png", pos:LatLng(35.302880, 139.05200)),
+  Member(name:"ママっち", iconPath:"assets/member_icon/000.png", pos:LatLng(35.302880, 139.05100), attended: true),
+  Member(name:"パパっち", iconPath:"assets/member_icon/002.png", pos:LatLng(35.302880, 139.05200), attended: true),
+  Member(name:"高桑さん", iconPath:"assets/member_icon/006.png", pos:LatLng(35.302880, 139.05300), attended: true),
+  Member(name:"今村さん", iconPath:"assets/member_icon/007.png", pos:LatLng(35.302880, 139.05400), attended: true),
   Member(name:"しゅうちゃん", iconPath:"assets/member_icon/004.png", pos:LatLng(35.302880, 139.05200)),
   Member(name:"まなみさん", iconPath:"assets/member_icon/008.png", pos:LatLng(35.302880, 139.05200)),
   Member(name:"がんちゃん", iconPath:"assets/member_icon/011.png", pos:LatLng(35.302880, 139.05200)),
   Member(name:"ガマさん", iconPath:"assets/member_icon/005.png", pos:LatLng(35.302880, 139.05200)),
   Member(name:"たかちん", iconPath:"assets/member_icon/009.png", pos:LatLng(35.302880, 139.05200)),
-  Member(name:"加藤さん", iconPath:"assets/member_icon/010.png", pos:LatLng(35.302880, 139.05200)),
+  Member(name:"加藤さん", iconPath:"assets/member_icon/010.png", pos:LatLng(35.302880, 139.05500), attended: true),
   Member(name:"娘っち", iconPath:"assets/member_icon/001.png", pos:LatLng(35.302880, 139.05200)),
   Member(name:"りんたろー", iconPath:"assets/member_icon/003.png", pos:LatLng(35.302880, 139.05200)),
 ];
+
+// メンバーのマーカー配列
+// 出動していないメンバー分もすべて作成。表示/非表示を設定しておく。
+List<MyDragMarker> memberMarkers = [];
+
+//----------------------------------------------------------------------------
+// 地図
+late MapController mainMapController;
 
 //----------------------------------------------------------------------------
 // メンバーマーカーの拡張クラス
@@ -167,6 +182,120 @@ class _MyFadeOutState extends State<MyFadeOut>
 }
 
 //----------------------------------------------------------------------------
+// 家ボタン＆メンバー一覧メニュー
+class HomeButtonWidget extends StatefulWidget {
+  HomeButtonWidget({super.key});
+
+  @override
+  State<HomeButtonWidget> createState() => _HomeButtonWidgetState();
+}
+
+class _HomeButtonWidgetState extends State<HomeButtonWidget>
+{
+  late StateSetter _setModalState;
+
+  // メンバー一覧メニューからドラッグして出動！
+  void onDragEndFunc(MyDraggableDetails details)
+  {
+    print("Draggable.onDragEnd: wasAccepted: ${details.wasAccepted}, velocity: ${details.velocity}, offset: ${details.offset}, data: ${details.data}");
+
+    // メニュー領域の再描画
+    if(_setModalState != null){
+      _setModalState((){
+        // データとマップ上マーカーを出動/表示状態に
+        int index = details.data;
+        members[index].attended = true;
+        memberMarkers[index].visible = true;
+      });
+    }
+
+    // 地図上のマーカーの再描画
+    // ここからは通常の方法で更新できないので、MapController 経由で地図を微妙に動かして再描画を走らせる。
+    // MyDragMarkerPlugin.createLayer() で作成した StreamBuilder が動作する。
+    const double jitter = 1.0/4096.0;
+    var center = mainMapController.center;
+    var zoom = mainMapController.zoom;
+    mainMapController!.move(center, zoom + jitter);
+    mainMapController!.move(center, zoom);
+  }
+
+  @override
+  void initState() {
+    super.initState();
+  }
+
+  @override
+  Widget build(BuildContext context)
+  {
+    return Align(
+      // 画面右下に配置
+      alignment: Alignment(1.0, 1.0),
+      // 家アイコンとそのスタイル
+      child: ElevatedButton(
+        child: Icon(Icons.home, size: 50),
+        style: ElevatedButton.styleFrom(
+          foregroundColor: Colors.grey.shade800,
+          backgroundColor: Colors.transparent,
+          shadowColor: Colors.transparent,
+          fixedSize: Size(80,80),
+        ),
+
+        // 家ボタンタップでメンバー一覧メニューを開く
+        onPressed: (){
+          // メンバー一覧メニューを開く
+          showModalBottomSheet<void>(
+            context: context,
+            builder: (BuildContext context) {
+              // メンバー一覧メニューの構築(再描画)
+              return StatefulBuilder(
+                builder: (context, StateSetter setModalState) {
+                  _setModalState = setModalState;
+                  // 出動していないメンバーのアイコンを並べる
+                  List<Widget> draggableIcons = [];
+                  int index = 0;
+                  members.forEach((member) {
+                    if(!member.attended){
+                      draggableIcons.add(
+                        MyDraggable<int>(
+                          data: index,
+                          child: member.icon0,
+                          feedback: member.icon0,
+                          childWhenDragging: Container(
+                            width: 64,
+                            height: 72,
+                          ),
+                          onDragEnd: onDragEndFunc,
+                        )
+                      );
+                    }
+                    index++;
+                  });
+                  return Container(
+                    height: 120,
+                    color: Colors.amber,
+                    child: Center(
+                      child: ListView(
+                        scrollDirection: Axis.horizontal,
+                        children : draggableIcons,
+                      ),
+                    ),
+                  );
+                },
+              );
+            },
+          );
+        },
+        
+        // 家アイコンの上でメンバーマーカーをドロップしたら帰宅、のためのフラグ記録
+        onHover: (value){
+          hoverHouseIson = value;
+        },
+      )
+    );
+  }
+}
+
+//----------------------------------------------------------------------------
 
 void main() {
   runApp(TestApp());
@@ -177,13 +306,8 @@ class TestApp extends StatefulWidget {
   _TestAppState createState() => _TestAppState();
 }
 
-class _TestAppState extends State<TestApp> {
-  // タツマのマーカー配列
-  List<Marker> tatsumaMarkers = [];
-
-  // メンバーのマーカー配列
-  List<MyDragMarker> memberMarkers = [];
-
+class _TestAppState extends State<TestApp>
+{
   // ポップアップメッセージ
   late MyFadeOut popupMessage;
 
@@ -210,18 +334,25 @@ class _TestAppState extends State<TestApp> {
 
     // メンバーデータからマーカー配列を作成
     int memberIndex = 0;
-    members.forEach((element) {
+    members.forEach((member) {
+      // アイコンを読み込んでおく
+      member.icon0 = Image.asset(member.iconPath, width:64, height:72);
+      // マーカーを作成
       memberMarkers.add(
         MyDragMarker2(
-          point: element.pos,
-          builder: (ctx) => Image.asset(element.iconPath),
+          point: member.pos,
+          builder: (ctx) => Image.asset(member.iconPath),
           index: memberIndex,
           onDragEnd: onDragEndFunc,
+          visible: member.attended,
         )
       );
       memberIndex++;
     });
 
+    // 地図コントローラを作成
+    mainMapController = MapController();
+  
     // ポップアップメッセージ
     popupMessage = MyFadeOut(child: Text(""));
   }
@@ -260,26 +391,12 @@ class _TestAppState extends State<TestApp> {
                       markers: memberMarkers,
                     ),
                   ],
+                  mapController: mainMapController,
                 ),
+
                 // 家アイコン
-                Align(
-                  alignment: Alignment(1.0, 1.0),
-                    child: ElevatedButton(
-                      child: Icon(Icons.home, size: 50),
-                      style: ElevatedButton.styleFrom(
-                        foregroundColor: Colors.grey.shade800,
-                        backgroundColor: Colors.transparent,
-                        shadowColor: Colors.transparent,
-                        fixedSize: Size(80,80),
-                      ),
-                      onPressed: (){},
-                      
-                      // 家アイコンの上でメンバーマーカーをドロップしたら帰宅、のためのフラグ記録
-                      onHover: (value){
-                        hoverHouseIson = value;
-                      }
-                    )
-                ),
+                HomeButtonWidget(),
+
                 // ポップアップメッセージ
                 Align(alignment:
                   Alignment(0.0, 0.0),
@@ -293,13 +410,16 @@ class _TestAppState extends State<TestApp> {
     );
   }
 
+  //---------------------------------------------------------------------------
   // ドラッグ終了時の処理
-  LatLng onDragEndFunc(DragEndDetails details, LatLng point, int index, MapState? mapState) {
+  LatLng onDragEndFunc(DragEndDetails details, LatLng point, int index, MapState? mapState)
+  {
     // 家アイコンに投げ込まれたら削除する
     if(hoverHouseIson){
         // メンバーマーカーを非表示にして再描画
         setState((){
           memberMarkers[index].visible = false;
+          members[index].attended = false;
 
           // ポップアップメッセージ
           String msg = members[index].name + " は家に帰った";
