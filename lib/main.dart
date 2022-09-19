@@ -244,7 +244,7 @@ class _HomeButtonWidgetState extends State<HomeButtonWidget>
       child: ElevatedButton(
         child: Icon(Icons.home, size: 50),
         style: ElevatedButton.styleFrom(
-          foregroundColor: Colors.grey.shade800,
+          foregroundColor: Colors.orange.shade900,
           backgroundColor: Colors.transparent,
           shadowColor: Colors.transparent,
           fixedSize: Size(80,80),
@@ -282,7 +282,7 @@ class _HomeButtonWidgetState extends State<HomeButtonWidget>
                   });
                   return Container(
                     height: 120,
-                    color: Colors.amber,
+                    color: Colors.brown.shade100,
                     child: Center(
                       child: ListView(
                         scrollDirection: Axis.horizontal,
