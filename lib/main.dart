@@ -199,6 +199,12 @@ class _HomeButtonWidgetState extends State<HomeButtonWidget>
   {
     print("Draggable.onDragEnd: wasAccepted: ${details.wasAccepted}, velocity: ${details.velocity}, offset: ${details.offset}, data: ${details.data}");
 
+    // ドラッグ座標からマーカーの緯度経度を計算
+    // ドラッグ座標はマーカー左上なので、下矢印の位置にオフセットする。
+    var px = details.offset.dx + 32;
+    var py = details.offset.dy + 72;
+    LatLng? point = mainMapController.pointToLatLng(CustomPoint(px, py));
+
     // メニュー領域の再描画
     if(_setModalState != null){
       _setModalState((){
@@ -206,6 +212,10 @@ class _HomeButtonWidgetState extends State<HomeButtonWidget>
         int index = details.data;
         members[index].attended = true;
         memberMarkers[index].visible = true;
+        if(point != null){
+          members[index].pos = point;
+          memberMarkers[index].point = point;
+        }
       });
     }
 
