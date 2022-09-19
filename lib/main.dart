@@ -434,10 +434,21 @@ class _TestAppState extends State<TestApp>
           // ポップアップメッセージ
           String msg = members[index].name + " は家に帰った";
           popupMessage = MyFadeOut(
-            child: Text(
-              msg,
-              style:TextStyle(fontWeight: FontWeight.bold),
-              textScaleFactor: 1.5,
+            child: Container(
+              padding: EdgeInsets.fromLTRB(25, 5, 25, 10),
+              decoration: BoxDecoration(
+                color: Colors.black,
+                borderRadius: BorderRadius.circular(5),
+              ),
+              child: Text(
+                msg,
+                style:TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: Colors.grey.shade200,
+                ),
+                textScaleFactor: 1.25,
+                textAlign: TextAlign.center,
+              ),
             )
           );
         });
