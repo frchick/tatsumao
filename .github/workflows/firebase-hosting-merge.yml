@@ -11,7 +11,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-      - run: npm
+      # -- ここから追記部分！ -- #
+      # Flutter のインストール clone がはやい
+      - name: Install Flutter
+        run: git clone https://github.com/flutter/flutter.git
+
+      # PATH を通す
+      - name: Add path
+        run: echo "$(pwd)/flutter/bin" >> $GITHUB_PATH
+
+      # パッケージのダウンロード
+      - name: Download Flutter packages
+        run: flutter pub get
+
+      - run: flutter build web
       - uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: '${{ secrets.GITHUB_TOKEN }}'
