@@ -410,6 +410,7 @@ class _TestAppState extends State<TestApp>
                 FlutterMap(
                   options: MapOptions(
                     allowPanningOnScrollingParent: false,
+                    interactiveFlags: InteractiveFlag.all & ~InteractiveFlag.rotate,
                     plugins: [
                       MyDragMarkerPlugin(),
                     ],
