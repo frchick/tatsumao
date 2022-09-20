@@ -8,8 +8,6 @@ import 'mydrag_target.dart';
 //----------------------------------------------------------------------------
 // グローバル変数
 
-// 家アイコンにマウスが乗っているか
-bool hoverHouseIson = false;
 
 //----------------------------------------------------------------------------
 // タツマデータ
@@ -82,6 +80,42 @@ List<MyDragMarker> memberMarkers = [];
 //----------------------------------------------------------------------------
 // 地図
 late MapController mainMapController;
+
+// 地図上のマーカーの再描画
+void updateMapView()
+{
+  // ここからは通常の方法で更新できないので、MapController 経由で地図を微妙に動かして再描画を走らせる。
+  // MyDragMarkerPlugin.createLayer() で作成した StreamBuilder が動作する。
+  const double jitter = 1.0/4096.0;
+  var center = mainMapController.center;
+  var zoom = mainMapController.zoom;
+  mainMapController!.move(center, zoom + jitter);
+  mainMapController!.move(center, zoom);
+}
+
+// 地図上のマーカーにスナップ
+LatLng snapToTatsuma(LatLng point)
+{
+  // 画面座標に変換してマーカーとの距離を判定
+  // マーカーサイズが16x16である前提
+  var pixelPos0 = mainMapController.latLngToScreenPoint(point);
+  num minDist = (18.0 * 18.0);
+  tatsumas.forEach((tatsuma) {
+    var pixelPos1 = mainMapController.latLngToScreenPoint(tatsuma.pos);
+    if((pixelPos0 != null) && (pixelPos1 != null)){
+      num dx = (pixelPos0.x - pixelPos1.x).abs();
+      num dy = (pixelPos0.y - pixelPos1.y).abs();
+      if ((dx < 16) && (dy < 16)) {
+        num d = (dx * dx) + (dy * dy);
+        if(d < minDist){
+          minDist = d;
+          point = tatsuma.pos;
+        }
+      }
+    }
+  });
+  return point;
+}
 
 //----------------------------------------------------------------------------
 // メンバーマーカーの拡張クラス
@@ -204,6 +238,10 @@ class _HomeButtonWidgetState extends State<HomeButtonWidget>
     var px = details.offset.dx + 32;
     var py = details.offset.dy + 72;
     LatLng? point = mainMapController.pointToLatLng(CustomPoint(px, py));
+    if(point == null) return;
+
+    // タツママーカーにスナップ
+    point = snapToTatsuma(point);
 
     // メニュー領域の再描画
     if(_setModalState != null){
@@ -220,13 +258,7 @@ class _HomeButtonWidgetState extends State<HomeButtonWidget>
     }
 
     // 地図上のマーカーの再描画
-    // ここからは通常の方法で更新できないので、MapController 経由で地図を微妙に動かして再描画を走らせる。
-    // MyDragMarkerPlugin.createLayer() で作成した StreamBuilder が動作する。
-    const double jitter = 1.0/4096.0;
-    var center = mainMapController.center;
-    var zoom = mainMapController.zoom;
-    mainMapController!.move(center, zoom + jitter);
-    mainMapController!.move(center, zoom);
+    updateMapView();
   }
 
   @override
@@ -295,11 +327,6 @@ class _HomeButtonWidgetState extends State<HomeButtonWidget>
             },
           );
         },
-        
-        // 家アイコンの上でメンバーマーカーをドロップしたら帰宅、のためのフラグ記録
-        onHover: (value){
-          hoverHouseIson = value;
-        },
       )
     );
   }
@@ -320,6 +347,9 @@ class _TestAppState extends State<TestApp>
 {
   // ポップアップメッセージ
   late MyFadeOut popupMessage;
+  
+  // ウィンドウサイズを参照するためのキー
+  GlobalKey scaffoldKey = GlobalKey();
 
   @override
   void initState() {
@@ -371,6 +401,7 @@ class _TestAppState extends State<TestApp>
   Widget build(BuildContext context) {
     return MaterialApp(
       home: Scaffold(
+        key: scaffoldKey,
         body: Center(
           child: Container(
             child: Stack(
@@ -408,8 +439,8 @@ class _TestAppState extends State<TestApp>
                 HomeButtonWidget(),
 
                 // ポップアップメッセージ
-                Align(alignment:
-                  Alignment(0.0, 0.0),
+                Align(
+                  alignment: Alignment(0.0, 0.0),
                   child: popupMessage
                 ),
               ]
@@ -422,61 +453,62 @@ class _TestAppState extends State<TestApp>
 
   //---------------------------------------------------------------------------
   // ドラッグ終了時の処理
-  LatLng onDragEndFunc(DragEndDetails details, LatLng point, int index, MapState? mapState)
+  LatLng onDragEndFunc(DragEndDetails details, LatLng point, Offset offset, int index, MapState? mapState)
   {
     // 家アイコンに投げ込まれたら削除する
-    if(hoverHouseIson){
+    // 画面右下にサイズ80x80で表示されている前提
+    final double width  = (scaffoldKey.currentContext?.size?.width ?? 0.0);
+    final double height = (scaffoldKey.currentContext?.size?.height ?? 0.0);
+    final bool dropToHouse = 
+      (0.0 < (offset.dx - (width - 80))) &&
+      (0.0 < (offset.dy - (height - 80)));
+    if(dropToHouse){
         // メンバーマーカーを非表示にして再描画
-        setState((){
-          memberMarkers[index].visible = false;
-          members[index].attended = false;
+        memberMarkers[index].visible = false;
+        members[index].attended = false;
+        updateMapView();
 
-          // ポップアップメッセージ
-          String msg = members[index].name + " は家に帰った";
-          popupMessage = MyFadeOut(
-            child: Container(
-              padding: EdgeInsets.fromLTRB(25, 5, 25, 10),
-              decoration: BoxDecoration(
-                color: Colors.black,
-                borderRadius: BorderRadius.circular(5),
-              ),
-              child: Text(
-                msg,
-                style:TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: Colors.grey.shade200,
-                ),
-                textScaleFactor: 1.25,
-                textAlign: TextAlign.center,
-              ),
-            )
-          );
-        });
+        // ポップアップメッセージ
+        String msg = members[index].name + " は家に帰った";
+        showPopupMessage(msg);
         
         return point;
     }
 
     // タツママーカーにスナップ
-    if (mapState != null) {
-      var pixelPos0 = mapState.project(point);
-      num minDist = (18.0 * 18.0);
-      tatsumas.forEach((element) {
-        var pixelPos1 = mapState.project(element.pos);
-        num dx = (pixelPos0.x - pixelPos1.x).abs();
-        num dy = (pixelPos0.y - pixelPos1.y).abs();
-        if ((dx < 16) && (dy < 16)) {
-          num d = (dx * dx) + (dy * dy);
-          if(d < minDist){
-            minDist = d;
-            point = element.pos;
-          }
-        }
-      });
-    }
+    point = snapToTatsuma(point);
+
     // メンバーデータを更新
     members[index].pos = point;
 
     print("End index $index, point $point");
     return point;
+  }
+
+  //---------------------------------------------------------------------------
+  // ポップアップメッセージの表示
+  void showPopupMessage(String message)
+  {
+    // ポップアップメッセージ
+    setState((){
+      popupMessage = MyFadeOut(
+        child: Container(
+          padding: EdgeInsets.fromLTRB(25, 5, 25, 10),
+          decoration: BoxDecoration(
+            color: Colors.black,
+            borderRadius: BorderRadius.circular(5),
+          ),
+          child: Text(
+            message,
+            style:TextStyle(
+              fontWeight: FontWeight.bold,
+              color: Colors.grey.shade200,
+            ),
+            textScaleFactor: 1.25,
+            textAlign: TextAlign.center,
+          ),
+        )
+      );
+    });
   }
 }

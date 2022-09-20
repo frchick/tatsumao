@@ -81,6 +81,7 @@ class _MyDragMarkerWidgetState extends State<MyDragMarkerWidget> {
   late LatLng markerPointStart;
   late LatLng oldDragPosition;
   bool isDragging = false;
+  Offset lastLocalOffset = Offset(0.0, 0.0);
 
   static Timer? autoDragTimer;
 
@@ -147,11 +148,13 @@ class _MyDragMarkerWidgetState extends State<MyDragMarkerWidget> {
     }
   }
 
-  void onPanStart(details) {
+  void onPanStart(DragStartDetails details) {
     isDragging = true;
     dragPosStart = _offsetToCrs(details.localPosition);
     markerPointStart =
         LatLng(widget.marker.point.latitude, widget.marker.point.longitude);
+
+    lastLocalOffset = details.localPosition;
 
     if (widget.marker.onDragStart != null) {
       widget.marker.onDragStart!(details, widget.marker.point);
@@ -230,6 +233,8 @@ class _MyDragMarkerWidgetState extends State<MyDragMarkerWidget> {
       updatePixelPos(marker.point);
     });
 
+    lastLocalOffset = details.localPosition;
+
     if (marker.onDragUpdate != null) {
       marker.onDragUpdate!(details, marker.point);
     }
@@ -256,13 +261,13 @@ class _MyDragMarkerWidgetState extends State<MyDragMarkerWidget> {
     }
   }
 
-  void onPanEnd(details) {
+  void onPanEnd(DragEndDetails details) {
     isDragging = false;
     if (autoDragTimer != null) autoDragTimer?.cancel();
     if (widget.marker.onDragEnd != null) {
       MapState? mapState = widget.mapState;
       int index = widget.marker.index;
-      widget.marker.point = widget.marker.onDragEnd!(details, widget.marker.point, index, mapState);
+      widget.marker.point = widget.marker.onDragEnd!(details, widget.marker.point, lastLocalOffset, index, mapState);
     }
     setState(() {}); // Needed if using a feedback widget
   }
@@ -301,7 +306,7 @@ class MyDragMarker {
   final Offset feedbackOffset;
   final Function(DragStartDetails, LatLng)? onDragStart;
   final Function(DragUpdateDetails, LatLng)? onDragUpdate;
-  final LatLng Function(DragEndDetails, LatLng, int, MapState?)? onDragEnd;
+  final LatLng Function(DragEndDetails, LatLng, Offset, int, MapState?)? onDragEnd;
   final Function(LatLng)? onTap;
   final Function(LatLng)? onLongPress;
   final bool updateMapNearEdge;
