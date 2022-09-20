@@ -21,9 +21,10 @@ jobs:
       - name: Download Flutter packages
         run: flutter pub get
 
-      - run: npm
       - uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: '${{ secrets.GITHUB_TOKEN }}'
           firebaseServiceAccount: '${{ secrets.FIREBASE_SERVICE_ACCOUNT_TATSUMAO_976E2 }}'
           projectId: tatsumao-976e2
+        env:
+          FIREBASE_CLI_PREVIEWS: hostingchannels
