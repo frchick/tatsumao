@@ -15,7 +15,7 @@ import 'firebase_options.dart';
 
 
 //----------------------------------------------------------------------------
-// タ��タ
+// タツマデータ
 class TatsumaData {
   TatsumaData({
     required this.pos,
@@ -26,29 +26,29 @@ class TatsumaData {
 }
 
 List<TatsumaData> tatsumas = [
-  TatsumaData(pos:LatLng(35.306227, 139.049396), name:"岩渰�索�),
-  TatsumaData(pos:LatLng(35.307217, 139.051598), name:"岩渰�中"),
-  TatsumaData(pos:LatLng(35.306809, 139.052676), name:"岩渰��),
-  TatsumaData(pos:LatLng(35.306282, 139.047802), name:"岩渰�"),
+  TatsumaData(pos:LatLng(35.306227, 139.049396), name:"岩清水索道"),
+  TatsumaData(pos:LatLng(35.307217, 139.051598), name:"岩清水中"),
+  TatsumaData(pos:LatLng(35.306809, 139.052676), name:"岩清水下"),
+  TatsumaData(pos:LatLng(35.306282, 139.047802), name:"岩清水"),
   TatsumaData(pos:LatLng(35.305798, 139.054232), name:"赤エル"),
   TatsumaData(pos:LatLng(35.30636, 139.05427), name:"裏赤エル"),
-  TatsumaData(pos:LatLng(35.305804, 139.055972), name:"ストッパ�"),
+  TatsumaData(pos:LatLng(35.305804, 139.055972), name:"ストッパー"),
   TatsumaData(pos:LatLng(35.304213, 139.046478), name:"新トナカイ"),
   TatsumaData(pos:LatLng(35.305561, 139.045259), name:"トナカイ"),
-  TatsumaData(pos:LatLng(35.302601, 139.04473), name:"�ロ岩の�),
-  TatsumaData(pos:LatLng(35.302488, 139.044131), name:"�ロ岩"),
+  TatsumaData(pos:LatLng(35.302601, 139.04473), name:"ムロ岩の先"),
+  TatsumaData(pos:LatLng(35.302488, 139.044131), name:"ムロ岩"),
   TatsumaData(pos:LatLng(35.301932, 139.043382), name:"スター"),
   TatsumaData(pos:LatLng(35.301166, 139.043601), name:"アメリカ"),
-  TatsumaData(pos:LatLng(35.300012, 139.044023), name:"太平�),
+  TatsumaData(pos:LatLng(35.300012, 139.044023), name:"太平洋"),
   TatsumaData(pos:LatLng(35.30026, 139.046538), name:"メキシコ"),
-  TatsumaData(pos:LatLng(35.29942, 139.04639), name:"沢の�),
+  TatsumaData(pos:LatLng(35.29942, 139.04639), name:"沢の上"),
 ];
 
-// タ�のマ�カー配�
+// タツマのマーカー配列
 List<Marker> tatsumaMarkers = [];
 
 //----------------------------------------------------------------------------
-// メンバ��タ
+// メンバーデータ
 class Member {
   Member({
     required this.name,
@@ -64,68 +64,69 @@ class Member {
 }
 
 List<Member> members = [
-  Member(name:"マ�っち", iconPath:"assets/member_icon/000.png", pos:LatLng(35.302880, 139.05100), attended: true),
+  Member(name:"ママっち", iconPath:"assets/member_icon/000.png", pos:LatLng(35.302880, 139.05100), attended: true),
   Member(name:"パパっち", iconPath:"assets/member_icon/002.png", pos:LatLng(35.302880, 139.05200), attended: true),
-  Member(name:"高桑さ�, iconPath:"assets/member_icon/006.png", pos:LatLng(35.302880, 139.05300), attended: true),
+  Member(name:"高桑さん", iconPath:"assets/member_icon/006.png", pos:LatLng(35.302880, 139.05300), attended: true),
   Member(name:"今村さん", iconPath:"assets/member_icon/007.png", pos:LatLng(35.302880, 139.05400), attended: true),
-  Member(name:"しゅぁ�も�", iconPath:"assets/member_icon/004.png", pos:LatLng(35.302880, 139.05200)),
+  Member(name:"しゅうちゃん", iconPath:"assets/member_icon/004.png", pos:LatLng(35.302880, 139.05200)),
   Member(name:"まなみさん", iconPath:"assets/member_icon/008.png", pos:LatLng(35.302880, 139.05200)),
-  Member(name:"がんちも�", iconPath:"assets/member_icon/011.png", pos:LatLng(35.302880, 139.05200)),
-  Member(name:"ガマさ�, iconPath:"assets/member_icon/005.png", pos:LatLng(35.302880, 139.05200)),
-  Member(name:"たかち�, iconPath:"assets/member_icon/009.png", pos:LatLng(35.302880, 139.05200)),
-  Member(name:"�藤さん", iconPath:"assets/member_icon/010.png", pos:LatLng(35.302880, 139.05500), attended: true),
+  Member(name:"がんちゃん", iconPath:"assets/member_icon/011.png", pos:LatLng(35.302880, 139.05200)),
+  Member(name:"ガマさん", iconPath:"assets/member_icon/005.png", pos:LatLng(35.302880, 139.05200)),
+  Member(name:"たかちん", iconPath:"assets/member_icon/009.png", pos:LatLng(35.302880, 139.05200)),
+  Member(name:"加藤さん", iconPath:"assets/member_icon/010.png", pos:LatLng(35.302880, 139.05500), attended: true),
   Member(name:"娘っち", iconPath:"assets/member_icon/001.png", pos:LatLng(35.302880, 139.05200)),
   Member(name:"りんたろー", iconPath:"assets/member_icon/003.png", pos:LatLng(35.302880, 139.05200)),
 ];
 
-// メンバ�のマ�カー配�
-// 出動してぁ�ぃ�ンバ�刂�すべて作�。表示/非表示を設定しておく�
+// メンバーのマーカー配列
+// 出動していないメンバー分もすべて作成。表示/非表示を設定しておく。
 List<MyDragMarker> memberMarkers = [];
 
 //----------------------------------------------------------------------------
-// メンバ��タの同期(firebase realtime database)
+// メンバーデータの同期(firebase realtime database)
 FirebaseDatabase database = FirebaseDatabase.instance;
 
 class MemberStateSync
 {
-  MemberStateSync();
-
+  // 初期化
   Future init() async
   {
     final DatabaseReference ref = database.ref("members");
     final DataSnapshot snapshot = await ref.get();
-    for(int i = 0; i < members.length; i++)
+    for(int index = 0; index < members.length; index++)
     {
-      Member member = members[i];
-      if (snapshot.hasChild("$i")) {
-        // �タベ�スから初期値を取�直前�状�
-        member.attended = snapshot.child("$i/attended").value as bool;
+      Member member = members[index];
+      final String id = index.toString().padLeft(3, '0');
+
+      if (snapshot.hasChild(id)) {
+        // メンバーデータがデータベースにあれば、初期値として取得(直前の状態)
+        member.attended = snapshot.child(id + "/attended").value as bool;
         member.pos = LatLng(
-          snapshot.child("$i/latitude").value as double,
-          snapshot.child("$i/longitude").value as double);
-        print("DB: Member entry exists. $i");
+          snapshot.child(id + "/latitude").value as double,
+          snapshot.child(id + "/longitude").value as double);
+        // 地図上に表示されているメンバーマーカーの情報も変更
+        memberMarkers[index].visible = member.attended;
+        memberMarkers[index].point = member.pos;
       } else {
-        // �タベ�スにエントリがなければ追�
-        await ref.set({
-          "$i/attended": member.attended,
-          "$i/latitude": member.pos.latitude,
-          "$i/longitude": member.pos.longitude,
-        });
-        print("DB: No member entry. $i");
+        // データベースにメンバーデータがなければ作成
+        update(index);
       }    
     }
   }
 
+  // メンバーマーカーの移動をデータベースへ反映
   void update(int index) async
   {
-    Member member = members[index];
-    DatabaseReference ref = database.ref("member/$index");
-    await ref.update({
-      "index": index,
+    final Member member = members[index];
+    final String id = index.toString().padLeft(3, '0');
+
+    DatabaseReference memberRef = database.ref("members/" + id);
+    final Map<String, dynamic> data = {
       "attended": member.attended,
       "latitude": member.pos.latitude,
       "longitude": member.pos.longitude,
-    });
+    };
+    memberRef.update(data);
   }
 }
 
@@ -134,11 +135,11 @@ class MemberStateSync
 // 地図
 late MapController mainMapController;
 
-// 地図上�マ�カーの再描画
+// 地図上のマーカーの再描画
 void updateMapView()
 {
-  // ここからは通常の方法で更新できな�で、MapController 経由で地図を微妙に動かして再描画を走らせる�
-  // MyDragMarkerPlugin.createLayer() で作�した StreamBuilder が動作する�
+  // ここからは通常の方法で更新できないので、MapController 経由で地図を微妙に動かして再描画を走らせる。
+  // MyDragMarkerPlugin.createLayer() で作成した StreamBuilder が動作する。
   const double jitter = 1.0/4096.0;
   var center = mainMapController.center;
   var zoom = mainMapController.zoom;
@@ -146,11 +147,11 @@ void updateMapView()
   mainMapController!.move(center, zoom);
 }
 
-// 地図上�マ�カーにスナッ�
+// 地図上のマーカーにスナップ
 LatLng snapToTatsuma(LatLng point)
 {
-  // 画面座標に変換してマ�カーとの距離を判�
-  // マ�カーサイズ�6x16である前提
+  // 画面座標に変換してマーカーとの距離を判定
+  // マーカーサイズが16x16である前提
   var pixelPos0 = mainMapController.latLngToScreenPoint(point);
   num minDist = (18.0 * 18.0);
   tatsumas.forEach((tatsuma) {
@@ -171,7 +172,7 @@ LatLng snapToTatsuma(LatLng point)
 }
 
 //----------------------------------------------------------------------------
-// メンバ�マ�カーの拡張クラス
+// メンバーマーカーの拡張クラス
 class MyDragMarker2 extends MyDragMarker {
   MyDragMarker2({
     required super.point,
@@ -199,13 +200,13 @@ class MyDragMarker2 extends MyDragMarker {
 
 
 //----------------------------------------------------------------------------
-// 遻�フェードアウ�
+// 遅延フェードアウト
 class MyFadeOut extends StatefulWidget {
   final Widget child;
   
   // アニメーションの再生が終わったかのフラグ
-  // Widget側のメンバ�は、インスタンスを作り直すごとにリセッ�される�
-  // State側のメンバ�は、インスタンスが作り直されても永続する�
+  // Widget側のメンバーは、インスタンスを作り直すごとにリセットされる。
+  // State側のメンバーは、インスタンスが作り直されても永続する？
   bool _completed = false;
 
   MyFadeOut({
@@ -226,18 +227,18 @@ class _MyFadeOutState extends State<MyFadeOut>
   @override
   initState() {
     super.initState();
-    // 1.5秒�アニメーション
+    // 1.5秒のアニメーション
     _controller = AnimationController(
       duration: const Duration(milliseconds: 1500),
       vsync: this);
-    // 表示→フェードアウトとなるよぁ�、値を逻�
+    // 表示→フェードアウトとなるように、値を逆転
     _reverse = Tween<double>(begin: 1.0, end: 0.0).animate(_controller);
-    // フェードアウトを遻�させ�
+    // フェードアウトを遅延させる
     _animation = CurvedAnimation(
       parent: _reverse,
       curve: Interval(0.0, 0.25, curve: Curves.easeIn),
     );
-    // アニメーション終亙�に非表示
+    // アニメーション終了時に非表示
     _controller.addStatusListener((status) {
       if (status == AnimationStatus.completed) {
         setState(() {
@@ -255,13 +256,13 @@ class _MyFadeOutState extends State<MyFadeOut>
 
   @override
   Widget build(BuildContext context) {
-    // アニメーション開�
-    // アニメーション終亾��更新では、当然アニメーションの開始�しな぀
+    // アニメーション開始
+    // アニメーション終了後の更新では、当然アニメーションの開始はしない。
     if(!widget._completed){
       _controller.forward(from: 0.0);
     }
 
-    // アニメーションが終亁�てぁ�ら、Widgetを非表示にする�
+    // アニメーションが終了していたら、Widgetを非表示にする。
     return Visibility(
       visible: !widget._completed,
       child: FadeTransition(opacity: _animation, child: widget.child));
@@ -269,7 +270,7 @@ class _MyFadeOutState extends State<MyFadeOut>
 }
 
 //----------------------------------------------------------------------------
-// 家ボタン��ンバ�一覧メニュー
+// 家ボタン＆メンバー一覧メニュー
 class HomeButtonWidget extends StatefulWidget {
   HomeButtonWidget({super.key});
 
@@ -281,26 +282,26 @@ class _HomeButtonWidgetState extends State<HomeButtonWidget>
 {
   late StateSetter _setModalState;
 
-  // メンバ�一覧メニューからドラヂ�して出動�
+  // メンバー一覧メニューからドラッグして出動！
   void onDragEndFunc(MyDraggableDetails details)
   {
     print("Draggable.onDragEnd: wasAccepted: ${details.wasAccepted}, velocity: ${details.velocity}, offset: ${details.offset}, data: ${details.data}");
 
-    // ドラヂ�座標から�ーカーの緯度経度を計�
-    // ドラヂ�座標�マ�カー左上なので、下矢印の位置にオフセッ�する�
+    // ドラッグ座標からマーカーの緯度経度を計算
+    // ドラッグ座標はマーカー左上なので、下矢印の位置にオフセットする。
     var px = details.offset.dx + 32;
     var py = details.offset.dy + 72;
     LatLng? point = mainMapController.pointToLatLng(CustomPoint(px, py));
     if(point == null) return;
 
-    // タ�マ�カーにスナッ�
+    // タツママーカーにスナップ
     point = snapToTatsuma(point);
 
     // メニュー領域の再描画
+    final int index = details.data;
     if(_setModalState != null){
       _setModalState((){
-        // �タとマップ上�ーカーを��表示状態に
-        int index = details.data;
+        // データとマップ上マーカーを出動/表示状態に
         members[index].attended = true;
         memberMarkers[index].visible = true;
         if(point != null){
@@ -310,8 +311,11 @@ class _HomeButtonWidgetState extends State<HomeButtonWidget>
       });
     }
 
-    // 地図上�マ�カーの再描画
+    // 地図上のマーカーの再描画
     updateMapView();
+
+    // データベースに変更を通知
+    MemberStateSync().update(index);
   }
 
   @override
@@ -325,7 +329,7 @@ class _HomeButtonWidgetState extends State<HomeButtonWidget>
     return Align(
       // 画面右下に配置
       alignment: Alignment(1.0, 1.0),
-      // 家アイコンとそ�スタイル
+      // 家アイコンとそのスタイル
       child: ElevatedButton(
         child: Icon(Icons.home, size: 50),
         style: ElevatedButton.styleFrom(
@@ -335,17 +339,17 @@ class _HomeButtonWidgetState extends State<HomeButtonWidget>
           fixedSize: Size(80,80),
         ),
 
-        // 家ボタンタ�でメンバ�一覧メニューを開�
+        // 家ボタンタップでメンバー一覧メニューを開く
         onPressed: (){
-          // メンバ�一覧メニューを開�
+          // メンバー一覧メニューを開く
           showModalBottomSheet<void>(
             context: context,
             builder: (BuildContext context) {
-              // メンバ�一覧メニューの構�再描画)
+              // メンバー一覧メニューの構築(再描画)
               return StatefulBuilder(
                 builder: (context, StateSetter setModalState) {
                   _setModalState = setModalState;
-                  // 出動してぁ�ぃ�ンバ�のアイコンを並べ�
+                  // 出動していないメンバーのアイコンを並べる
                   List<Widget> draggableIcons = [];
                   int index = 0;
                   members.forEach((member) {
@@ -387,12 +391,14 @@ class _HomeButtonWidgetState extends State<HomeButtonWidget>
 
 //----------------------------------------------------------------------------
 
-void main() {
+void main() async
+{
+  // Firebase を初期化
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,    
   );
 
-  // 地図コントローラを作�
+  // 地図コントローラを作成
   mainMapController = MapController();
 
   runApp(TestApp());
@@ -405,7 +411,7 @@ class TestApp extends StatefulWidget {
 
 class _TestAppState extends State<TestApp>
 {
-  // ポップア�メヂ�ージ
+  // ポップアップメッセージ
   late MyFadeOut popupMessage;
   
   // ウィンドウサイズを参照するためのキー
@@ -415,12 +421,7 @@ class _TestAppState extends State<TestApp>
   void initState() {
     super.initState();
 
-    // メンバ��タの初期値をデータベ�スから取�
-    MemberStateSync().init().then((res){
-      setState((){});
-    });
-  
-    // タ��タからマ�カー配�を作�
+    // タツマデータからマーカー配列を作成
     tatsumas.forEach((element) {
       tatsumaMarkers.add(Marker(
         point: element.pos,
@@ -437,12 +438,12 @@ class _TestAppState extends State<TestApp>
       ));
     });
 
-    // メンバ��タからマ�カー配�を作�
+    // メンバーデータからマーカー配列を作成
     int memberIndex = 0;
     members.forEach((member) {
       // アイコンを読み込んでおく
       member.icon0 = Image.asset(member.iconPath, width:64, height:72);
-      // マ�カーを作�
+      // マーカーを作成
       memberMarkers.add(
         MyDragMarker2(
           point: member.pos,
@@ -455,7 +456,12 @@ class _TestAppState extends State<TestApp>
       memberIndex++;
     });
 
-    // ポップア�メヂ�ージ
+    // メンバーデータの初期値をデータベースから取得
+    MemberStateSync().init().then((res){
+      setState((){});
+    });
+  
+    // ポップアップメッセージ
     popupMessage = MyFadeOut(child: Text(""));
   }
 
@@ -501,7 +507,7 @@ class _TestAppState extends State<TestApp>
                 // 家アイコン
                 HomeButtonWidget(),
 
-                // ポップア�メヂ�ージ
+                // ポップアップメッセージ
                 Align(
                   alignment: Alignment(0.0, 0.0),
                   child: popupMessage
@@ -515,44 +521,50 @@ class _TestAppState extends State<TestApp>
   }
 
   //---------------------------------------------------------------------------
-  // ドラヂ�終亙�の処�
+  // ドラッグ終了時の処理
   LatLng onDragEndFunc(DragEndDetails details, LatLng point, Offset offset, int index, MapState? mapState)
   {
     // 家アイコンに投げ込まれたら削除する
-    // 画面右下にサイズ80x80で表示されてあ�前提
+    // 画面右下にサイズ80x80で表示されている前提
     final double width  = (scaffoldKey.currentContext?.size?.width ?? 0.0);
     final double height = (scaffoldKey.currentContext?.size?.height ?? 0.0);
     final bool dropToHouse = 
       (0.0 < (offset.dx - (width - 80))) &&
       (0.0 < (offset.dy - (height - 80)));
     if(dropToHouse){
-        // メンバ�マ�カーを非表示にして再描画
+        // メンバーマーカーを非表示にして再描画
         memberMarkers[index].visible = false;
         members[index].attended = false;
         updateMapView();
 
-        // ポップア�メヂ�ージ
-        String msg = members[index].name + " は家に帰っ�;
+        // データベースに変更を通知
+        MemberStateSync().update(index);
+
+        // ポップアップメッセージ
+        String msg = members[index].name + " は家に帰った";
         showPopupMessage(msg);
         
         return point;
     }
 
-    // タ�マ�カーにスナッ�
+    // タツママーカーにスナップ
     point = snapToTatsuma(point);
 
-    // メンバ��タを更新
+    // メンバーデータを更新
     members[index].pos = point;
+
+    // データベースに変更を通知
+    MemberStateSync().update(index);
 
     print("End index $index, point $point");
     return point;
   }
 
   //---------------------------------------------------------------------------
-  // ポップア�メヂ�ージの表示
+  // ポップアップメッセージの表示
   void showPopupMessage(String message)
   {
-    // ポップア�メヂ�ージ
+    // ポップアップメッセージ
     setState((){
       popupMessage = MyFadeOut(
         child: Container(
