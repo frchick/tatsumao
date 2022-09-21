@@ -155,7 +155,7 @@ class MemberStateSync
       (member.pos.latitude != latitude) ||
       (member.pos.longitude != longitude);
     if(change){
-      print("onChangeMemberState() -> change");
+      print("onChangeMemberState(index:${index}) -> change");
       // メンバーデータとマーカーのパラメータを、データベースの値に更新
       member.attended = attended;
       member.pos = LatLng(latitude, longitude);
@@ -165,7 +165,7 @@ class MemberStateSync
       updateMapView();
     }
     else{
-      print("onChangeMemberState() -> stay");
+      print("onChangeMemberState(index:${index}) -> stay");
     }
   }
 }
