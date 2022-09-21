@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:flutter_map/plugin_api.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_database/firebase_database.dart';
+import 'firebase_options.dart';
 import 'mydragmarker.dart';
 import 'mydrag_target.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -80,19 +83,110 @@ List<Member> members = [
 List<MyDragMarker> memberMarkers = [];
 
 //----------------------------------------------------------------------------
+// メンバーデータの同期(firebase realtime database)
+FirebaseDatabase database = FirebaseDatabase.instance;
+
+class MemberStateSync
+{
+  // 初期化
+  Future init() async
+  {
+    final DatabaseReference ref = database.ref("members");
+    final DataSnapshot snapshot = await ref.get();
+    for(int index = 0; index < members.length; index++)
+    {
+      Member member = members[index];
+      final String id = index.toString().padLeft(3, '0');
+
+      if (snapshot.hasChild(id)) {
+        // メンバーデータがデータベースにあれば、初期値として取得(直前の状態)
+        member.attended = snapshot.child(id + "/attended").value as bool;
+        member.pos = LatLng(
+          snapshot.child(id + "/latitude").value as double,
+          snapshot.child(id + "/longitude").value as double);
+        // 地図上に表示されているメンバーマーカーの情報も変更
+        memberMarkers[index].visible = member.attended;
+        memberMarkers[index].point = member.pos;
+      } else {
+        // データベースにメンバーデータがなければ作成
+        update(index);
+      }    
+    }
+
+    // 他の利用者からの変更通知を登録
+    for(int index = 0; index < members.length; index++){
+      final String id = index.toString().padLeft(3, '0');
+      final DatabaseReference ref = database.ref("members/" + id);
+      ref.onValue.listen((DatabaseEvent event){
+        onChangeMemberState(index, event);
+      });
+    }
+  }
+
+  // メンバーマーカーの移動をデータベースへ反映
+  void update(final int index) async
+  {
+    final Member member = members[index];
+    final String id = index.toString().padLeft(3, '0');
+
+    DatabaseReference memberRef = database.ref("members/" + id);
+    final Map<String, dynamic> data = {
+      "attended": member.attended,
+      "latitude": member.pos.latitude,
+      "longitude": member.pos.longitude,
+    };
+    memberRef.update(data);
+  }
+
+  // 他の利用者からの通知変更
+  void onChangeMemberState(final int index, DatabaseEvent event)
+  {
+    final DataSnapshot snapshot = event.snapshot;
+    Member member = members[index];
+    MyDragMarker memberMarker = memberMarkers[index];
+
+    // ローカルのデータと変更がなければ、自分の変更に対する通知の可能性があるので、無視する。
+    final bool attended = snapshot.child("attended").value as bool;
+    final double latitude = snapshot.child("latitude").value as double;
+    final double longitude = snapshot.child("longitude").value as double;
+
+    final bool change =
+      (member.attended != attended) ||
+      (member.pos.latitude != latitude) ||
+      (member.pos.longitude != longitude);
+    if(change){
+      print("onChangeMemberState(index:${index}) -> change");
+      // メンバーデータとマーカーのパラメータを、データベースの値に更新
+      member.attended = attended;
+      member.pos = LatLng(latitude, longitude);
+      memberMarker.visible = member.attended;
+      memberMarker.point = member.pos;
+      // 再描画
+      updateMapView();
+    }
+    else{
+      print("onChangeMemberState(index:${index}) -> stay");
+    }
+  }
+}
+
+
+//----------------------------------------------------------------------------
 // 地図
 late MapController mainMapController;
 
 // 地図上のマーカーの再描画
 void updateMapView()
 {
+  if(mainMapController == null) return;
+
   // ここからは通常の方法で更新できないので、MapController 経由で地図を微妙に動かして再描画を走らせる。
   // MyDragMarkerPlugin.createLayer() で作成した StreamBuilder が動作する。
   const double jitter = 1.0/4096.0;
   var center = mainMapController.center;
   var zoom = mainMapController.zoom;
-  mainMapController!.move(center, zoom + jitter);
-  mainMapController!.move(center, zoom);
+  mainMapController.move(center, zoom + jitter);
+  mainMapController.move(center, zoom);
 }
 
 // 地図上のマーカーにスナップ
@@ -246,10 +340,10 @@ class _HomeButtonWidgetState extends State<HomeButtonWidget>
     point = snapToTatsuma(point);
 
     // メニュー領域の再描画
+    final int index = details.data;
     if(_setModalState != null){
       _setModalState((){
         // データとマップ上マーカーを出動/表示状態に
-        int index = details.data;
         members[index].attended = true;
         memberMarkers[index].visible = true;
         if(point != null){
@@ -261,6 +355,9 @@ class _HomeButtonWidgetState extends State<HomeButtonWidget>
 
     // 地図上のマーカーの再描画
     updateMapView();
+
+    // データベースに変更を通知
+    MemberStateSync().update(index);
   }
 
   @override
@@ -336,10 +433,16 @@ class _HomeButtonWidgetState extends State<HomeButtonWidget>
 
 //----------------------------------------------------------------------------
 
-void main() async {
+void main() async
+{
+  // Firebase を初期化
   await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
+    options: DefaultFirebaseOptions.currentPlatform,    
   );
+
+  // 地図コントローラを作成
+  mainMapController = MapController();
+
   runApp(TestApp());
 }
 
@@ -395,8 +498,10 @@ class _TestAppState extends State<TestApp>
       memberIndex++;
     });
 
-    // 地図コントローラを作成
-    mainMapController = MapController();
+    // メンバーデータの初期値をデータベースから取得
+    MemberStateSync().init().then((res){
+      setState((){});
+    });
   
     // ポップアップメッセージ
     popupMessage = MyFadeOut(child: Text(""));
@@ -474,6 +579,9 @@ class _TestAppState extends State<TestApp>
         members[index].attended = false;
         updateMapView();
 
+        // データベースに変更を通知
+        MemberStateSync().update(index);
+
         // ポップアップメッセージ
         String msg = members[index].name + " は家に帰った";
         showPopupMessage(msg);
@@ -486,6 +594,9 @@ class _TestAppState extends State<TestApp>
 
     // メンバーデータを更新
     members[index].pos = point;
+
+    // データベースに変更を通知
+    MemberStateSync().update(index);
 
     print("End index $index, point $point");
     return point;
