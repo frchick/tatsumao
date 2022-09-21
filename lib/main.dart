@@ -112,10 +112,19 @@ class MemberStateSync
         update(index);
       }    
     }
+
+    // 他の利用者からの変更通知を登録
+    for(int index = 0; index < members.length; index++){
+      final String id = index.toString().padLeft(3, '0');
+      final DatabaseReference ref = database.ref("members/" + id);
+      ref.onValue.listen((DatabaseEvent event){
+        onChangeMemberState(index, event);
+      });
+    }
   }
 
   // メンバーマーカーの移動をデータベースへ反映
-  void update(int index) async
+  void update(final int index) async
   {
     final Member member = members[index];
     final String id = index.toString().padLeft(3, '0');
@@ -128,6 +137,37 @@ class MemberStateSync
     };
     memberRef.update(data);
   }
+
+  // 他の利用者からの通知変更
+  void onChangeMemberState(final int index, DatabaseEvent event)
+  {
+    final DataSnapshot snapshot = event.snapshot;
+    Member member = members[index];
+    MyDragMarker memberMarker = memberMarkers[index];
+
+    // ローカルのデータと変更がなければ、自分の変更に対する通知の可能性があるので、無視する。
+    final bool attended = snapshot.child("attended").value as bool;
+    final double latitude = snapshot.child("latitude").value as double;
+    final double longitude = snapshot.child("longitude").value as double;
+
+    final bool change =
+      (member.attended != attended) ||
+      (member.pos.latitude != latitude) ||
+      (member.pos.longitude != longitude);
+    if(change){
+      print("onChangeMemberState() -> change");
+      // メンバーデータとマーカーのパラメータを、データベースの値に更新
+      member.attended = attended;
+      member.pos = LatLng(latitude, longitude);
+      memberMarker.visible = member.attended;
+      memberMarker.point = member.pos;
+      // 再描画
+      updateMapView();
+    }
+    else{
+      print("onChangeMemberState() -> stay");
+    }
+  }
 }
 
 
@@ -138,13 +178,15 @@ late MapController mainMapController;
 // 地図上のマーカーの再描画
 void updateMapView()
 {
+  if(mainMapController == null) return;
+
   // ここからは通常の方法で更新できないので、MapController 経由で地図を微妙に動かして再描画を走らせる。
   // MyDragMarkerPlugin.createLayer() で作成した StreamBuilder が動作する。
   const double jitter = 1.0/4096.0;
   var center = mainMapController.center;
   var zoom = mainMapController.zoom;
-  mainMapController!.move(center, zoom + jitter);
-  mainMapController!.move(center, zoom);
+  mainMapController.move(center, zoom + jitter);
+  mainMapController.move(center, zoom);
 }
 
 // 地図上のマーカーにスナップ
