@@ -4,6 +4,8 @@ import 'package:latlong2/latlong.dart';
 import 'package:flutter_map/plugin_api.dart';
 import 'mydragmarker.dart';
 import 'mydrag_target.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
 
 //----------------------------------------------------------------------------
 // グローバル変数
@@ -334,7 +336,10 @@ class _HomeButtonWidgetState extends State<HomeButtonWidget>
 
 //----------------------------------------------------------------------------
 
-void main() {
+void main() async {
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
   runApp(TestApp());
 }
 

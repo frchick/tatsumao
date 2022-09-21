@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "141848678365",
+    "firebase_url": "https://tatsumao-976e2-default-rtdb.asia-southeast1.firebasedatabase.app",
+    "project_id": "tatsumao-976e2",
+    "storage_bucket": "tatsumao-976e2.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:141848678365:android:8a3f6d4c4dd65006973034",
+        "android_client_info": {
+          "package_name": "com.example.tatsumao"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "141848678365-n6ch1dgskc6n8lvdn5thsd2ulf6u14nv.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCmzrKt3vFpnTRn0mPrhostoBD4NcJbNz0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "141848678365-n6ch1dgskc6n8lvdn5thsd2ulf6u14nv.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "141848678365-ub928nlpavat06jcrqk21v654u6uj1t8.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.tatsumao"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
