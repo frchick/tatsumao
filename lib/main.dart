@@ -9,6 +9,7 @@ import 'mydragmarker.dart';
 import 'mydrag_target.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
+import 'dart:async';
 
 //----------------------------------------------------------------------------
 // グローバル変数
@@ -86,6 +87,9 @@ List<MyDragMarker> memberMarkers = [];
 // メンバーデータの同期(firebase realtime database)
 FirebaseDatabase database = FirebaseDatabase.instance;
 
+// このアプリケーションインスタンスを一意に識別するキー
+final String appInstKey = UniqueKey().toString();
+
 class MemberStateSync
 {
   // 初期化
@@ -123,49 +127,47 @@ class MemberStateSync
     }
   }
 
-  // メンバーマーカーの移動をデータベースへ反映
+  // メンバーマーカーの移動を他のユーザーへ同期
   void update(final int index) async
   {
     final Member member = members[index];
     final String id = index.toString().padLeft(3, '0');
 
     DatabaseReference memberRef = database.ref("members/" + id);
-    final Map<String, dynamic> data = {
+    memberRef.update({
+      "sender_id": appInstKey,
       "attended": member.attended,
       "latitude": member.pos.latitude,
-      "longitude": member.pos.longitude,
-    };
-    memberRef.update(data);
+      "longitude": member.pos.longitude
+    });
   }
 
-  // 他の利用者からの通知変更
+  // 他の利用者からの同期通知による変更
   void onChangeMemberState(final int index, DatabaseEvent event)
   {
     final DataSnapshot snapshot = event.snapshot;
-    Member member = members[index];
-    MyDragMarker memberMarker = memberMarkers[index];
 
-    // ローカルのデータと変更がなければ、自分の変更に対する通知の可能性があるので、無視する。
-    final bool attended = snapshot.child("attended").value as bool;
-    final double latitude = snapshot.child("latitude").value as double;
-    final double longitude = snapshot.child("longitude").value as double;
-
-    final bool change =
-      (member.attended != attended) ||
-      (member.pos.latitude != latitude) ||
-      (member.pos.longitude != longitude);
-    if(change){
-      print("onChangeMemberState(index:${index}) -> change");
+    // 自分が送った変更には(当然)反応しない。送信者IDと自分のIDを比較する。
+    final String sender_id = snapshot.child("sender_id").value as String;
+    final bool fromOther =
+      (sender_id != appInstKey) &&
+      (event.type == DatabaseEventType.value);
+    if(fromOther){
+      print("onChangeMemberState(index:${index}) -> from other");
       // メンバーデータとマーカーのパラメータを、データベースの値に更新
-      member.attended = attended;
-      member.pos = LatLng(latitude, longitude);
+      Member member = members[index];
+      member.attended = snapshot.child("attended").value as bool;
+      member.pos = LatLng(
+        snapshot.child("latitude").value as double,
+        snapshot.child("longitude").value as double);
+      MyDragMarker memberMarker = memberMarkers[index];
       memberMarker.visible = member.attended;
       memberMarker.point = member.pos;
       // 再描画
       updateMapView();
     }
     else{
-      print("onChangeMemberState(index:${index}) -> stay");
+      print("onChangeMemberState(index:${index}) -> myself");
     }
   }
 }
@@ -491,6 +493,8 @@ class _TestAppState extends State<TestApp>
           point: member.pos,
           builder: (ctx) => Image.asset(member.iconPath),
           index: memberIndex,
+          onDragStart: onDragStartFunc,
+          onDragUpdate: onDragUpdateFunc,
           onDragEnd: onDragEndFunc,
           visible: member.attended,
         )
@@ -562,10 +566,43 @@ class _TestAppState extends State<TestApp>
     );
   }
 
+
+  //---------------------------------------------------------------------------
+  // ドラッグ中、マーカー座標をデータベースに同期する実装
+  void onDragStartFunc(DragStartDetails details, LatLng point, int index)
+  {
+    // ドラッグ中の連続同期のためのタイマーをスタート
+    Timer.periodic(Duration(milliseconds: 250), (Timer timer){
+      _draggingTimer = timer;
+      // 直前に同期した座標から動いていたら変更を通知
+      if(_lastDraggingPoiny != members[index].pos){
+        _lastDraggingPoiny = members[index].pos;
+        MemberStateSync().update(index);
+      }
+    });
+  }
+
+  void onDragUpdateFunc(DragUpdateDetails detils, LatLng point, int index)
+  {
+    // メンバーデータを更新(ドラッグ中の連続同期のために)
+    members[index].pos = point;
+  }
+
+  // 最後にデータベースに同期したドラッグ座標
+  LatLng _lastDraggingPoiny = LatLng(0,0);
+  // ドラッグ中の連続同期のためのタイマー
+  Timer? _draggingTimer;
+
   //---------------------------------------------------------------------------
   // ドラッグ終了時の処理
   LatLng onDragEndFunc(DragEndDetails details, LatLng point, Offset offset, int index, MapState? mapState)
   {
+    // ドラッグ中の連続同期のためのタイマーを停止
+    if(_draggingTimer != null){
+      _draggingTimer!.cancel();
+      _draggingTimer = null;
+    }
+
     // 家アイコンに投げ込まれたら削除する
     // 画面右下にサイズ80x80で表示されている前提
     final double width  = (scaffoldKey.currentContext?.size?.width ?? 0.0);

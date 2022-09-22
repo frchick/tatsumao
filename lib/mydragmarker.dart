@@ -157,7 +157,7 @@ class _MyDragMarkerWidgetState extends State<MyDragMarkerWidget> {
     lastLocalOffset = details.localPosition;
 
     if (widget.marker.onDragStart != null) {
-      widget.marker.onDragStart!(details, widget.marker.point);
+      widget.marker.onDragStart!(details, widget.marker.point, widget.marker.index);
     }
   }
 
@@ -236,7 +236,7 @@ class _MyDragMarkerWidgetState extends State<MyDragMarkerWidget> {
     lastLocalOffset = details.localPosition;
 
     if (marker.onDragUpdate != null) {
-      marker.onDragUpdate!(details, marker.point);
+      marker.onDragUpdate!(details, marker.point, widget.marker.index);
     }
   }
 
@@ -304,8 +304,8 @@ class MyDragMarker {
   final double height;
   final Offset offset;
   final Offset feedbackOffset;
-  final Function(DragStartDetails, LatLng)? onDragStart;
-  final Function(DragUpdateDetails, LatLng)? onDragUpdate;
+  final Function(DragStartDetails, LatLng, int)? onDragStart;
+  final Function(DragUpdateDetails, LatLng, int)? onDragUpdate;
   final LatLng Function(DragEndDetails, LatLng, Offset, int, MapState?)? onDragEnd;
   final Function(LatLng)? onTap;
   final Function(LatLng)? onLongPress;
