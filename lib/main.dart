@@ -83,95 +83,6 @@ List<Member> members = [
 // 出動していないメンバー分もすべて作成。表示/非表示を設定しておく。
 List<MyDragMarker> memberMarkers = [];
 
-//----------------------------------------------------------------------------
-// メンバーデータの同期(firebase realtime database)
-FirebaseDatabase database = FirebaseDatabase.instance;
-
-// このアプリケーションインスタンスを一意に識別するキー
-final String appInstKey = UniqueKey().toString();
-
-class MemberStateSync
-{
-  // 初期化
-  Future init() async
-  {
-    final DatabaseReference ref = database.ref("members");
-    final DataSnapshot snapshot = await ref.get();
-    for(int index = 0; index < members.length; index++)
-    {
-      Member member = members[index];
-      final String id = index.toString().padLeft(3, '0');
-
-      if (snapshot.hasChild(id)) {
-        // メンバーデータがデータベースにあれば、初期値として取得(直前の状態)
-        member.attended = snapshot.child(id + "/attended").value as bool;
-        member.pos = LatLng(
-          snapshot.child(id + "/latitude").value as double,
-          snapshot.child(id + "/longitude").value as double);
-        // 地図上に表示されているメンバーマーカーの情報も変更
-        memberMarkers[index].visible = member.attended;
-        memberMarkers[index].point = member.pos;
-      } else {
-        // データベースにメンバーデータがなければ作成
-        update(index);
-      }    
-    }
-
-    // 他の利用者からの変更通知を登録
-    for(int index = 0; index < members.length; index++){
-      final String id = index.toString().padLeft(3, '0');
-      final DatabaseReference ref = database.ref("members/" + id);
-      ref.onValue.listen((DatabaseEvent event){
-        onChangeMemberState(index, event);
-      });
-    }
-  }
-
-  // メンバーマーカーの移動を他のユーザーへ同期
-  void update(final int index) async
-  {
-    final Member member = members[index];
-    final String id = index.toString().padLeft(3, '0');
-
-    DatabaseReference memberRef = database.ref("members/" + id);
-    memberRef.update({
-      "sender_id": appInstKey,
-      "attended": member.attended,
-      "latitude": member.pos.latitude,
-      "longitude": member.pos.longitude
-    });
-  }
-
-  // 他の利用者からの同期通知による変更
-  void onChangeMemberState(final int index, DatabaseEvent event)
-  {
-    final DataSnapshot snapshot = event.snapshot;
-
-    // 自分が送った変更には(当然)反応しない。送信者IDと自分のIDを比較する。
-    final String sender_id = snapshot.child("sender_id").value as String;
-    final bool fromOther =
-      (sender_id != appInstKey) &&
-      (event.type == DatabaseEventType.value);
-    if(fromOther){
-      print("onChangeMemberState(index:${index}) -> from other");
-      // メンバーデータとマーカーのパラメータを、データベースの値に更新
-      Member member = members[index];
-      member.attended = snapshot.child("attended").value as bool;
-      member.pos = LatLng(
-        snapshot.child("latitude").value as double,
-        snapshot.child("longitude").value as double);
-      MyDragMarker memberMarker = memberMarkers[index];
-      memberMarker.visible = member.attended;
-      memberMarker.point = member.pos;
-      // 再描画
-      updateMapView();
-    }
-    else{
-      print("onChangeMemberState(index:${index}) -> myself");
-    }
-  }
-}
-
 
 //----------------------------------------------------------------------------
 // 地図
@@ -359,7 +270,7 @@ class _HomeButtonWidgetState extends State<HomeButtonWidget>
     updateMapView();
 
     // データベースに変更を通知
-    MemberStateSync().update(index);
+    _TestAppState().syncMemberState(index);
   }
 
   @override
@@ -434,7 +345,8 @@ class _HomeButtonWidgetState extends State<HomeButtonWidget>
 }
 
 //----------------------------------------------------------------------------
-
+//----------------------------------------------------------------------------
+// アプリケーション
 void main() async
 {
   // Firebase を初期化
@@ -502,13 +414,13 @@ class _TestAppState extends State<TestApp>
       memberIndex++;
     });
 
-    // メンバーデータの初期値をデータベースから取得
-    MemberStateSync().init().then((res){
-      setState((){});
-    });
-  
     // ポップアップメッセージ
     popupMessage = MyFadeOut(child: Text(""));
+
+    // メンバーデータの初期値をデータベースから取得
+    initMemberSync().then((res){
+      setState((){});
+    });
   }
 
   @override
@@ -568,6 +480,8 @@ class _TestAppState extends State<TestApp>
 
 
   //---------------------------------------------------------------------------
+  // メンバーマーカーのドラッグ
+
   // ドラッグ中、マーカー座標をデータベースに同期する実装
   void onDragStartFunc(DragStartDetails details, LatLng point, int index)
   {
@@ -577,7 +491,7 @@ class _TestAppState extends State<TestApp>
       // 直前に同期した座標から動いていたら変更を通知
       if(_lastDraggingPoiny != members[index].pos){
         _lastDraggingPoiny = members[index].pos;
-        MemberStateSync().update(index);
+        syncMemberState(index);
       }
     });
   }
@@ -593,7 +507,6 @@ class _TestAppState extends State<TestApp>
   // ドラッグ中の連続同期のためのタイマー
   Timer? _draggingTimer;
 
-  //---------------------------------------------------------------------------
   // ドラッグ終了時の処理
   LatLng onDragEndFunc(DragEndDetails details, LatLng point, Offset offset, int index, MapState? mapState)
   {
@@ -617,7 +530,7 @@ class _TestAppState extends State<TestApp>
         updateMapView();
 
         // データベースに変更を通知
-        MemberStateSync().update(index);
+        syncMemberState(index);
 
         // ポップアップメッセージ
         String msg = members[index].name + " は家に帰った";
@@ -633,10 +546,110 @@ class _TestAppState extends State<TestApp>
     members[index].pos = point;
 
     // データベースに変更を通知
-    MemberStateSync().update(index);
+    syncMemberState(index);
 
     print("End index $index, point $point");
     return point;
+  }
+
+  //---------------------------------------------------------------------------
+  // メンバーデータの同期(firebase realtime database)
+  FirebaseDatabase database = FirebaseDatabase.instance;
+
+  // このアプリケーションインスタンスを一意に識別するキー
+  final String appInstKey = UniqueKey().toString();
+
+  // 初期化
+  Future initMemberSync() async
+  {
+    final DatabaseReference ref = database.ref("members");
+    final DataSnapshot snapshot = await ref.get();
+    for(int index = 0; index < members.length; index++)
+    {
+      Member member = members[index];
+      final String id = index.toString().padLeft(3, '0');
+
+      if (snapshot.hasChild(id)) {
+        // メンバーデータがデータベースにあれば、初期値として取得(直前の状態)
+        member.attended = snapshot.child(id + "/attended").value as bool;
+        member.pos = LatLng(
+          snapshot.child(id + "/latitude").value as double,
+          snapshot.child(id + "/longitude").value as double);
+        // 地図上に表示されているメンバーマーカーの情報も変更
+        memberMarkers[index].visible = member.attended;
+        memberMarkers[index].point = member.pos;
+      } else {
+        // データベースにメンバーデータがなければ作成
+        syncMemberState(index);
+      }    
+    }
+
+    // 他の利用者からの変更通知を登録
+    for(int index = 0; index < members.length; index++){
+      final String id = index.toString().padLeft(3, '0');
+      final DatabaseReference ref = database.ref("members/" + id);
+      ref.onValue.listen((DatabaseEvent event){
+        onChangeMemberState(index, event);
+      });
+    }
+  }
+
+  // メンバーマーカーの移動を他のユーザーへ同期
+  void syncMemberState(final int index) async
+  {
+    final Member member = members[index];
+    final String id = index.toString().padLeft(3, '0');
+
+    DatabaseReference memberRef = database.ref("members/" + id);
+    memberRef.update({
+      "sender_id": appInstKey,
+      "attended": member.attended,
+      "latitude": member.pos.latitude,
+      "longitude": member.pos.longitude
+    });
+  }
+
+  // 他の利用者からの同期通知による変更
+  void onChangeMemberState(final int index, DatabaseEvent event)
+  {
+    final DataSnapshot snapshot = event.snapshot;
+
+    // 自分が送った変更には(当然)反応しない。送信者IDと自分のIDを比較する。
+    final String sender_id = snapshot.child("sender_id").value as String;
+    final bool fromOther =
+      (sender_id != appInstKey) &&
+      (event.type == DatabaseEventType.value);
+    if(fromOther){
+      print("onChangeMemberState(index:${index}) -> from other");
+      // メンバーデータとマーカーのパラメータを、データベースの値に更新
+      Member member = members[index];
+      final bool attended = snapshot.child("attended").value as bool;
+      final bool returnToHome = (member.attended && !attended);
+      final bool joinToTeam = (!member.attended && attended);
+      member.attended = attended;
+      member.pos = LatLng(
+        snapshot.child("latitude").value as double,
+        snapshot.child("longitude").value as double);
+      MyDragMarker memberMarker = memberMarkers[index];
+      memberMarker.visible = member.attended;
+      memberMarker.point = member.pos;
+
+      // マーカーの再描画
+      updateMapView();
+
+      // 家に帰った/参加したポップアップメッセージ
+      if(returnToHome){
+        String msg = members[index].name + " は家に帰った";
+        showPopupMessage(msg);
+      }
+      else if(joinToTeam){
+        String msg = members[index].name + " が参加した";
+        showPopupMessage(msg);
+      }
+    }
+    else{
+      print("onChangeMemberState(index:${index}) -> myself");
+    }
   }
 
   //---------------------------------------------------------------------------
