@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:flutter_map/plugin_api.dart';
@@ -331,8 +332,9 @@ class _HomeButtonWidgetState extends State<HomeButtonWidget>
                   int index = 0;
                   members.forEach((member) {
                     if(!member.attended){
-                      draggableIcons.add(
-                        MyDraggable<int>(
+                      draggableIcons.add(Align(
+                        alignment: Alignment(0.0, -0.8),
+                        child: MyDraggable<int>(
                           data: index,
                           child: member.icon0,
                           feedback: member.icon0,
@@ -342,14 +344,16 @@ class _HomeButtonWidgetState extends State<HomeButtonWidget>
                           ),
                           onDragEnd: onDragEndFunc,
                         )
-                      );
+                      ));
                     }
                     index++;
                   });
+                  // 高さ120ドット、横スクロールのリストビュー
                   return Container(
                     height: 120,
                     color: Colors.brown.shade100,
-                    child: Center(
+                    child: Scrollbar(
+                      thumbVisibility: true,
                       child: ListView(
                         scrollDirection: Axis.horizontal,
                         children : draggableIcons,
@@ -369,6 +373,16 @@ class _HomeButtonWidgetState extends State<HomeButtonWidget>
 //----------------------------------------------------------------------------
 //----------------------------------------------------------------------------
 // アプリケーション
+
+// PC WEB環境で、マウスドラッグによるWidgetのスクロールを有効にするおまじない。
+class MyCustomScrollBehavior extends MaterialScrollBehavior {
+  // Override behavior methods and getters like dragDevices
+  @override
+  Set<PointerDeviceKind> get dragDevices => {
+        PointerDeviceKind.touch,
+        PointerDeviceKind.mouse,
+      };
+}
 void main() async
 {
   // Firebase を初期化
@@ -448,6 +462,7 @@ class _TestAppState extends State<TestApp>
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      scrollBehavior: MyCustomScrollBehavior(),
       home: Scaffold(
         key: scaffoldKey,
         body: Center(
