@@ -10,10 +10,18 @@ import 'mydrag_target.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 import 'dart:async';
+import 'package:flutter/services.dart';
 
 //----------------------------------------------------------------------------
 // グローバル変数
 
+// アイコンボタン共通のスタイル
+final ButtonStyle _appIconButtonStyle = ElevatedButton.styleFrom(
+  foregroundColor: Colors.orange.shade900,
+  backgroundColor: Colors.transparent,
+  shadowColor: Colors.transparent,
+  fixedSize: Size(80,80),
+);
 
 //----------------------------------------------------------------------------
 // タツマデータ
@@ -47,6 +55,26 @@ List<TatsumaData> tatsumas = [
 
 // タツマのマーカー配列
 List<Marker> tatsumaMarkers = [];
+
+// 座標からタツマデータを参照
+TatsumaData? searchTatsumaByPoint(LatLng point)
+{
+  // 同じ座標のタツマを探して返す。
+  // 誤差0.0001度(約1[m])での一致判定。
+  const double th = (0.0001 * 0.0001) + (0.0001 * 0.0001);
+  TatsumaData? res = null;
+  tatsumas.forEach((tatsuma){
+    final double dx = point.latitude - tatsuma.pos.latitude;
+    final double dy = point.longitude - tatsuma.pos.longitude;
+    final double d = (dx * dx) + (dy * dy);
+    if(d < th){
+      res = tatsuma;
+      return;
+    }
+  });
+
+  return res;
+}
 
 //----------------------------------------------------------------------------
 // メンバーデータ
@@ -287,13 +315,7 @@ class _HomeButtonWidgetState extends State<HomeButtonWidget>
       // 家アイコンとそのスタイル
       child: ElevatedButton(
         child: Icon(Icons.home, size: 50),
-        style: ElevatedButton.styleFrom(
-          foregroundColor: Colors.orange.shade900,
-          backgroundColor: Colors.transparent,
-          shadowColor: Colors.transparent,
-          fixedSize: Size(80,80),
-        ),
-
+        style: _appIconButtonStyle,
         // 家ボタンタップでメンバー一覧メニューを開く
         onPressed: (){
           // メンバー一覧メニューを開く
@@ -464,6 +486,20 @@ class _TestAppState extends State<TestApp>
 
                 // 家アイコン
                 HomeButtonWidget(),
+
+                // クリップボードへコピーボタン
+                Align(
+                  // 画面左下に配置
+                  alignment: Alignment(-1.0, 1.0),
+                  child: ElevatedButton(
+                    child: Icon(Icons.content_copy, size: 50),
+                    style: _appIconButtonStyle,
+                    onPressed: () {
+                      copyAssignToClipboard();
+                      showPopupMessage("配置をクリップボードへコピー");
+                    },
+                  )
+                ),
 
                 // ポップアップメッセージ
                 Align(
@@ -677,5 +713,32 @@ class _TestAppState extends State<TestApp>
         )
       );
     });
+  }
+
+  //---------------------------------------------------------------------------
+  // タツマ配置をクリップボートへコピー
+  void copyAssignToClipboard() async
+  {
+    String text = "";
+    members.forEach((member){
+      if(member.attended){
+        TatsumaData? tatsuma = searchTatsumaByPoint(member.pos);
+        String line;
+        if(tatsuma != null){
+          line = member.name + ": " + tatsuma.name;
+        }
+        else{
+          // タツマに立っていない？
+          line = member.name + ": ["
+            + member.pos.latitude.toStringAsFixed(4) + ","
+            + member.pos.longitude.toStringAsFixed(4) + "]";
+        }
+        text += line + "\n";
+      }
+    });
+    print(text);
+
+    final data = ClipboardData(text: text);
+    await Clipboard.setData(data);    
   }
 }
