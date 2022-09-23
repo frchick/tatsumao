@@ -255,8 +255,15 @@ class _MyFadeOutState extends State<MyFadeOut>
 
 //----------------------------------------------------------------------------
 // 家ボタン＆メンバー一覧メニュー
-class HomeButtonWidget extends StatefulWidget {
-  HomeButtonWidget({super.key});
+class HomeButtonWidget extends StatefulWidget
+{
+  HomeButtonWidget({
+    super.key,
+    required this.appState,
+  });
+
+  // アプリケーションインスタンスへの参照
+  _TestAppState appState;
 
   @override
   State<HomeButtonWidget> createState() => _HomeButtonWidgetState();
@@ -266,15 +273,22 @@ class _HomeButtonWidgetState extends State<HomeButtonWidget>
 {
   late StateSetter _setModalState;
 
+  // メンバーメニュー領域の高さ
+  static const double menuHeight = 120;
+
   // メンバー一覧メニューからドラッグして出動！
   void onDragEndFunc(MyDraggableDetails details)
   {
     print("Draggable.onDragEnd: wasAccepted: ${details.wasAccepted}, velocity: ${details.velocity}, offset: ${details.offset}, data: ${details.data}");
 
-    // ドラッグ座標からマーカーの緯度経度を計算
+    // メンバー一覧メニューの外にドラッグされていなければ何もしない。
     // ドラッグ座標はマーカー左上なので、下矢印の位置にオフセットする。
     var px = details.offset.dx + 32;
     var py = details.offset.dy + 72;
+    final double screenHeight = widget.appState.getScreenHeight();
+    if((screenHeight - menuHeight) < py) return;
+  
+    // ドラッグ座標からマーカーの緯度経度を計算
     LatLng? point = mainMapController.pointToLatLng(CustomPoint(px, py));
     if(point == null) return;
 
@@ -299,7 +313,7 @@ class _HomeButtonWidgetState extends State<HomeButtonWidget>
     updateMapView();
 
     // データベースに変更を通知
-    _TestAppState().syncMemberState(index);
+    widget.appState.syncMemberState(index);
   }
 
   @override
@@ -350,7 +364,7 @@ class _HomeButtonWidgetState extends State<HomeButtonWidget>
                   });
                   // 高さ120ドット、横スクロールのリストビュー
                   return Container(
-                    height: 120,
+                    height: menuHeight,
                     color: Colors.brown.shade100,
                     child: Scrollbar(
                       thumbVisibility: true,
@@ -500,7 +514,7 @@ class _TestAppState extends State<TestApp>
                 ),
 
                 // 家アイコン
-                HomeButtonWidget(),
+                HomeButtonWidget(appState:this),
 
                 // クリップボードへコピーボタン
                 Align(
@@ -529,6 +543,16 @@ class _TestAppState extends State<TestApp>
     );
   }
 
+  // 画面サイズの取得(幅)
+  double getScreenWidth()
+  {
+    return (scaffoldKey.currentContext?.size?.width ?? 0.0);
+  }
+  // 画面サイズの取得(高さ)
+  double getScreenHeight()
+  {
+    return (scaffoldKey.currentContext?.size?.height ?? 0.0);
+  }
 
   //---------------------------------------------------------------------------
   // メンバーマーカーのドラッグ
@@ -537,7 +561,7 @@ class _TestAppState extends State<TestApp>
   void onDragStartFunc(DragStartDetails details, LatLng point, int index)
   {
     // ドラッグ中の連続同期のためのタイマーをスタート
-    Timer.periodic(Duration(milliseconds: 250), (Timer timer){
+    Timer.periodic(Duration(milliseconds: 500), (Timer timer){
       _draggingTimer = timer;
       // 直前に同期した座標から動いていたら変更を通知
       if(_lastDraggingPoiny != members[index].pos){
@@ -569,12 +593,10 @@ class _TestAppState extends State<TestApp>
 
     // 家アイコンに投げ込まれたら削除する
     // 画面右下にサイズ80x80で表示されている前提
-    final double width  = (scaffoldKey.currentContext?.size?.width ?? 0.0);
-    final double height = (scaffoldKey.currentContext?.size?.height ?? 0.0);
-    final bool dropToHouse = 
-      (0.0 < (offset.dx - (width - 80))) &&
-      (0.0 < (offset.dy - (height - 80)));
-    if(dropToHouse){
+    final bool dropToHome = 
+      (0.0 < (offset.dx - (getScreenWidth()  - 80))) &&
+      (0.0 < (offset.dy - (getScreenHeight() - 80)));
+    if(dropToHome){
         // メンバーマーカーを非表示にして再描画
         memberMarkers[index].visible = false;
         members[index].attended = false;
