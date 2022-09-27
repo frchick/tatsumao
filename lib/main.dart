@@ -25,6 +25,7 @@ final ButtonStyle _appIconButtonStyle = ElevatedButton.styleFrom(
 );
 
 //----------------------------------------------------------------------------
+//----------------------------------------------------------------------------
 // タツマデータ
 class TatsumaData {
   TatsumaData({
@@ -78,6 +79,7 @@ TatsumaData? searchTatsumaByPoint(LatLng point)
 }
 
 //----------------------------------------------------------------------------
+//----------------------------------------------------------------------------
 // メンバーデータ
 class Member {
   Member({
@@ -112,7 +114,114 @@ List<Member> members = [
 // 出動していないメンバー分もすべて作成。表示/非表示を設定しておく。
 List<MyDragMarker> memberMarkers = [];
 
+//---------------------------------------------------------------------------
+// メンバーデータの同期(firebase realtime database)
+FirebaseDatabase database = FirebaseDatabase.instance;
 
+// このアプリケーションインスタンスを一意に識別するキー
+final String _appInstKey = UniqueKey().toString();
+
+// メンバーのアサインデータへのパス
+String _assignPath = "assign/";
+
+// 初期化
+Future initMemberSync(String path) async
+{
+  print(">initMemberSync($path)");
+
+  // 配置データのパス
+  _assignPath = "assign/" + path;
+  final DatabaseReference ref = database.ref(_assignPath);
+  final DataSnapshot snapshot = await ref.get();
+  for(int index = 0; index < members.length; index++)
+  {
+    Member member = members[index];
+    final String id = index.toString().padLeft(3, '0');
+
+    if (snapshot.hasChild(id)) {
+      // メンバーデータがデータベースにあれば、初期値として取得(直前の状態)
+      member.attended = snapshot.child(id + "/attended").value as bool;
+      member.pos = LatLng(
+        snapshot.child(id + "/latitude").value as double,
+        snapshot.child(id + "/longitude").value as double);
+      // 地図上に表示されているメンバーマーカーの情報も変更
+      memberMarkers[index].visible = member.attended;
+      memberMarkers[index].point = member.pos;
+    } else {
+      // データベースにメンバーデータがなければ作成
+      syncMemberState(index);
+    }    
+  }
+
+  // 他の利用者からの変更通知を登録
+  for(int index = 0; index < members.length; index++){
+    final String id = index.toString().padLeft(3, '0');
+    final DatabaseReference ref = database.ref(_assignPath + "/" + id);
+    ref.onValue.listen((DatabaseEvent event){
+      onChangeMemberState(index, event);
+    });
+  }
+}
+
+// メンバーマーカーの移動を他のユーザーへ同期
+void syncMemberState(final int index) async
+{
+  final Member member = members[index];
+  final String id = index.toString().padLeft(3, '0');
+
+  DatabaseReference memberRef = database.ref(_assignPath + "/" + id);
+  memberRef.update({
+    "sender_id": _appInstKey,
+    "attended": member.attended,
+    "latitude": member.pos.latitude,
+    "longitude": member.pos.longitude
+  });
+}
+
+// 他の利用者からの同期通知による変更
+void onChangeMemberState(final int index, DatabaseEvent event)
+{
+  final DataSnapshot snapshot = event.snapshot;
+
+  // 自分が送った変更には(当然)反応しない。送信者IDと自分のIDを比較する。
+  final String sender_id = snapshot.child("sender_id").value as String;
+  final bool fromOther =
+    (sender_id != _appInstKey) &&
+    (event.type == DatabaseEventType.value);
+  if(fromOther){
+    print("onChangeMemberState(index:${index}) -> from other");
+    // メンバーデータとマーカーのパラメータを、データベースの値に更新
+    Member member = members[index];
+    final bool attended = snapshot.child("attended").value as bool;
+    final bool returnToHome = (member.attended && !attended);
+    final bool joinToTeam = (!member.attended && attended);
+    member.attended = attended;
+    member.pos = LatLng(
+      snapshot.child("latitude").value as double,
+      snapshot.child("longitude").value as double);
+    MyDragMarker memberMarker = memberMarkers[index];
+    memberMarker.visible = member.attended;
+    memberMarker.point = member.pos;
+
+    // マーカーの再描画
+    updateMapView();
+
+    // 家に帰った/参加したポップアップメッセージ
+    if(returnToHome){
+      String msg = members[index].name + " は家に帰った";
+//!!!!      showPopupMessage(msg);
+    }
+    else if(joinToTeam){
+      String msg = members[index].name + " が参加した";
+//!!!!      showPopupMessage(msg);
+    }
+  }
+  else{
+    print("onChangeMemberState(index:${index}) -> myself");
+  }
+}
+
+//----------------------------------------------------------------------------
 //----------------------------------------------------------------------------
 // 地図
 late MapController mainMapController;
@@ -184,6 +293,7 @@ class MyDragMarker2 extends MyDragMarker {
 
 
 //----------------------------------------------------------------------------
+//----------------------------------------------------------------------------
 // 遅延フェードアウト
 class MyFadeOut extends StatefulWidget {
   final Widget child;
@@ -254,6 +364,7 @@ class _MyFadeOutState extends State<MyFadeOut>
 }
 
 //----------------------------------------------------------------------------
+//----------------------------------------------------------------------------
 // 家ボタン＆メンバー一覧メニュー
 class HomeButtonWidget extends StatefulWidget
 {
@@ -313,7 +424,7 @@ class _HomeButtonWidgetState extends State<HomeButtonWidget>
     updateMapView();
 
     // データベースに変更を通知
-    widget.appState.syncMemberState(index);
+    syncMemberState(index);
   }
 
   @override
@@ -482,7 +593,7 @@ class _MapViewState extends State<MapView>
     popupMessage = MyFadeOut(child: Text(""));
 
     // メンバーデータの初期値をデータベースから取得
-    initMemberSync().then((res){
+    initMemberSync("default_data").then((res){
       setState((){});
     });
   }
@@ -649,106 +760,6 @@ class _MapViewState extends State<MapView>
   }
 
   //---------------------------------------------------------------------------
-  // メンバーデータの同期(firebase realtime database)
-  FirebaseDatabase database = FirebaseDatabase.instance;
-
-  // このアプリケーションインスタンスを一意に識別するキー
-  final String appInstKey = UniqueKey().toString();
-
-  // 初期化
-  Future initMemberSync() async
-  {
-    final DatabaseReference ref = database.ref("members");
-    final DataSnapshot snapshot = await ref.get();
-    for(int index = 0; index < members.length; index++)
-    {
-      Member member = members[index];
-      final String id = index.toString().padLeft(3, '0');
-
-      if (snapshot.hasChild(id)) {
-        // メンバーデータがデータベースにあれば、初期値として取得(直前の状態)
-        member.attended = snapshot.child(id + "/attended").value as bool;
-        member.pos = LatLng(
-          snapshot.child(id + "/latitude").value as double,
-          snapshot.child(id + "/longitude").value as double);
-        // 地図上に表示されているメンバーマーカーの情報も変更
-        memberMarkers[index].visible = member.attended;
-        memberMarkers[index].point = member.pos;
-      } else {
-        // データベースにメンバーデータがなければ作成
-        syncMemberState(index);
-      }    
-    }
-
-    // 他の利用者からの変更通知を登録
-    for(int index = 0; index < members.length; index++){
-      final String id = index.toString().padLeft(3, '0');
-      final DatabaseReference ref = database.ref("members/" + id);
-      ref.onValue.listen((DatabaseEvent event){
-        onChangeMemberState(index, event);
-      });
-    }
-  }
-
-  // メンバーマーカーの移動を他のユーザーへ同期
-  void syncMemberState(final int index) async
-  {
-    final Member member = members[index];
-    final String id = index.toString().padLeft(3, '0');
-
-    DatabaseReference memberRef = database.ref("members/" + id);
-    memberRef.update({
-      "sender_id": appInstKey,
-      "attended": member.attended,
-      "latitude": member.pos.latitude,
-      "longitude": member.pos.longitude
-    });
-  }
-
-  // 他の利用者からの同期通知による変更
-  void onChangeMemberState(final int index, DatabaseEvent event)
-  {
-    final DataSnapshot snapshot = event.snapshot;
-
-    // 自分が送った変更には(当然)反応しない。送信者IDと自分のIDを比較する。
-    final String sender_id = snapshot.child("sender_id").value as String;
-    final bool fromOther =
-      (sender_id != appInstKey) &&
-      (event.type == DatabaseEventType.value);
-    if(fromOther){
-      print("onChangeMemberState(index:${index}) -> from other");
-      // メンバーデータとマーカーのパラメータを、データベースの値に更新
-      Member member = members[index];
-      final bool attended = snapshot.child("attended").value as bool;
-      final bool returnToHome = (member.attended && !attended);
-      final bool joinToTeam = (!member.attended && attended);
-      member.attended = attended;
-      member.pos = LatLng(
-        snapshot.child("latitude").value as double,
-        snapshot.child("longitude").value as double);
-      MyDragMarker memberMarker = memberMarkers[index];
-      memberMarker.visible = member.attended;
-      memberMarker.point = member.pos;
-
-      // マーカーの再描画
-      updateMapView();
-
-      // 家に帰った/参加したポップアップメッセージ
-      if(returnToHome){
-        String msg = members[index].name + " は家に帰った";
-        showPopupMessage(msg);
-      }
-      else if(joinToTeam){
-        String msg = members[index].name + " が参加した";
-        showPopupMessage(msg);
-      }
-    }
-    else{
-      print("onChangeMemberState(index:${index}) -> myself");
-    }
-  }
-
-  //---------------------------------------------------------------------------
   // ポップアップメッセージの表示
   void showPopupMessage(String message)
   {
@@ -806,51 +817,66 @@ class _MapViewState extends State<MapView>
 //----------------------------------------------------------------------------
 //----------------------------------------------------------------------------
 // ファイル一覧画面
+
+class FileData {
+  FileData({
+    required this.name,
+    required this.icon,
+  });
+  final String name;
+  final IconData icon;
+}
+List<FileData> _files = [
+  FileData(name:"default_data", icon:Icons.description),
+  FileData(name:"11月1日R1 ホンダメ", icon:Icons.description),
+  FileData(name:"11月1日R2 暗闇沢", icon:Icons.description),
+  FileData(name:"11月2日R1 笹原林道", icon:Icons.description),
+  FileData(name:"11月2日R2 桧山", icon:Icons.description),
+  FileData(name:"11月8日R1 金太郎上", icon:Icons.description),
+  FileData(name:"11月8日R1 金太郎571", icon:Icons.description),
+];
+
 class FilesPage extends StatelessWidget {
+  final _textStyle = TextStyle(
+    color:Colors.black, fontSize:18.0
+  );
+  final _borderStyle = Border(
+    bottom: BorderSide(width:1.0, color:Colors.grey)
+  );
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: Text('File and Folder'),
       ),
-      body: ListView(
-        children: [
-          _menuItem(context, "2022年11月", Icon(Icons.folder)),
-          _menuItem(context, "2022年12月", Icon(Icons.folder)),
-          _menuItem(context, "2023年1月", Icon(Icons.folder)),
-          _menuItem(context, "2023年2月", Icon(Icons.folder)),
-
-          _menuItem(context, "11月1日R1 ホンダメ", Icon(Icons.description)),
-          _menuItem(context, "11月1日R2 暗闇沢", Icon(Icons.description)),
-          _menuItem(context, "11月2日R1 笹原林道", Icon(Icons.description)),
-          _menuItem(context, "11月2日R2 桧山", Icon(Icons.description)),
-          _menuItem(context, "11月8日R1 金太郎上", Icon(Icons.description)),
-          _menuItem(context, "11月8日R2 金太郎571", Icon(Icons.description)),
-
-          _menuItem(context, "ファイル追加", Icon(Icons.note_add)),
-          _menuItem(context, "フォルダー追加", Icon(Icons.create_new_folder)),
-        ]
+      body: ListView.builder(
+        itemCount: _files.length,
+        itemBuilder: (context, index){
+          var file = _files[index];
+          return _menuItem(context, index, file.name, Icon(file.icon));
+        }
+//          _menuItem(context, "ファイル追加", Icon(Icons.note_add)),
+//          _menuItem(context, "フォルダー追加", Icon(Icons.create_new_folder)),
       ),        
     );
   }
 
-  Widget _menuItem(BuildContext context, String title, Icon icon) {
+  // ファイル一覧アイテムの作成
+  Widget _menuItem(BuildContext context, int index, String text, Icon icon) {
     return Container(
-      decoration: new BoxDecoration(
-        border: new Border(bottom: BorderSide(width: 1.0, color: Colors.grey))
-      ),
+      // ファイル間の境界線
+      decoration: BoxDecoration(border:_borderStyle),
+      // アイコンとファイル名
       child:ListTile(
         leading: icon,
-        title: Text(
-          title,
-          style: TextStyle(
-            color:Colors.black,
-            fontSize: 18.0
-          ),
-        ),
+        title: Text(text, style:_textStyle),
+        // タップでファイルを切り替え
         onTap: () {
+          initMemberSync(_files[index].name);
+          updateMapView();
           Navigator.pop(context);
-        }, // タップ
+        },
       ),
     );
   }
