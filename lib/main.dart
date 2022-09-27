@@ -263,7 +263,7 @@ class HomeButtonWidget extends StatefulWidget
   });
 
   // アプリケーションインスタンスへの参照
-  _TestAppState appState;
+  _MapViewState appState;
 
   @override
   State<HomeButtonWidget> createState() => _HomeButtonWidgetState();
@@ -407,15 +407,29 @@ void main() async
   // 地図コントローラを作成
   mainMapController = MapController();
 
-  runApp(TestApp());
+  runApp(MyApp());
 }
 
-class TestApp extends StatefulWidget {
+class MyApp extends StatelessWidget {
   @override
-  _TestAppState createState() => _TestAppState();
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      scrollBehavior: MyCustomScrollBehavior(),
+      title: 'TatsumaO',
+      home: MapView(),
+    );
+  }
 }
 
-class _TestAppState extends State<TestApp>
+//----------------------------------------------------------------------------
+//----------------------------------------------------------------------------
+// 地図画面
+class MapView extends StatefulWidget {
+  @override
+  _MapViewState createState() => _MapViewState();
+}
+
+class _MapViewState extends State<MapView>
 {
   // ポップアップメッセージ
   late MyFadeOut popupMessage;
@@ -475,68 +489,77 @@ class _TestAppState extends State<TestApp>
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      scrollBehavior: MyCustomScrollBehavior(),
-      home: Scaffold(
-        key: scaffoldKey,
-        body: Center(
-          child: Container(
-            child: Stack(
-              children: [
-                // 地図
-                FlutterMap(
-                  options: MapOptions(
-                    allowPanningOnScrollingParent: false,
-                    interactiveFlags: InteractiveFlag.all & ~InteractiveFlag.rotate,
-                    plugins: [
-                      MyDragMarkerPlugin(),
-                    ],
-                    center: LatLng(35.302894, 139.053848),
-                    zoom: 16,
-                    maxZoom: 18,
-                  ),
-                  nonRotatedLayers: [
-                    TileLayerOptions(
-                      urlTemplate: "https://cyberjapandata.gsi.go.jp/xyz/hillshademap/{z}/{x}/{y}.png",
-                    ),
-                    TileLayerOptions(
-                      urlTemplate: "https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png",
-                      opacity: 0.64
-                    ),
-                    MarkerLayerOptions(
-                      markers: tatsumaMarkers
-                    ),
-                    MyDragMarkerPluginOptions(
-                      markers: memberMarkers,
-                    ),
+    return Scaffold(
+      key: scaffoldKey,
+      body: Center(
+        child: Container(
+          child: Stack(
+            children: [
+              // 地図
+              FlutterMap(
+                options: MapOptions(
+                  allowPanningOnScrollingParent: false,
+                  interactiveFlags: InteractiveFlag.all & ~InteractiveFlag.rotate,
+                  plugins: [
+                    MyDragMarkerPlugin(),
                   ],
-                  mapController: mainMapController,
+                  center: LatLng(35.302894, 139.053848),
+                  zoom: 16,
+                  maxZoom: 18,
                 ),
+                nonRotatedLayers: [
+                  TileLayerOptions(
+                    urlTemplate: "https://cyberjapandata.gsi.go.jp/xyz/hillshademap/{z}/{x}/{y}.png",
+                  ),
+                  TileLayerOptions(
+                    urlTemplate: "https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png",
+                    opacity: 0.64
+                  ),
+                  MarkerLayerOptions(
+                    markers: tatsumaMarkers
+                  ),
+                  MyDragMarkerPluginOptions(
+                    markers: memberMarkers,
+                  ),
+                ],
+                mapController: mainMapController,
+              ),
 
-                // 家アイコン
-                HomeButtonWidget(appState:this),
+              // 家アイコン
+              HomeButtonWidget(appState:this),
 
+              Column(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
                 // クリップボードへコピーボタン
-                Align(
-                  // 画面左下に配置
-                  alignment: Alignment(-1.0, 1.0),
-                  child: ElevatedButton(
+                  ElevatedButton(
                     child: Icon(Icons.content_copy, size: 50),
                     style: _appIconButtonStyle,
                     onPressed: () {
                       copyAssignToClipboard();
                       showPopupMessage("配置をクリップボードへコピー");
                     },
+                  ),
+                  // ファイル一覧ボタン
+                  ElevatedButton(
+                    child: Icon(Icons.folder, size: 50),
+                    style: _appIconButtonStyle,
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => FilesPage())
+                      );
+                    }
                   )
-                ),
+                ]
+              ),
 
-                // ポップアップメッセージ
-                Align(
-                  alignment: Alignment(0.0, 0.0),
-                  child: popupMessage
-                ),
-              ]
-            ),
+              // ポップアップメッセージ
+              Align(
+                alignment: Alignment(0.0, 0.0),
+                child: popupMessage
+              ),
+            ]
           ),
         ),
       ),
@@ -777,5 +800,32 @@ class _TestAppState extends State<TestApp>
 
     final data = ClipboardData(text: text);
     await Clipboard.setData(data);    
+  }
+}
+
+//----------------------------------------------------------------------------
+//----------------------------------------------------------------------------
+// ファイル一覧画面
+class FilesPage extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Container(
+        padding: EdgeInsets.all(32.0),
+        child: Center(
+          child: Column(
+            children: [
+              Text('Sub1'),
+              ElevatedButton(
+                child: Icon(Icons.arrow_back, size: 50),
+                onPressed: () {
+                  Navigator.pop(context);
+                }
+              ),
+            ]
+          ),
+        ),
+      ),
+    );
   }
 }
