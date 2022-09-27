@@ -810,21 +810,47 @@ class FilesPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Container(
-        padding: EdgeInsets.all(32.0),
-        child: Center(
-          child: Column(
-            children: [
-              Text('Sub1'),
-              ElevatedButton(
-                child: Icon(Icons.arrow_back, size: 50),
-                onPressed: () {
-                  Navigator.pop(context);
-                }
-              ),
-            ]
+      appBar: AppBar(
+        title: Text('File and Folder'),
+      ),
+      body: ListView(
+        children: [
+          _menuItem(context, "2022年11月", Icon(Icons.folder)),
+          _menuItem(context, "2022年12月", Icon(Icons.folder)),
+          _menuItem(context, "2023年1月", Icon(Icons.folder)),
+          _menuItem(context, "2023年2月", Icon(Icons.folder)),
+
+          _menuItem(context, "11月1日R1 ホンダメ", Icon(Icons.description)),
+          _menuItem(context, "11月1日R2 暗闇沢", Icon(Icons.description)),
+          _menuItem(context, "11月2日R1 笹原林道", Icon(Icons.description)),
+          _menuItem(context, "11月2日R2 桧山", Icon(Icons.description)),
+          _menuItem(context, "11月8日R1 金太郎上", Icon(Icons.description)),
+          _menuItem(context, "11月8日R2 金太郎571", Icon(Icons.description)),
+
+          _menuItem(context, "ファイル追加", Icon(Icons.note_add)),
+          _menuItem(context, "フォルダー追加", Icon(Icons.create_new_folder)),
+        ]
+      ),        
+    );
+  }
+
+  Widget _menuItem(BuildContext context, String title, Icon icon) {
+    return Container(
+      decoration: new BoxDecoration(
+        border: new Border(bottom: BorderSide(width: 1.0, color: Colors.grey))
+      ),
+      child:ListTile(
+        leading: icon,
+        title: Text(
+          title,
+          style: TextStyle(
+            color:Colors.black,
+            fontSize: 18.0
           ),
         ),
+        onTap: () {
+          Navigator.pop(context);
+        }, // タップ
       ),
     );
   }
