@@ -12,6 +12,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 import 'dart:async';
 import 'package:flutter/services.dart';
+import 'files.dart';
 
 //----------------------------------------------------------------------------
 // グローバル変数
@@ -658,7 +659,12 @@ class _MapViewState extends State<MapView>
                     onPressed: () {
                       Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (context) => FilesPage())
+                        MaterialPageRoute(builder: (context) => FilesPage(
+                          onSelectFile: (path){
+                            initMemberSync(path);
+                            updateMapView();
+                          }
+                        ))
                       );
                     }
                   )
@@ -811,229 +817,5 @@ class _MapViewState extends State<MapView>
 
     final data = ClipboardData(text: text);
     await Clipboard.setData(data);    
-  }
-}
-
-//----------------------------------------------------------------------------
-//----------------------------------------------------------------------------
-// ファイル一覧画面
-
-class FileItem {
-  FileItem({
-    required this.name,
-    this.child,
-  });
-  // ファイル/ディレクトリ名
-  String name;
-  // 子階層
-  List<FileItem>? child;
-}
-
-List<FileItem> _file202211 = [
-  FileItem(name:"上階層へ戻る"),
-  FileItem(name:"11月1日R1 ホンダメ"),
-  FileItem(name:"11月1日R2 暗闇沢"),
-  FileItem(name:"11月2日R1 笹原林道"),
-  FileItem(name:"11月2日R2 桧山"),
-  FileItem(name:"11月8日R1 金太郎上"),
-  FileItem(name:"11月8日R2 金太郎571"),
-];
-
-List<FileItem> _file202212 = [
-  FileItem(name:"上階層へ戻る"),
-  FileItem(name:"12月3日R1 マムシ沢"),
-  FileItem(name:"12月3日R2 ミョウガ谷"),
-  FileItem(name:"12月10日R1 苅野上"),
-  FileItem(name:"12月10日R2 暗闇沢"),
-  FileItem(name:"12月11日R1 桧山下"),
-  FileItem(name:"12月11日R2 桧山"),
-];
-
-List<FileItem> _file202301 = [
-  FileItem(name:"上階層へ戻る"),
-  FileItem(name:"1月3日R1 狩猟初め！"),
-  FileItem(name:"1月3日R2 ジビエBBQ"),
-  FileItem(name:"1月6日R1 21世紀の森遠征"),
-  FileItem(name:"1月7日R1 グリーンヒル"),
-  FileItem(name:"1月7日R2 ガマハウスBBQ"),
-];
-
-List<FileItem> _file202302 = [
-  FileItem(name:"上階層へ戻る"),
-  FileItem(name:"2月3日R1 ホンダメ"),
-  FileItem(name:"2月3日R2 苅野上"),
-  FileItem(name:"2月6日R1 暗闇沢"),
-  FileItem(name:"2月6日R2 桧山下"),
-  FileItem(name:"2月28日R1 狩猟納！"),
-  FileItem(name:"2月28日R2 打ち上げBBQ"),
-];
-
-List<FileItem> _file2022 = [
-  FileItem(name:"上階層へ戻る"),
-  FileItem(name:"2022年11月", child:_file202211),
-  FileItem(name:"2022年12月", child:_file202212),
-  FileItem(name:"2023年1月", child:_file202301),
-  FileItem(name:"2023年2月", child:_file202302),
-];
-
-List<FileItem> _file202311 = [
-  FileItem(name:"上階層へ戻る"),
-  FileItem(name:"11月1日R1 小土肥1"),
-  FileItem(name:"11月1日R2 小土肥2"),
-  FileItem(name:"11月2日R1 未定"),
-  FileItem(name:"11月2日R2 未定"),
-  FileItem(name:"11月8日R1 未定"),
-  FileItem(name:"11月8日R2 未定"),
-];
-
-List<FileItem> _file202312 = [
-  FileItem(name:"上階層へ戻る"),
-  FileItem(name:"12月3日R1 未定"),
-  FileItem(name:"12月3日R2 未定"),
-  FileItem(name:"12月10日R1 未定"),
-  FileItem(name:"12月10日R2 未定"),
-  FileItem(name:"12月11日R1 未定"),
-  FileItem(name:"12月11日R2 未定"),
-];
-
-List<FileItem> _file202401 = [
-  FileItem(name:"上階層へ戻る"),
-  FileItem(name:"1月3日R1 狩猟初め！"),
-  FileItem(name:"1月3日R2 ジビエBBQ"),
-  FileItem(name:"1月6日R1 未定"),
-  FileItem(name:"1月7日R1 未定"),
-  FileItem(name:"1月7日R2 未定"),
-];
-
-List<FileItem> _file202402 = [
-  FileItem(name:"上階層へ戻る"),
-  FileItem(name:"2月3日R1 未定"),
-  FileItem(name:"2月3日R2 未定"),
-  FileItem(name:"2月6日R1 未定"),
-  FileItem(name:"2月6日R2 未定"),
-  FileItem(name:"2月28日R1 狩猟納！"),
-  FileItem(name:"2月28日R2 打ち上げBBQ"),
-];
-
-List<FileItem> _file2023 = [
-  FileItem(name:"上階層へ戻る"),
-  FileItem(name:"2023年11月", child:_file202311),
-  FileItem(name:"2023年12月", child:_file202312),
-  FileItem(name:"2024年1月", child:_file202401),
-  FileItem(name:"2024年2月", child:_file202402),
-];
-
-List<FileItem> _fileRoot = [
-  FileItem(name:"2022シーズン", child:_file2022),
-  FileItem(name:"2023シーズン", child:_file2023),
-  FileItem(name:"default_data"),
-  FileItem(name:"11月1日R1 ホンダメ"),
-];
-
-// ルートから現在のディレクトリまでのスタック
-List<FileItem> _directoryStack = [];
-
-class FilesPage extends StatefulWidget {
-  @override
-  FilesPageState createState() => FilesPageState();
-}
-
-class FilesPageState extends State<FilesPage>
-{
-  final _textStyle = TextStyle(
-    color:Colors.black, fontSize:18.0
-  );
-  final _borderStyle = Border(
-    bottom: BorderSide(width:1.0, color:Colors.grey)
-  );
-
-  @override
-  initState() {
-    super.initState();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    // カレントディレクトリのファイル/ディレクトリを表示
-    final int stackDepth = _directoryStack.length;
-    final List<FileItem>? currentDir = getCurrentDir();
-
-    return Scaffold(
-      appBar: AppBar(
-        title: Text('File and Folder'),
-      ),
-      body: ListView.builder(
-        itemCount: currentDir!.length,
-        itemBuilder: (context, index){
-          // アイコンを選択
-          var file = currentDir[index];
-          IconData icon;
-          if((0 < stackDepth) && (index == 0)){
-            //「上階層に戻る」
-            icon = Icons.drive_file_move_rtl;
-          }else{
-            // ファイルかフォルダ
-            icon = (file.child == null)? Icons.description: Icons.folder;
-          }
-          return _menuItem(context, index, file.name, Icon(icon));
-        }
-//          _menuItem(context, "ファイル追加", Icon(Icons.note_add)),
-//          _menuItem(context, "フォルダー追加", Icon(Icons.create_new_folder)),
-      ),        
-    );
-  }
-
-  // ファイル一覧アイテムの作成
-  Widget _menuItem(BuildContext context, int index, String text, Icon icon) {
-    return Container(
-      // ファイル間の境界線
-      decoration: BoxDecoration(border:_borderStyle),
-      // アイコンとファイル名
-      child:ListTile(
-        leading: icon,
-        title: Text(text, style:_textStyle),
-        // タップでファイルを切り替え
-        onTap: () {
-          if((0 < _directoryStack.length) && (index == 0)){
-            // 親階層に戻る
-            setState((){
-              _directoryStack.removeLast();
-            });
-            return;
-          }
-          var currentDir = getCurrentDir();
-          if(currentDir == null) return;  // ありえない
-          if(currentDir[index].child == null){
-            // ファイルを切り替える
-            String path = getCurrentPath() + currentDir[index].name;
-            initMemberSync(path);
-            updateMapView();
-            Navigator.pop(context);
-          }else{
-            // ディレクトリを下る
-            setState((){
-              _directoryStack.add(currentDir[index]);
-            });
-          }
-        },
-      ),
-    );
-  }
-
-  // カレントディレクトリを参照
-  List<FileItem>? getCurrentDir()
-  {
-    final int stackDepth = _directoryStack.length;
-    return (stackDepth == 0)? _fileRoot: _directoryStack[stackDepth-1].child;
-  }
-
-  // カレントディレクトリへのフルパスを取得
-  String getCurrentPath()
-  {
-    String path = "";
-    _directoryStack.forEach((folder){
-      path += folder.name + "/";
-    });
-    return path;
   }
 }
