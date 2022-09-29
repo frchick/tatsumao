@@ -123,7 +123,7 @@ FirebaseDatabase database = FirebaseDatabase.instance;
 final String _appInstKey = UniqueKey().toString();
 
 // メンバーのアサインデータへのパス
-String _assignPath = "assign/";
+String _assignPath = "";
 
 // 初期化
 Future initMemberSync(String path) async
@@ -131,7 +131,7 @@ Future initMemberSync(String path) async
   print(">initMemberSync($path)");
 
   // 配置データのパス
-  _assignPath = "assign/" + path;
+  _assignPath = "assign" + path;
   final DatabaseReference ref = database.ref(_assignPath);
   final DataSnapshot snapshot = await ref.get();
   for(int index = 0; index < members.length; index++)
@@ -594,7 +594,7 @@ class _MapViewState extends State<MapView>
     popupMessage = MyFadeOut(child: Text(""));
 
     // メンバーデータの初期値をデータベースから取得
-    initMemberSync("default_data").then((res){
+    initMemberSync("/default_data").then((res){
       setState((){});
     });
   }

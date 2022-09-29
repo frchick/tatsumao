@@ -14,7 +14,7 @@ final ButtonStyle _appIconButtonStyle = ElevatedButton.styleFrom(
 
 //----------------------------------------------------------------------------
 //----------------------------------------------------------------------------
-// ファイル一覧画面
+// ファイル一覧
 
 class FileItem {
   FileItem({
@@ -25,10 +25,15 @@ class FileItem {
   String name;
   // 子階層
   List<FileItem>? child;
+
+  // ファイルか？
+  bool isFile(){ return (child == null); }
+  // フォルダか？
+  bool isFolder(){ return (child != null); }
 }
 
 List<FileItem> _file202211 = [
-  FileItem(name:"上階層へ戻る"),
+  FileItem(name:".."),
   FileItem(name:"11月1日R1 ホンダメ"),
   FileItem(name:"11月1日R2 暗闇沢"),
   FileItem(name:"11月2日R1 笹原林道"),
@@ -38,7 +43,7 @@ List<FileItem> _file202211 = [
 ];
 
 List<FileItem> _file202212 = [
-  FileItem(name:"上階層へ戻る"),
+  FileItem(name:".."),
   FileItem(name:"12月3日R1 マムシ沢"),
   FileItem(name:"12月3日R2 ミョウガ谷"),
   FileItem(name:"12月10日R1 苅野上"),
@@ -48,7 +53,7 @@ List<FileItem> _file202212 = [
 ];
 
 List<FileItem> _file202301 = [
-  FileItem(name:"上階層へ戻る"),
+  FileItem(name:".."),
   FileItem(name:"1月3日R1 狩猟初め！"),
   FileItem(name:"1月3日R2 ジビエBBQ"),
   FileItem(name:"1月6日R1 21世紀の森遠征"),
@@ -57,7 +62,7 @@ List<FileItem> _file202301 = [
 ];
 
 List<FileItem> _file202302 = [
-  FileItem(name:"上階層へ戻る"),
+  FileItem(name:".."),
   FileItem(name:"2月3日R1 ホンダメ"),
   FileItem(name:"2月3日R2 苅野上"),
   FileItem(name:"2月6日R1 暗闇沢"),
@@ -67,7 +72,7 @@ List<FileItem> _file202302 = [
 ];
 
 List<FileItem> _file2022 = [
-  FileItem(name:"上階層へ戻る"),
+  FileItem(name:".."),
   FileItem(name:"2022年11月", child:_file202211),
   FileItem(name:"2022年12月", child:_file202212),
   FileItem(name:"2023年1月", child:_file202301),
@@ -75,7 +80,7 @@ List<FileItem> _file2022 = [
 ];
 
 List<FileItem> _file202311 = [
-  FileItem(name:"上階層へ戻る"),
+  FileItem(name:".."),
   FileItem(name:"11月1日R1 小土肥1"),
   FileItem(name:"11月1日R2 小土肥2"),
   FileItem(name:"11月2日R1 未定"),
@@ -85,7 +90,7 @@ List<FileItem> _file202311 = [
 ];
 
 List<FileItem> _file202312 = [
-  FileItem(name:"上階層へ戻る"),
+  FileItem(name:".."),
   FileItem(name:"12月3日R1 未定"),
   FileItem(name:"12月3日R2 未定"),
   FileItem(name:"12月10日R1 未定"),
@@ -95,7 +100,7 @@ List<FileItem> _file202312 = [
 ];
 
 List<FileItem> _file202401 = [
-  FileItem(name:"上階層へ戻る"),
+  FileItem(name:".."),
   FileItem(name:"1月3日R1 狩猟初め！"),
   FileItem(name:"1月3日R2 ジビエBBQ"),
   FileItem(name:"1月6日R1 未定"),
@@ -104,7 +109,7 @@ List<FileItem> _file202401 = [
 ];
 
 List<FileItem> _file202402 = [
-  FileItem(name:"上階層へ戻る"),
+  FileItem(name:".."),
   FileItem(name:"2月3日R1 未定"),
   FileItem(name:"2月3日R2 未定"),
   FileItem(name:"2月6日R1 未定"),
@@ -114,23 +119,115 @@ List<FileItem> _file202402 = [
 ];
 
 List<FileItem> _file2023 = [
-  FileItem(name:"上階層へ戻る"),
+  FileItem(name:".."),
   FileItem(name:"2023年11月", child:_file202311),
   FileItem(name:"2023年12月", child:_file202312),
   FileItem(name:"2024年1月", child:_file202401),
   FileItem(name:"2024年2月", child:_file202402),
 ];
 
-List<FileItem> _fileRoot = [
+List<FileItem> _fileTopDir = [
   FileItem(name:"2022シーズン", child:_file2022),
   FileItem(name:"2023シーズン", child:_file2023),
   FileItem(name:"default_data"),
   FileItem(name:"11月1日R1 ホンダメ"),
 ];
 
-// ルートから現在のディレクトリまでのスタック
-List<FileItem> _directoryStack = [];
+FileItem _fileRoot = FileItem(name:"", child:_fileTopDir);
 
+// ルートから現在のディレクトリまでのスタック
+List<FileItem> _directoryStack = [ _fileRoot ];
+
+//----------------------------------------------------------------------------
+// 汎用
+class Result
+{
+  Result({ this.res=true, this.message="", this.path="" }){}
+
+  bool res;
+  String message;
+  String path;
+}
+
+//----------------------------------------------------------------------------
+// ファイル追加
+Result createNewFile(String fileName)
+{
+  return addFileItem(fileName, false);
+}
+
+// フォルダ追加
+Result createNewFolder(String folderName)
+{
+  return addFileItem(folderName, true);
+}
+
+Result addFileItem(String name, bool folder)
+{
+  List<FileItem> currentDir = getCurrentDir();
+
+  // エラーチェック
+  if(name == ""){
+    return Result(res:false, message:"ファイル名が指定されていません");
+  }
+  if(name == ".."){
+    return Result(res:false, message:"'..'はファイル名に使えません");
+  }
+  if(name.contains("/")){
+    return Result(res:false, message:"'/'はファイル名に使えません");
+  }
+  bool res = true;
+  currentDir.forEach((item){
+    if(item.name == name) res = false;
+  });
+  if(!res){
+    return Result(res:false, message:"既にあるファイル名は使えません");
+  }
+
+  // 新しいファイル/フォルダーを、カレントディレクトリに追加
+  FileItem newItem = FileItem(name:name);
+  if(folder){
+    // フォルダを作成する場合には、子階層をぶら下げておく。
+    newItem.child = [ FileItem(name:"..") ];
+  }
+  currentDir.add(newItem);
+
+  // 並びをソートする
+  currentDir.sort((a, b){
+    // 「階層を戻る」が先頭
+    if(a.name == "..") return -1;
+    // フォルダが前
+    if(a.isFolder() && !b.isFolder()) return -1;
+    if(!a.isFolder() && b.isFolder()) return 1;
+    // ファイル名で比較
+    return a.name.compareTo(b.name);
+  });
+
+  // 作成されたファイルパス
+  String newPath = getCurrentPath() + name;
+
+  return Result(path:newPath);
+}
+
+// カレントディレクトリを参照
+List<FileItem> getCurrentDir()
+{
+  assert((0 < _directoryStack.length) && (_directoryStack.last.child != null));
+  return _directoryStack.last.child!;
+}
+
+// カレントディレクトリへのフルパスを取得
+String getCurrentPath()
+{
+  String path = "";
+  _directoryStack.forEach((folder){
+    path += folder.name + "/";
+  });
+  return path;
+}
+
+//----------------------------------------------------------------------------
+// ファイル一覧画面
 class FilesPage extends StatefulWidget
 {
   FilesPage({
@@ -177,17 +274,21 @@ class FilesPageState extends State<FilesPage>
             // アイコンを選択
             var file = currentDir[index];
             IconData icon;
-            if((0 < stackDepth) && (index == 0)){
+            late String name;
+            if((1 < stackDepth) && (index == 0)){
               //「上階層に戻る」
+              name = "上階層に戻る";
               icon = Icons.drive_file_move_rtl;
             }else{
               // ファイルかフォルダ
+              name = file.name;
               icon = (file.child == null)? Icons.description: Icons.folder;
             }
-            return _menuItem(context, index, file.name, Icon(icon));
+            return _menuItem(context, index, name, Icon(icon));
           }
         ),        
 
+        // ファイル/フォルダー追加ボタン
         Align(
           // 画面右下に配置
           alignment: Alignment(1.0, 1.0),
@@ -198,21 +299,17 @@ class FilesPageState extends State<FilesPage>
               ElevatedButton(
                 child: Icon(Icons.note_add, size: 50),
                 style: _appIconButtonStyle,
-                onPressed: () async {
-                  // ファイル作成
-                  String? path = await showCreateFileDialog(context);
-                  print("showCreateFileDialog() -> $path");
+                onPressed: () {
+                  createNewFileSub(context);
                 },
               ),
               // フォルダ作成ボタン
               ElevatedButton(
                 child: Icon(Icons.create_new_folder, size: 50),
                 style: _appIconButtonStyle,
-                onPressed: () async {
-                  // フォルダ作成
-                  String? path = await showCreateFolderDialog(context);
-                  print("showCreateFolderDialog() -> $path");
-                }
+                onPressed: () {
+                  createNewFolderSub(context);
+                },
               )
             ]
           ),
@@ -232,16 +329,15 @@ class FilesPageState extends State<FilesPage>
         title: Text(text, style:_textStyle),
         // タップでファイルを切り替え
         onTap: () {
-          if((0 < _directoryStack.length) && (index == 0)){
-            // 親階層に戻る
+          if((1 < _directoryStack.length) && (index == 0)){
+            // 上階層に戻る
             setState((){
               _directoryStack.removeLast();
             });
             return;
           }
           var currentDir = getCurrentDir();
-          if(currentDir == null) return;  // ありえない
-          if(currentDir[index].child == null){
+          if(currentDir[index].isFile()){
             // ファイルを切り替える
             String path = getCurrentPath() + currentDir[index].name;
             if(widget.onSelectFile != null){
@@ -259,21 +355,49 @@ class FilesPageState extends State<FilesPage>
     );
   }
 
-  // カレントディレクトリを参照
-  List<FileItem>? getCurrentDir()
+  // ファイル作成
+  void createNewFileSub(BuildContext context) async
   {
-    final int stackDepth = _directoryStack.length;
-    return (stackDepth == 0)? _fileRoot: _directoryStack[stackDepth-1].child;
+    // ファイル名入力ダイアログ
+    String? name = await showCreateFileDialog(context);
+    if(name == null) return;
+
+    // 作成
+    var res = createNewFile(name);
+    if(res.res){
+      // 作成が成功したら、切り替えてマップに戻る
+      if(widget.onSelectFile != null){
+        widget.onSelectFile!(res.path);
+      }
+      Navigator.pop(context);
+    }else{
+      // エラーメッセージ
+      showDialog(
+        context: context,
+        builder: (_){ return AlertDialog(content: Text(res.message)); }
+      );
+    }
   }
 
-  // カレントディレクトリへのフルパスを取得
-  String getCurrentPath()
+  // フォルダ作成
+  void createNewFolderSub(BuildContext context) async
   {
-    String path = "";
-    _directoryStack.forEach((folder){
-      path += folder.name + "/";
-    });
-    return path;
+    // ファイル名入力ダイアログ
+    String? name = await showCreateFolderDialog(context);
+    if(name == null) return;
+
+    // 作成
+    var res = createNewFolder(name);
+    if(res.res){
+      // フォルダ作成が成功したら再描画
+      setState((){});
+    }else{
+      // エラーメッセージ
+      showDialog(
+        context: context,
+        builder: (_){ return AlertDialog(content: Text(res.message)); }
+      );
+    }
   }
 }
 
