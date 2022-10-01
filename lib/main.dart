@@ -593,6 +593,9 @@ class _MapViewState extends State<MapView>
     // ポップアップメッセージ
     popupMessage = MyFadeOut(child: Text(""));
 
+    // ファイルツリーのデータベースを初期化
+    initFileTree();
+
     // メンバーデータの初期値をデータベースから取得
     initMemberSync("/default_data").then((res){
       setState((){});

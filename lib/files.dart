@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_database/firebase_database.dart';
 
 //----------------------------------------------------------------------------
 // グローバル変数
@@ -27,122 +29,28 @@ class FileItem {
   List<FileItem>? child;
 
   // ファイルか？
-  bool isFile(){ return (child == null); }
+  bool isFile(){ return (name != "..") && (child == null); }
   // フォルダか？
-  bool isFolder(){ return (child != null); }
+  bool isFolder(){ return (name == "..") || (child != null); }
 }
 
-List<FileItem> _file202211 = [
-  FileItem(name:".."),
-  FileItem(name:"11月1日R1 ホンダメ"),
-  FileItem(name:"11月1日R2 暗闇沢"),
-  FileItem(name:"11月2日R1 笹原林道"),
-  FileItem(name:"11月2日R2 桧山"),
-  FileItem(name:"11月8日R1 金太郎上"),
-  FileItem(name:"11月8日R2 金太郎571"),
-];
-
-List<FileItem> _file202212 = [
-  FileItem(name:".."),
-  FileItem(name:"12月3日R1 マムシ沢"),
-  FileItem(name:"12月3日R2 ミョウガ谷"),
-  FileItem(name:"12月10日R1 苅野上"),
-  FileItem(name:"12月10日R2 暗闇沢"),
-  FileItem(name:"12月11日R1 桧山下"),
-  FileItem(name:"12月11日R2 桧山"),
-];
-
-List<FileItem> _file202301 = [
-  FileItem(name:".."),
-  FileItem(name:"1月3日R1 狩猟初め！"),
-  FileItem(name:"1月3日R2 ジビエBBQ"),
-  FileItem(name:"1月6日R1 21世紀の森遠征"),
-  FileItem(name:"1月7日R1 グリーンヒル"),
-  FileItem(name:"1月7日R2 ガマハウスBBQ"),
-];
-
-List<FileItem> _file202302 = [
-  FileItem(name:".."),
-  FileItem(name:"2月3日R1 ホンダメ"),
-  FileItem(name:"2月3日R2 苅野上"),
-  FileItem(name:"2月6日R1 暗闇沢"),
-  FileItem(name:"2月6日R2 桧山下"),
-  FileItem(name:"2月28日R1 狩猟納！"),
-  FileItem(name:"2月28日R2 打ち上げBBQ"),
-];
-
-List<FileItem> _file2022 = [
-  FileItem(name:".."),
-  FileItem(name:"2022年11月", child:_file202211),
-  FileItem(name:"2022年12月", child:_file202212),
-  FileItem(name:"2023年1月", child:_file202301),
-  FileItem(name:"2023年2月", child:_file202302),
-];
-
-List<FileItem> _file202311 = [
-  FileItem(name:".."),
-  FileItem(name:"11月1日R1 小土肥1"),
-  FileItem(name:"11月1日R2 小土肥2"),
-  FileItem(name:"11月2日R1 未定"),
-  FileItem(name:"11月2日R2 未定"),
-  FileItem(name:"11月8日R1 未定"),
-  FileItem(name:"11月8日R2 未定"),
-];
-
-List<FileItem> _file202312 = [
-  FileItem(name:".."),
-  FileItem(name:"12月3日R1 未定"),
-  FileItem(name:"12月3日R2 未定"),
-  FileItem(name:"12月10日R1 未定"),
-  FileItem(name:"12月10日R2 未定"),
-  FileItem(name:"12月11日R1 未定"),
-  FileItem(name:"12月11日R2 未定"),
-];
-
-List<FileItem> _file202401 = [
-  FileItem(name:".."),
-  FileItem(name:"1月3日R1 狩猟初め！"),
-  FileItem(name:"1月3日R2 ジビエBBQ"),
-  FileItem(name:"1月6日R1 未定"),
-  FileItem(name:"1月7日R1 未定"),
-  FileItem(name:"1月7日R2 未定"),
-];
-
-List<FileItem> _file202402 = [
-  FileItem(name:".."),
-  FileItem(name:"2月3日R1 未定"),
-  FileItem(name:"2月3日R2 未定"),
-  FileItem(name:"2月6日R1 未定"),
-  FileItem(name:"2月6日R2 未定"),
-  FileItem(name:"2月28日R1 狩猟納！"),
-  FileItem(name:"2月28日R2 打ち上げBBQ"),
-];
-
-List<FileItem> _file2023 = [
-  FileItem(name:".."),
-  FileItem(name:"2023年11月", child:_file202311),
-  FileItem(name:"2023年12月", child:_file202312),
-  FileItem(name:"2024年1月", child:_file202401),
-  FileItem(name:"2024年2月", child:_file202402),
-];
-
-List<FileItem> _fileTopDir = [
-  FileItem(name:"2022シーズン", child:_file2022),
-  FileItem(name:"2023シーズン", child:_file2023),
-  FileItem(name:"default_data"),
-  FileItem(name:"11月1日R1 ホンダメ"),
-];
-
-FileItem _fileRoot = FileItem(name:"", child:_fileTopDir);
+// ルートノード
+FileItem _fileRoot = FileItem(name:"");
 
 // ルートから現在のディレクトリまでのスタック
 List<FileItem> _directoryStack = [ _fileRoot ];
 
+//ファイルツリーの共有(Firebase RealtimeDataBase)
+FirebaseDatabase database = FirebaseDatabase.instance;
+
+// Firebase RealtimeDataBase の参照パス
+final _fileRootPath = "fileTree/";
+
 //----------------------------------------------------------------------------
 // 汎用
-class Result
+class FileResult
 {
-  Result({ this.res=true, this.message="", this.path="" }){}
+  FileResult({ this.res=true, this.message="", this.path="" }){}
 
   bool res;
   String message;
@@ -150,38 +58,58 @@ class Result
 }
 
 //----------------------------------------------------------------------------
+// 初期化
+Future initFileTree() async
+{
+  // データベースにルートディレクトリが記録されていなければ、
+  // デフォルトのファイル(default_data)と共に登録。
+  final DatabaseReference ref = database.ref(_fileRootPath + "~");
+  final DataSnapshot snapshot = await ref.get();
+  if(!snapshot.exists){
+    List<String> files = [ "default_data" ];
+    ref.set(files);
+  }
+  // ルートディレクトリをデータベースから読み込み
+  moveDir(FileItem(name:"."));
+}
+
+//----------------------------------------------------------------------------
 // ファイル追加
-Result createNewFile(String fileName)
+FileResult createNewFile(String fileName)
 {
   return addFileItem(fileName, false);
 }
 
 // フォルダ追加
-Result createNewFolder(String folderName)
+FileResult createNewFolder(String folderName)
 {
   return addFileItem(folderName, true);
 }
 
-Result addFileItem(String name, bool folder)
+// ファイル/フォルダ追加の共通処理
+FileResult addFileItem(String name, bool folder)
 {
   List<FileItem> currentDir = getCurrentDir();
 
   // エラーチェック
   if(name == ""){
-    return Result(res:false, message:"ファイル名が指定されていません");
+    return FileResult(res:false, message:"ファイル名が指定されていません");
   }
-  if(name == ".."){
-    return Result(res:false, message:"'..'はファイル名に使えません");
+  if((name == ".") || (name == "..")){
+    return FileResult(res:false, message:"'.'および'..'はファイル名に使えません");
   }
   if(name.contains("/")){
-    return Result(res:false, message:"'/'はファイル名に使えません");
+    return FileResult(res:false, message:"'/'はファイル名に使えません");
+  }
+  if(name.contains("~")){
+    return FileResult(res:false, message:"'~'はファイル名に使えません");
   }
   bool res = true;
   currentDir.forEach((item){
     if(item.name == name) res = false;
   });
   if(!res){
-    return Result(res:false, message:"既にあるファイル名は使えません");
+    return FileResult(res:false, message:"既にあるファイル名は使えません");
   }
 
   // 新しいファイル/フォルダーを、カレントディレクトリに追加
@@ -193,7 +121,21 @@ Result addFileItem(String name, bool folder)
   currentDir.add(newItem);
 
   // 並びをソートする
-  currentDir.sort((a, b){
+  sortDir(currentDir);
+
+  // ディレクトリツリーのデータベースを更新
+  updateFileListToDB(getCurrentPath(), currentDir);
+
+  // 作成されたファイルパスを返す
+  String newPath = getCurrentPath() + name;
+
+  return FileResult(path:newPath);
+}
+
+// ディレクトリ内の並びをソート
+void sortDir(List<FileItem> dir)
+{
+  dir.sort((a, b){
     // 「階層を戻る」が先頭
     if(a.name == "..") return -1;
     // フォルダが前
@@ -202,11 +144,6 @@ Result addFileItem(String name, bool folder)
     // ファイル名で比較
     return a.name.compareTo(b.name);
   });
-
-  // 作成されたファイルパス
-  String newPath = getCurrentPath() + name;
-
-  return Result(path:newPath);
 }
 
 // カレントディレクトリを参照
@@ -217,6 +154,7 @@ List<FileItem> getCurrentDir()
 }
 
 // カレントディレクトリへのフルパスを取得
+// 先頭は"/"から始まり、最後のディレクトリ名の後ろは"/"で終わる。
 String getCurrentPath()
 {
   String path = "";
@@ -224,6 +162,100 @@ String getCurrentPath()
     path += folder.name + "/";
   });
   return path;
+}
+
+// ディレクトリを移動
+// カレントディレクトリから1階層の移動のみ。
+Future<bool> moveDir(FileItem folder) async
+{
+  // "."はカレントディレクトリへの移動で、実際にはカレントディレクトリの再構築
+  if(folder.name != "."){
+    // 移動先は当然フォルダーのみ
+    if(!folder.isFolder()) return false;
+
+    if(folder.name == ".."){
+      // 親階層に戻る
+      // ルートディレクトリより上には戻れない
+      if(_directoryStack.length <= 1) return false;
+      _directoryStack.removeLast();
+    }else{
+      // 下階層に下る
+      _directoryStack.add(folder);
+    }
+  }
+
+  // 移動先ディレクトリの構成をデータベースから取得
+  List<FileItem> currentDir = await getFileListFromDB(getCurrentPath());
+  // ルート以外(より下階層)なら「親階層に戻る」を追加
+  if(1 < _directoryStack.length){
+    currentDir.add(FileItem(name:".."));
+  }
+  // 並びをソートする
+  sortDir(currentDir);
+
+  // カレントディレクトリのデータを置き換え
+  _directoryStack[_directoryStack.length-1].child = currentDir;
+
+  return true;
+}
+
+// ディレクトリツリーのデータベースを更新
+void updateFileListToDB(String path, List<FileItem> dir)
+{
+  // ディレクトリの階層構造をDBの階層構造として扱わない！
+  // そのためパスセパレータ'/'を、セパレータではない文字'~'に置き換えて、階層構造を作らせない。
+  // DatabaseReference.get() でのデータ転送量をケチるため。
+  String databasePath = path.replaceAll("/", "~");
+  final DatabaseReference ref = database.ref(_fileRootPath + databasePath);
+  List<String> names = [];
+  dir.forEach((item){
+    // 「親階層に戻る」は除外
+    String name = item.name;
+    if(name != ".."){
+      // フォルダの場合には名前に"/"を追加
+      names.add(name + ((item.child != null)? "/": ""));
+    }
+  });
+  ref.set(names);
+}
+
+// ディレクトリツリーのデータベースから、ディレクトリ内のファイル/ディレクトリを取得
+Future<List<FileItem>> getFileListFromDB(String path) async
+{
+  // ディレクトリの階層構造をDBの階層構造として扱わない！
+  // そのためパスセパレータ'/'を、セパレータではない文字'~'に置き換えて、階層構造を作らせない。
+  // DatabaseReference.get() でのデータ転送量をケチるため。
+  String databasePath = path.replaceAll("/", "~");
+  final DatabaseReference ref = database.ref(_fileRootPath + databasePath);
+  List<dynamic> names = [];
+  try{
+    final DataSnapshot snapshot = await ref.get();
+    names = snapshot.value as List<dynamic>;
+  }catch(e){
+    // 移動先のディレクトリがなくてもなにもしない。
+    // 後でファイル/ディレクトリを追加したときに作成される。
+  }
+
+  // ディレクトリのファイル/ディレクトリ一覧を構築
+  List<FileItem> dir = [];
+  names.forEach((_name){
+    // データベースから取得した名前でファイル/ディレクトリを作成
+    // もし名前を取得できなければ破棄
+    String name = "";
+    try { name = _name as String; } catch(e){}
+    if(name != ""){
+      FileItem item = FileItem(name:"");
+      // 名前の後ろに"/"が付いているのはディレクトリ
+      if(name.substring(name.length-1) == "/"){
+        item.child = [ FileItem(name:"..") ];
+        name = name.substring(0, name.length-1);
+      }
+      item.name = name;
+      dir.add(item);
+    }
+  });
+
+  return dir;
 }
 
 //----------------------------------------------------------------------------
@@ -329,13 +361,6 @@ class FilesPageState extends State<FilesPage>
         title: Text(text, style:_textStyle),
         // タップでファイルを切り替え
         onTap: () {
-          if((1 < _directoryStack.length) && (index == 0)){
-            // 上階層に戻る
-            setState((){
-              _directoryStack.removeLast();
-            });
-            return;
-          }
           var currentDir = getCurrentDir();
           if(currentDir[index].isFile()){
             // ファイルを切り替える
@@ -345,9 +370,9 @@ class FilesPageState extends State<FilesPage>
             }
             Navigator.pop(context);
           }else{
-            // ディレクトリを下る
-            setState((){
-              _directoryStack.add(currentDir[index]);
+            // ディレクトリ移動
+            moveDir(currentDir[index]).then((_){
+              setState((){});
             });
           }
         },
