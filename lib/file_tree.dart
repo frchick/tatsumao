@@ -26,7 +26,7 @@ class FileItem {
     this.child,
   });
   // ファイル/ディレクトリ名
-  String name;
+  final String name;
   // 子階層
   List<FileItem>? child;
 
@@ -41,6 +41,9 @@ FileItem _fileRoot = FileItem(name:"");
 
 // ルートから現在のディレクトリまでのスタック
 List<FileItem> _directoryStack = [ _fileRoot ];
+
+// 現在のファイルへのフルパス
+String _currentFilePath = "/default_data";
 
 //ファイルツリーの共有(Firebase RealtimeDataBase)
 FirebaseDatabase database = FirebaseDatabase.instance;
@@ -68,7 +71,7 @@ Future initFileTree() async
   final DatabaseReference ref = database.ref(_fileRootPath + "~");
   final DataSnapshot snapshot = await ref.get();
   if(!snapshot.exists){
-    List<String> files = [ "default_data" ];
+    final List<String> files = [ "default_data" ];
     ref.set(files);
   }
   // ルートディレクトリをデータベースから読み込み
@@ -129,7 +132,7 @@ FileResult addFileItem(String name, bool folder)
   updateFileListToDB(getCurrentPath(), currentDir);
 
   // 作成されたファイルパスを返す
-  String newPath = getCurrentPath() + name;
+  final String newPath = getCurrentPath() + name;
 
   return FileResult(path:newPath);
 }
@@ -144,6 +147,10 @@ FileResult deleteFile(FileItem item)
   if((_directoryStack.length == 1) && (item.name == "default_data")){
     return FileResult(res:false, message:"ルートの'default_data'は削除できません");
   }
+  final String filePath = getCurrentPath() + item.name;
+  if(filePath == _currentFilePath){
+    return FileResult(res:false, message:"開いているファイルは削除できません");
+  }
 
   // カレントディレクトリから要素を削除
   List<FileItem> currentDir = getCurrentDir();
@@ -153,8 +160,8 @@ FileResult deleteFile(FileItem item)
   updateFileListToDB(getCurrentPath(), currentDir);
 
   // 配置データも削除する
-  String path = "assign" + getCurrentPath() + item.name;
-  DatabaseReference ref = database.ref(path);
+  final String path = "assign" + filePath;
+  final DatabaseReference ref = database.ref(path);
   try{ ref.remove(); } catch(e) {}
 
   return FileResult();
@@ -170,13 +177,17 @@ Future<FileResult> deleteFolder(FileItem folder) async
   if(folder.name == ".."){
     return FileResult(res:false, message:"'上階層に戻る'は削除できません");
   }
+  final String folderPath = getCurrentPath() + folder.name;
+  if(_currentFilePath.indexOf(folderPath) == 0){
+    return FileResult(res:false, message:"開いているファイルを含むフォルダは削除できません");
+  }
 
   // フォルダ削除の再帰処理
   await deleteFolderRecursive(folder);
 
   // フォルダ以下の配置データを削除
-  String path = "assign" + getCurrentPath() + folder.name;
-  DatabaseReference ref = database.ref(path);
+  final String path = "assign" + folderPath;
+  final DatabaseReference ref = database.ref(path);
   try{ ref.remove(); } catch(e) {}
 
   // カレントディレクトリから要素を削除
@@ -203,9 +214,9 @@ Future deleteFolderRecursive(FileItem folder) async
 
   // その中のディレクトリに再帰しながら削除
   // NOTE: forEach() 使うと await で処理止められない…
-  var currentDir = getCurrentDir();
+  final List<FileItem> currentDir = getCurrentDir();
   for(int i = 0; i < currentDir.length; i++){
-    var item = currentDir[i];
+    final FileItem item = currentDir[i];
     if(item.isFolder() && (item.name != "..")){
       // フォルダを再帰的に削除
       await deleteFolderRecursive(item);
@@ -213,8 +224,8 @@ Future deleteFolderRecursive(FileItem folder) async
   }
 
   // データベースから自分自身を削除
-  String path = getCurrentPath();
-  String databasePath = path.replaceAll("/", "~");
+  final String path = getCurrentPath();
+  final String databasePath = path.replaceAll("/", "~");
   final DatabaseReference ref = database.ref(_fileRootPath + databasePath);
   try { ref.remove(); } catch(e) {}
 
@@ -252,6 +263,12 @@ String getCurrentPath()
     path += folder.name + "/";
   });
   return path;
+}
+
+// 現在開かれているカレントファフィルのフルパスを取得
+String getCurrentFilePath()
+{
+  return _currentFilePath;
 }
 
 // ディレクトリを移動
@@ -295,15 +312,14 @@ void updateFileListToDB(String path, List<FileItem> dir)
   // ディレクトリの階層構造をDBの階層構造として扱わない！
   // そのためパスセパレータ'/'を、セパレータではない文字'~'に置き換えて、階層構造を作らせない。
   // DatabaseReference.get() でのデータ転送量をケチるため。
-  String databasePath = path.replaceAll("/", "~");
+  final String databasePath = path.replaceAll("/", "~");
   final DatabaseReference ref = database.ref(_fileRootPath + databasePath);
   List<String> names = [];
   dir.forEach((item){
     // 「親階層に戻る」は除外
-    String name = item.name;
-    if(name != ".."){
+    if(item.name != ".."){
       // フォルダの場合には名前に"/"を追加
-      names.add(name + ((item.child != null)? "/": ""));
+      names.add(item.name + ((item.child != null)? "/": ""));
     }
   });
   try {
@@ -322,7 +338,7 @@ Future<List<FileItem>> getFileListFromDB(String path) async
   // ディレクトリの階層構造をDBの階層構造として扱わない！
   // そのためパスセパレータ'/'を、セパレータではない文字'~'に置き換えて、階層構造を作らせない。
   // DatabaseReference.get() でのデータ転送量をケチるため。
-  String databasePath = path.replaceAll("/", "~");
+  final String databasePath = path.replaceAll("/", "~");
   final DatabaseReference ref = database.ref(_fileRootPath + databasePath);
   List<dynamic> names = [];
   try{
@@ -341,14 +357,13 @@ Future<List<FileItem>> getFileListFromDB(String path) async
     String name = "";
     try { name = _name as String; } catch(e){}
     if(name != ""){
-      FileItem item = FileItem(name:"");
       // 名前の後ろに"/"が付いているのはディレクトリ
+      List<FileItem>? child;
       if(name.substring(name.length-1) == "/"){
-        item.child = [ FileItem(name:"..") ];
+        child = [ FileItem(name:"..") ];
         name = name.substring(0, name.length-1);
       }
-      item.name = name;
-      dir.add(item);
+      dir.add(FileItem(name:name, child:child));
     }
   });
 
@@ -376,6 +391,9 @@ class FilesPageState extends State<FilesPage>
 {
   final _textStyle = TextStyle(
     color:Colors.black, fontSize:18.0
+  );
+  final _textStyleBold = TextStyle(
+    color:Colors.black, fontSize:18.0, fontWeight:FontWeight.bold
   );
   final _borderStyle = Border(
     bottom: BorderSide(width:1.0, color:Colors.grey)
@@ -450,21 +468,28 @@ class FilesPageState extends State<FilesPage>
 
   // ファイル一覧アイテムの作成
   Widget _menuItem(BuildContext context, int index, String text, Icon icon) {
+    // 現在開いているファイルとその途中のフォルダは、強調表示する。
+    final List<FileItem> currentDir = getCurrentDir();
+    final String fullPath = getCurrentPath() + currentDir[index].name;
+    final bool isCurrentFile = (_currentFilePath.indexOf(fullPath) == 0);
+
     return Container(
       // ファイル間の境界線
       decoration: BoxDecoration(border:_borderStyle),
       // アイコンとファイル名
       child:ListTile(
         leading: icon,
-        title: Text(text, style:_textStyle),
+        iconColor: (isCurrentFile? Colors.black: null),
+        title: Text(text,
+          style: (isCurrentFile? _textStyleBold: _textStyle),
+        ),
         // タップでファイルを切り替え
         onTap: () {
-          var currentDir = getCurrentDir();
           if(currentDir[index].isFile()){
             // ファイルを切り替える
-            String path = getCurrentPath() + currentDir[index].name;
+            _currentFilePath = fullPath;
             if(widget.onSelectFile != null){
-              widget.onSelectFile!(path);
+              widget.onSelectFile!(_currentFilePath);
             }
             Navigator.pop(context);
           }else{
@@ -475,8 +500,7 @@ class FilesPageState extends State<FilesPage>
           }
         },
         // 長押しで削除
-        onLongPress: () async {
-          var currentDir = getCurrentDir();
+        onLongPress: () {
           deleteFileSub(context, currentDir[index]).then((_){
             setState((){});
           });
@@ -496,8 +520,9 @@ class FilesPageState extends State<FilesPage>
     var res = createNewFile(name);
     if(res.res){
       // 作成が成功したら、切り替えてマップに戻る
+      _currentFilePath = res.path;
       if(widget.onSelectFile != null){
-        widget.onSelectFile!(res.path);
+        widget.onSelectFile!(_currentFilePath);
       }
       Navigator.pop(context);
     }else{
