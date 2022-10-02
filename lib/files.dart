@@ -132,6 +132,94 @@ FileResult addFileItem(String name, bool folder)
   return FileResult(path:newPath);
 }
 
+// ファイル削除
+FileResult deleteFile(FileItem item)
+{
+  // エラーチェック
+  if(!item.isFile()){
+    return FileResult(res:false, message:"内部エラー(deleteFile()にフォルダを指定)");
+  }
+  if((_directoryStack.length == 1) && (item.name == "default_data")){
+    return FileResult(res:false, message:"ルートの'default_data'は削除できません");
+  }
+
+  // カレントディレクトリから要素を削除
+  List<FileItem> currentDir = getCurrentDir();
+  currentDir.remove(item);
+
+  // ディレクトリツリーのデータベースを更新
+  updateFileListToDB(getCurrentPath(), currentDir);
+
+  // 配置データも削除する
+  String path = "assign" + getCurrentPath() + item.name;
+  DatabaseReference ref = database.ref(path);
+  try{ ref.remove(); } catch(e) {}
+
+  return FileResult();
+}
+
+// フォルダ削除
+Future<FileResult> deleteFolder(FileItem folder) async
+{
+  // エラーチェック
+  if(!folder.isFolder()){
+    return FileResult(res:false, message:"内部エラー(deleteFolder()にファイルを指定)");
+  }
+  if(folder.name == ".."){
+    return FileResult(res:false, message:"'上階層に戻る'は削除できません");
+  }
+
+  // フォルダ削除の再帰処理
+  await deleteFolderRecursive(folder);
+
+  // フォルダ以下の配置データを削除
+  String path = "assign" + getCurrentPath() + folder.name;
+  DatabaseReference ref = database.ref(path);
+  try{ ref.remove(); } catch(e) {}
+
+  // カレントディレクトリから要素を削除
+  List<FileItem> currentDir = getCurrentDir();
+  for(int i = 0; i < currentDir.length; i++){
+    var item = currentDir[i];
+    if(item.isFolder() && (item.name == folder.name)){
+      currentDir.removeAt(i);
+      break;
+    }
+  }
+
+  // ディレクトリツリーのデータベースを更新
+  updateFileListToDB(getCurrentPath(), currentDir);
+
+  return FileResult();
+}
+
+// フォルダ削除の再帰処理
+Future deleteFolderRecursive(FileItem folder) async
+{
+  // 指定されたフォルダに降りて、
+  await moveDir(folder);
+
+  // その中のディレクトリに再帰しながら削除
+  // NOTE: forEach() 使うと await で処理止められない…
+  var currentDir = getCurrentDir();
+  for(int i = 0; i < currentDir.length; i++){
+    var item = currentDir[i];
+    if(item.isFolder() && (item.name != "..")){
+      // フォルダを再帰的に削除
+      await deleteFolderRecursive(item);
+    }
+  }
+
+  // データベースから自分自身を削除
+  String path = getCurrentPath();
+  String databasePath = path.replaceAll("/", "~");
+  final DatabaseReference ref = database.ref(_fileRootPath + databasePath);
+  try { ref.remove(); } catch(e) {}
+
+  // 親ディレクトリへ戻る
+  await moveDir(FileItem(name:".."));
+}
+
 // ディレクトリ内の並びをソート
 void sortDir(List<FileItem> dir)
 {
@@ -216,7 +304,14 @@ void updateFileListToDB(String path, List<FileItem> dir)
       names.add(name + ((item.child != null)? "/": ""));
     }
   });
-  ref.set(names);
+  try {
+    if(0 < names.length){
+      ref.set(names);
+    }else{
+      // ディレクトリが空の場合にはデータベースからは削除
+      ref.remove();
+    }
+  }catch(e){}
 }
 
 // ディレクトリツリーのデータベースから、ディレクトリ内のファイル/ディレクトリを取得
@@ -258,6 +353,7 @@ Future<List<FileItem>> getFileListFromDB(String path) async
   return dir;
 }
 
+//----------------------------------------------------------------------------
 //----------------------------------------------------------------------------
 // ファイル一覧画面
 class FilesPage extends StatefulWidget
@@ -376,6 +472,13 @@ class FilesPageState extends State<FilesPage>
             });
           }
         },
+        // 長押しで削除
+        onLongPress: () async {
+          var currentDir = getCurrentDir();
+          deleteFileSub(context, currentDir[index]).then((_){
+            setState((){});
+          });
+        }
       ),
     );
   }
@@ -416,6 +519,30 @@ class FilesPageState extends State<FilesPage>
     if(res.res){
       // フォルダ作成が成功したら再描画
       setState((){});
+    }else{
+      // エラーメッセージ
+      showDialog(
+        context: context,
+        builder: (_){ return AlertDialog(content: Text(res.message)); }
+      );
+    }
+  }
+
+  // ファイル/ディレクトリの削除
+  Future deleteFileSub(BuildContext context, FileItem item) async
+  {
+    // ファイル削除ダイアログ
+    bool? ok = await showOkCancelDialog(context, "ファイルを削除しますか？");
+    if((ok != null)? !ok: true) return;
+
+    late FileResult res;
+    if(item.isFile()){
+      res = deleteFile(item);
+    }else{
+      await deleteFolder(item).then((r){ res = r; });
+    }
+
+    if(res.res){
     }else{
       // エラーメッセージ
       showDialog(
@@ -505,6 +632,59 @@ Future<String?> showCreateFolderDialog(BuildContext context)
     useRootNavigator: true,
     builder: (context) {
       return TextEditDialog(titleText:"フォルダの作成", hintText:"新規フォルダ名");
+    },
+  );
+}
+
+//----------------------------------------------------------------------------
+//----------------------------------------------------------------------------
+// はい/いいえダイアログ
+class OkCancelDialog extends StatefulWidget
+{
+  OkCancelDialog({
+    super.key,
+    this.titleText = "",
+  }){}
+
+  String titleText = "";
+
+  @override
+  State createState() => _OkCancelDialogState();
+}
+
+class _OkCancelDialogState extends State<OkCancelDialog>
+{
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(widget.titleText),
+      actions: [
+        ElevatedButton(
+          child: Text("キャンセル"),
+          onPressed: (){
+            Navigator.pop<bool>(context, false);
+          }
+        ),
+        ElevatedButton(
+          child: Text("OK"),
+          onPressed: (){
+            Navigator.pop<bool>(context, true);
+          },
+        ),
+      ],
+    );
+  }
+}
+
+//----------------------------------------------------------------------------
+// はい/いいえダイアログを表示
+Future<bool?> showOkCancelDialog(BuildContext context, String text)
+{
+  return showDialog<bool>(
+    context: context,
+    useRootNavigator: true,
+    builder: (context) {
+      return OkCancelDialog(titleText:text);
     },
   );
 }
