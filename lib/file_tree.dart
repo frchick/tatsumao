@@ -394,7 +394,7 @@ class FilesPageState extends State<FilesPage>
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('File and Folder'),
+        title: Text("階層：" + getCurrentPath()),
       ),
       body: Stack(children: [
         // ファイル/フォルダー一覧
@@ -534,9 +534,11 @@ class FilesPageState extends State<FilesPage>
   Future deleteFileSub(BuildContext context, FileItem item) async
   {
     // ファイル削除ダイアログ
-    bool? ok = await showOkCancelDialog(context, "ファイルを削除しますか？");
+    final String typeText = item.isFile()? "ファイル": "フォルダ";
+    bool? ok = await showOkCancelDialog(context, typeText + "を削除しますか？");
     if((ok != null)? !ok: true) return;
 
+    // 削除処理
     late FileResult res;
     if(item.isFile()){
       res = deleteFile(item);
