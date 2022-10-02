@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_database/firebase_database.dart';
+import 'ok_cancel_dialog.dart';
+import 'text_edit_dialog.dart';
 
 //----------------------------------------------------------------------------
 // グローバル変数
@@ -16,7 +18,7 @@ final ButtonStyle _appIconButtonStyle = ElevatedButton.styleFrom(
 
 //----------------------------------------------------------------------------
 //----------------------------------------------------------------------------
-// ファイル一覧
+// ファイル/ディレクトリ階層構造
 
 class FileItem {
   FileItem({
@@ -554,63 +556,6 @@ class FilesPageState extends State<FilesPage>
 }
 
 //----------------------------------------------------------------------------
-//----------------------------------------------------------------------------
-// 汎用テキスト入力ダイアログ
-
-class TextEditDialog extends StatefulWidget
-{
-  TextEditDialog({
-    super.key,
-    this.titleText = "",
-    this.hintText = "",
-  }){}
-
-  String titleText = "";
-  String hintText = "";
-
-  @override
-  State createState() => _TextEditDialogState();
-}
-
-class _TextEditDialogState extends State<TextEditDialog>
-{
-  final dateTextController = TextEditingController();
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: Text(widget.titleText),
-      content: TextField(
-        controller: dateTextController,
-        decoration: InputDecoration(
-          hintText: widget.hintText,
-        ),
-        autofocus: true,
-      ),
-      actions: [
-        ElevatedButton(
-          child: Text("キャンセル"),
-          onPressed: () => Navigator.pop(context),
-        ),
-        ElevatedButton(
-          child: Text("作成"),
-          onPressed: () {
-            int seconds = int.tryParse(dateTextController.text) ?? 0;
-            Navigator.pop<String>(context, dateTextController.text);
-          },
-        ),
-      ],
-    );
-  }
-
-  @override
-  void dispose() {
-    dateTextController.dispose();
-    super.dispose();
-  }
-}
-
-//----------------------------------------------------------------------------
 // ファイル名入力ダイアログ
 Future<String?> showCreateFileDialog(BuildContext context)
 {
@@ -632,59 +577,6 @@ Future<String?> showCreateFolderDialog(BuildContext context)
     useRootNavigator: true,
     builder: (context) {
       return TextEditDialog(titleText:"フォルダの作成", hintText:"新規フォルダ名");
-    },
-  );
-}
-
-//----------------------------------------------------------------------------
-//----------------------------------------------------------------------------
-// はい/いいえダイアログ
-class OkCancelDialog extends StatefulWidget
-{
-  OkCancelDialog({
-    super.key,
-    this.titleText = "",
-  }){}
-
-  String titleText = "";
-
-  @override
-  State createState() => _OkCancelDialogState();
-}
-
-class _OkCancelDialogState extends State<OkCancelDialog>
-{
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: Text(widget.titleText),
-      actions: [
-        ElevatedButton(
-          child: Text("キャンセル"),
-          onPressed: (){
-            Navigator.pop<bool>(context, false);
-          }
-        ),
-        ElevatedButton(
-          child: Text("OK"),
-          onPressed: (){
-            Navigator.pop<bool>(context, true);
-          },
-        ),
-      ],
-    );
-  }
-}
-
-//----------------------------------------------------------------------------
-// はい/いいえダイアログを表示
-Future<bool?> showOkCancelDialog(BuildContext context, String text)
-{
-  return showDialog<bool>(
-    context: context,
-    useRootNavigator: true,
-    builder: (context) {
-      return OkCancelDialog(titleText:text);
     },
   );
 }
