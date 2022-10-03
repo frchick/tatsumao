@@ -13,6 +13,7 @@ import 'firebase_options.dart';
 import 'dart:async';
 import 'package:flutter/services.dart';
 import 'file_tree.dart';
+import 'text_ballon_widget.dart';
 
 //----------------------------------------------------------------------------
 // グローバル変数
@@ -209,12 +210,12 @@ void onChangeMemberState(final int index, DatabaseEvent event)
 
     // 家に帰った/参加したポップアップメッセージ
     if(returnToHome){
-      String msg = members[index].name + " は家に帰った";
-//!!!!      showPopupMessage(msg);
+      final String msg = members[index].name + " は家に帰った";
+      showTextBallonMessage(msg);
     }
     else if(joinToTeam){
-      String msg = members[index].name + " が参加した";
-//!!!!      showPopupMessage(msg);
+      final String msg = members[index].name + " が参加した";
+      showTextBallonMessage(msg);
     }
   }
   else{
@@ -289,78 +290,6 @@ class MyDragMarker2 extends MyDragMarker {
     required super.index,
     super.visible = true,
   }) {
-  }
-}
-
-
-//----------------------------------------------------------------------------
-//----------------------------------------------------------------------------
-// 遅延フェードアウト
-class MyFadeOut extends StatefulWidget {
-  final Widget child;
-  
-  // アニメーションの再生が終わったかのフラグ
-  // Widget側のメンバーは、インスタンスを作り直すごとにリセットされる。
-  // State側のメンバーは、インスタンスが作り直されても永続する？
-  bool _completed = false;
-
-  MyFadeOut({
-    required this.child,
-  }){}
-
-  @override
-  _MyFadeOutState createState() => _MyFadeOutState();
-}
-
-class _MyFadeOutState extends State<MyFadeOut>
-    with TickerProviderStateMixin
-{
-  late AnimationController _controller;
-  late Animation<double> _reverse;
-  late Animation<double> _animation;
-
-  @override
-  initState() {
-    super.initState();
-    // 1.5秒のアニメーション
-    _controller = AnimationController(
-      duration: const Duration(milliseconds: 1500),
-      vsync: this);
-    // 表示→フェードアウトとなるように、値を逆転
-    _reverse = Tween<double>(begin: 1.0, end: 0.0).animate(_controller);
-    // フェードアウトを遅延させる
-    _animation = CurvedAnimation(
-      parent: _reverse,
-      curve: Interval(0.0, 0.25, curve: Curves.easeIn),
-    );
-    // アニメーション終了時に非表示
-    _controller.addStatusListener((status) {
-      if (status == AnimationStatus.completed) {
-        setState(() {
-          widget._completed = true;
-        });
-      }
-    });
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    // アニメーション開始
-    // アニメーション終了後の更新では、当然アニメーションの開始はしない。
-    if(!widget._completed){
-      _controller.forward(from: 0.0);
-    }
-
-    // アニメーションが終了していたら、Widgetを非表示にする。
-    return Visibility(
-      visible: !widget._completed,
-      child: FadeTransition(opacity: _animation, child: widget.child));
   }
 }
 
@@ -543,9 +472,6 @@ class MapView extends StatefulWidget {
 
 class _MapViewState extends State<MapView>
 {
-  // ポップアップメッセージ
-  late MyFadeOut popupMessage;
-  
   // ウィンドウサイズを参照するためのキー
   GlobalKey scaffoldKey = GlobalKey();
 
@@ -589,9 +515,6 @@ class _MapViewState extends State<MapView>
       );
       memberIndex++;
     });
-
-    // ポップアップメッセージ
-    popupMessage = MyFadeOut(child: Text(""));
 
     // ファイルツリーのデータベースを初期化
     initFileTree();
@@ -652,7 +575,7 @@ class _MapViewState extends State<MapView>
                     style: _appIconButtonStyle,
                     onPressed: () {
                       copyAssignToClipboard();
-                      showPopupMessage("配置をクリップボードへコピー");
+                      showTextBallonMessage("配置をクリップボードへコピー");
                     },
                   ),
                   // ファイル一覧ボタン
@@ -677,7 +600,7 @@ class _MapViewState extends State<MapView>
               // ポップアップメッセージ
               Align(
                 alignment: Alignment(0.0, 0.0),
-                child: popupMessage
+                child: TextBallonWidget(),
               ),
             ]
           ),
@@ -750,7 +673,7 @@ class _MapViewState extends State<MapView>
 
         // ポップアップメッセージ
         String msg = members[index].name + " は家に帰った";
-        showPopupMessage(msg);
+        showTextBallonMessage(msg);
         
         return point;
     }
@@ -766,33 +689,6 @@ class _MapViewState extends State<MapView>
 
     print("End index $index, point $point");
     return point;
-  }
-
-  //---------------------------------------------------------------------------
-  // ポップアップメッセージの表示
-  void showPopupMessage(String message)
-  {
-    // ポップアップメッセージ
-    setState((){
-      popupMessage = MyFadeOut(
-        child: Container(
-          padding: EdgeInsets.fromLTRB(25, 5, 25, 10),
-          decoration: BoxDecoration(
-            color: Colors.black,
-            borderRadius: BorderRadius.circular(5),
-          ),
-          child: Text(
-            message,
-            style:TextStyle(
-              fontWeight: FontWeight.bold,
-              color: Colors.grey.shade200,
-            ),
-            textScaleFactor: 1.25,
-            textAlign: TextAlign.center,
-          ),
-        )
-      );
-    });
   }
 
   //---------------------------------------------------------------------------
