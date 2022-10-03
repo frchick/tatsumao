@@ -385,28 +385,35 @@ class _HomeButtonWidgetState extends State<HomeButtonWidget>
   {
     return Align(
       // 画面右下に配置
-      alignment: Alignment(1.0, 1.0),
+      alignment: const Alignment(1.0, 1.0),
       // 家アイコンとそのスタイル
       child: ElevatedButton(
-        child: Icon(Icons.home, size: 50),
+        child: const Icon(Icons.home, size: 50),
         style: _appIconButtonStyle,
+
         // 家ボタンタップでメンバー一覧メニューを開く
-        onPressed: (){
+        onPressed: ()
+        {
           // メンバー一覧メニューを開く
           showModalBottomSheet<void>(
             context: context,
-            builder: (BuildContext context) {
-              // メンバー一覧メニューの構築(再描画)
+            builder: (BuildContext context)
+            {
               return StatefulBuilder(
-                builder: (context, StateSetter setModalState) {
+                builder: (context, StateSetter setModalState)
+                {
                   _setModalState = setModalState;
+
                   // 出動していないメンバーのアイコンを並べる
+                  // NOTE: メンバーをドラッグで地図に配置した際、この StatefulBuilder.builder() で
+                  // NOTE: 再描画を行う。そのためアイコンリストの構築はココに実装する必要がある。
                   List<Widget> draggableIcons = [];
                   int index = 0;
-                  members.forEach((member) {
+                  members.forEach((member)
+                  {
                     if(!member.attended){
                       draggableIcons.add(Align(
-                        alignment: Alignment(0.0, -0.8),
+                        alignment: const Alignment(0.0, -0.8),
                         child: MyDraggable<int>(
                           data: index,
                           child: member.icon0,
@@ -422,14 +429,17 @@ class _HomeButtonWidgetState extends State<HomeButtonWidget>
                     index++;
                   });
                   // 高さ120ドット、横スクロールのリストビュー
+                  final ScrollController controller = ScrollController();
                   return Container(
                     height: menuHeight,
                     color: Colors.brown.shade100,
                     child: Scrollbar(
                       thumbVisibility: true,
+                      controller: controller,
                       child: ListView(
+                        controller: controller,
                         scrollDirection: Axis.horizontal,
-                        children : draggableIcons,
+                        children: draggableIcons,
                       ),
                     ),
                   );
@@ -456,6 +466,7 @@ class MyCustomScrollBehavior extends MaterialScrollBehavior {
         PointerDeviceKind.mouse,
       };
 }
+
 void main() async
 {
   // Firebase を初期化
