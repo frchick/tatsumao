@@ -3,6 +3,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'ok_cancel_dialog.dart';
 import 'text_edit_dialog.dart';
+import 'text_ballon_widget.dart';
 
 //----------------------------------------------------------------------------
 // グローバル変数
@@ -492,6 +493,7 @@ class FilesPageState extends State<FilesPage>
               widget.onSelectFile!(_currentFilePath);
             }
             Navigator.pop(context);
+            showTextBallonMessage(_currentFilePath);
           }else{
             // ディレクトリ移動
             moveDir(currentDir[index]).then((_){
@@ -525,6 +527,7 @@ class FilesPageState extends State<FilesPage>
         widget.onSelectFile!(_currentFilePath);
       }
       Navigator.pop(context);
+      showTextBallonMessage(_currentFilePath);
     }else{
       // エラーメッセージ
       showDialog(
