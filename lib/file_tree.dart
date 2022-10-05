@@ -532,8 +532,7 @@ class FilesPageState extends State<FilesPage>
       // エラーメッセージ
       showDialog(
         context: context,
-        builder: (_){ return AlertDialog(content: Text(res.message)); }
-      );
+        builder: (_){ return AlertDialog(content: Text(res.message)); });
     }
   }
 
@@ -563,7 +562,7 @@ class FilesPageState extends State<FilesPage>
   {
     // ファイル削除ダイアログ
     final String typeText = item.isFile()? "ファイル": "フォルダ";
-    bool? ok = await showOkCancelDialog(context, typeText + "を削除しますか？");
+    bool? ok = await showOkCancelDialog(context, text:typeText + "を削除しますか？");
     if((ok != null)? !ok: true) return;
 
     // 削除処理
@@ -593,7 +592,10 @@ Future<String?> showCreateFileDialog(BuildContext context)
     context: context,
     useRootNavigator: true,
     builder: (context) {
-      return TextEditDialog(titleText:"ファイルの作成", hintText:"新規ファイル名");
+      return TextEditDialog(
+        titleText:"ファイルの作成",
+        hintText:"新規ファイル名",
+        okText:"作成");
     },
   );
 }
@@ -606,7 +608,10 @@ Future<String?> showCreateFolderDialog(BuildContext context)
     context: context,
     useRootNavigator: true,
     builder: (context) {
-      return TextEditDialog(titleText:"フォルダの作成", hintText:"新規フォルダ名");
+      return TextEditDialog(
+        titleText:"フォルダの作成",
+        hintText:"新規フォルダ名",
+        okText:"作成");
     },
   );
 }

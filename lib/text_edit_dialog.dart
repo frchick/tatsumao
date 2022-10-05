@@ -9,11 +9,15 @@ class TextEditDialog extends StatefulWidget
   TextEditDialog({
     super.key,
     this.titleText = "",
-    this.hintText = "",
+    this.hintText,
+    this.defaultText,
+    this.okText = "決定",
   }){}
 
   String titleText = "";
-  String hintText = "";
+  String? hintText;
+  String? defaultText;
+  String okText;
 
   @override
   State createState() => _TextEditDialogState();
@@ -21,17 +25,15 @@ class TextEditDialog extends StatefulWidget
 
 class _TextEditDialogState extends State<TextEditDialog>
 {
-  final dateTextController = TextEditingController();
-
   @override
   Widget build(BuildContext context) {
+    final dateTextController = TextEditingController(text: widget.defaultText);
+
     return AlertDialog(
       title: Text(widget.titleText),
       content: TextField(
         controller: dateTextController,
-        decoration: InputDecoration(
-          hintText: widget.hintText,
-        ),
+        decoration: (widget.hintText != null)? InputDecoration(hintText: widget.hintText): null,
         autofocus: true,
       ),
       actions: [
@@ -40,7 +42,7 @@ class _TextEditDialogState extends State<TextEditDialog>
           onPressed: () => Navigator.pop(context),
         ),
         ElevatedButton(
-          child: Text("作成"),
+          child: Text(widget.okText),
           onPressed: () {
             int seconds = int.tryParse(dateTextController.text) ?? 0;
             Navigator.pop<String>(context, dateTextController.text);
@@ -48,11 +50,5 @@ class _TextEditDialogState extends State<TextEditDialog>
         ),
       ],
     );
-  }
-
-  @override
-  void dispose() {
-    dateTextController.dispose();
-    super.dispose();
   }
 }

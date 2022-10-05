@@ -7,10 +7,14 @@ class OkCancelDialog extends StatefulWidget
 {
   OkCancelDialog({
     super.key,
-    this.titleText = "",
-  }){}
+    this.titleText,
+    this.contentText,
+    this.showCancelButton = true,
+  });
 
-  String titleText = "";
+  String? titleText;
+  String? contentText;
+  bool showCancelButton;
 
   @override
   State createState() => _OkCancelDialogState();
@@ -21,9 +25,10 @@ class _OkCancelDialogState extends State<OkCancelDialog>
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: Text(widget.titleText),
+      title: (widget.titleText != null)? Text(widget.titleText!): null,
+      content: (widget.contentText != null)? Text(widget.contentText!): null,
       actions: [
-        ElevatedButton(
+        if(widget.showCancelButton) ElevatedButton(
           child: Text("キャンセル"),
           onPressed: (){
             Navigator.pop<bool>(context, false);
@@ -42,13 +47,29 @@ class _OkCancelDialogState extends State<OkCancelDialog>
 
 //----------------------------------------------------------------------------
 // はい/いいえダイアログを表示
-Future<bool?> showOkCancelDialog(BuildContext context, String text)
+Future<bool?> showOkCancelDialog(
+  BuildContext context, { String? title, String? text })
 {
   return showDialog<bool>(
     context: context,
     useRootNavigator: true,
     builder: (context) {
-      return OkCancelDialog(titleText:text);
+      return OkCancelDialog(titleText:title, contentText:text);
+    },
+  );
+}
+
+//----------------------------------------------------------------------------
+// OKダイアログを表示
+Future<bool?> showOkDialog(
+  BuildContext context, { String? title, String? text })
+{
+  return showDialog<bool>(
+    context: context,
+    useRootNavigator: true,
+    builder: (context) {
+      return OkCancelDialog(
+        titleText:title, contentText:text, showCancelButton:false);
     },
   );
 }

@@ -8,9 +8,7 @@ import 'package:firebase_database/firebase_database.dart';
 import 'package:xml/xml.dart';
 import 'firebase_options.dart';
 import 'mydragmarker.dart';
-import 'mydrag_target.dart';
-import 'dart:async';
-import 'package:flutter/services.dart';
+import 'text_edit_dialog.dart';
 
 //----------------------------------------------------------------------------
 // グローバル変数
@@ -142,22 +140,13 @@ Future loadTatsumaFromDB() async
 
 //----------------------------------------------------------------------------
 // GPXファイルからタツマを読み込む
-Future readTatsumaFromGPX() async
+Map<String,int>? readTatsumaFromGPX(String fileContent)
 {
-  // .pgx ファイルを選択して開く
-  final XTypeGroup typeGroup = XTypeGroup(
-	  label: 'gpx',
-	  extensions: ['gpx'],
-  );
-  final XFile? file = await openFile(acceptedTypeGroups: [typeGroup]);
-  if (file == null) return;
-
   // XMLパース
-  final String fileContent = await file.readAsString();
   final XmlDocument gpxDoc = XmlDocument.parse(fileContent);
 
   final XmlElement? gpx = gpxDoc.getElement("gpx");
-  if(gpx == null) return;
+  if(gpx == null) return null;
 
   // タツマを読み取り
   List<TatsumaData> newTatsumas = [];
@@ -175,19 +164,23 @@ Future readTatsumaFromGPX() async
   });
 
   // タツマデータをマージ
-  mergeTatsumas(newTatsumas);
+  final int mergeCount = mergeTatsumas(newTatsumas);
 
-  // タツマをデータベースへ保存
-  saveTatsumaToDB();
+  // 読みこんだ数と、マージで取り込んだ数を返す
+  return {
+    "readCount": newTatsumas.length,
+    "mergeCount": mergeCount,
+  };
 }
 
 //----------------------------------------------------------------------------
 // タツマデータをマージ
-void mergeTatsumas(List<TatsumaData> newTatsumas)
+int mergeTatsumas(List<TatsumaData> newTatsumas)
 {
   // 同じ座標のタツマは上書きしない。
   // 新しい座標のタツマのみを取り込む。
   // 結果として、本ツール上で変更した名前と表示/非表示フラグは維持される。
+  int addCount = 0;
   final int numTatsumas = tatsumas.length;
   newTatsumas.forEach((newTatsuma){
     bool existed = false;
@@ -199,8 +192,12 @@ void mergeTatsumas(List<TatsumaData> newTatsumas)
     }
     if(!existed){
       tatsumas.add(newTatsuma);
+      addCount++;
     }
   });
+
+  // マージで追加したタツマ数を返す
+  return addCount;
 }
 
 //----------------------------------------------------------------------------
@@ -247,6 +244,9 @@ class TatsumasPageState extends State<TatsumasPage>
     bottom: BorderSide(width:1.0, color:Colors.grey)
   );
 
+  // タツマデータに変更があったかのフラグ
+  bool changeFlag = false;
+
   @override
   initState() {
     super.initState();
@@ -254,41 +254,138 @@ class TatsumasPageState extends State<TatsumasPage>
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text("タツマ一覧"),
-      ),
-      body: Stack(children: [
-        ListView.builder(
+    return WillPopScope(
+      // ページの戻り値
+      onWillPop: (){
+        Navigator.of(context).pop(changeFlag);
+        return Future.value(false);
+      },
+      child: Scaffold(
+        // ヘッダー部
+        appBar: AppBar(
+          title: const Text("タツマ一覧"),
+          actions: [
+            // GPXファイル読み込み
+            IconButton(
+              icon: Icon(Icons.file_open),
+              onPressed:() async {
+                readTatsumaFromGPXSub(context);
+              },
+            ),
+          ],
+        ),
+
+        body: ListView.builder(
           itemCount: tatsumas.length,
           itemBuilder: (context, index){
             return _menuItem(context, index);
           }
         ),
-      ]),
+      )
     );
   }
 
-  // ファイル一覧アイテムの作成
+  // タツマ一覧アイテムの作成
   Widget _menuItem(BuildContext context, int index) {
     final TatsumaData tatsuma = tatsumas[index];
-    final Icon icon =
-      (tatsuma.visible?
-        const Icon(Icons.visibility):
-        const Icon(Icons.visibility_off));
 
     return Container(
-      // ファイル間の境界線
+      // 境界線
       decoration: BoxDecoration(border:_borderStyle),
-      // アイコンとファイル名
+      // 表示/非表示アイコンとタツマ名
       child:ListTile(
-        leading: icon,
         title: Text(tatsuma.name),
-        onTap: () {
+
+        // (左側)表示非表示アイコンボタン
+        leading: IconButton(
+          icon: Icon(tatsuma.visible? Icons.visibility: Icons.visibility_off),
+          onPressed:() {
+            // 表示非表示の切り替え
+            setState((){
+              changeFlag = true;
+              tatsuma.visible = !tatsuma.visible;
+            });
+          },
+        ),
+
+        // (右側)編集ボタン
+        trailing: IconButton(
+          icon: Icon(Icons.more_horiz),
+          onPressed:() {
+            // タツマ名の変更ダイアログ
+            showChangeTatsumaDialog(context, index).then((name){
+              if(name != null){
+                setState((){
+                  changeFlag = true;
+                  tatsuma.name = name;
+                });
+              }
+            });
+          },
+        ),
+
+        onTap: (){
         },
-        onLongPress: () {
-        }
+
+        onLongPress: (){
+        },
       ),
     );
+  }
+
+  //----------------------------------------------------------------------------
+  // タツマ名変更ダイアログ
+  Future<String?> showChangeTatsumaDialog(BuildContext context, int index)
+  {
+    return showDialog<String>(
+      context: context,
+      useRootNavigator: true,
+      builder: (context) {
+        return TextEditDialog(
+          titleText: "タツマ名の変更",
+          defaultText: tatsumas[index].name);
+      },
+    );
+  }
+
+  //----------------------------------------------------------------------------
+  // GPXからのタツマ読み込み処理
+  Future<bool> readTatsumaFromGPXSub(BuildContext context) async
+  {
+    // .pgx ファイルを選択して開く
+    final XTypeGroup typeGroup = XTypeGroup(
+      label: 'gpx',
+      extensions: ['gpx'],
+    );
+    final XFile? file = await openFile(acceptedTypeGroups: [typeGroup]);
+    if (file == null) return false;
+
+    // ファイル読み込み
+    final String fileContent = await file.readAsString();
+
+    // XMLパース
+    final Map<String,int>? res = readTatsumaFromGPX(fileContent);
+    if(res == null) return false;
+    final int readCount = res["readCount"] ?? 0;
+    final int mergeCount = res["mergeCount"] ?? 0;
+
+    // メッセージを表示
+    final String message =
+      "${readCount}個の座標を読み込み、${mergeCount}個を追加しました。";
+    showDialog(
+      context: context,
+      builder: (_){ return AlertDialog(content: Text(message)); });
+
+    // タツマをデータベースへ保存して再描画(追加があれば)
+    final bool addTatsuma = (0 < mergeCount);
+    if(addTatsuma){
+      saveTatsumaToDB();
+      setState((){
+        changeFlag = true;
+        updateTatsumaMarkers();
+      });
+    }
+
+    return addTatsuma;
   }
 }

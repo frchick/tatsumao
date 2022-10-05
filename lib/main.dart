@@ -539,21 +539,26 @@ class _MapViewState extends State<MapView>
               Column(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                  // タツマの読み込み
+                  // タツマの編集と読み込み
                   ElevatedButton(
                     child: Icon(Icons.map, size: 50),
                     style: _appIconButtonStyle,
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (context) => TatsumasPage()),
+                    onPressed: () async {
+                      bool? changeTatsuma = await Navigator.of(context).push(
+                        MaterialPageRoute<bool>(
+                          builder: (context) => TatsumasPage()
+                        )
                       );
-/*                    await readTatsumaFromGPX();
-                      // タツマデータからマーカー配列を作成
-                      setState((){
-                        updateTatsumaMarkers();
-                      });
-*/                    },
+                      // タツマに変更があれば…
+                      if(changeTatsuma ?? false){
+                        // タツマをデータベースへ保存
+                        saveTatsumaToDB();
+                        // タツママーカーを再描画
+                        setState((){
+                          updateTatsumaMarkers();
+                        });
+                      }
+                    },
                   ),
 
                   // クリップボードへコピーボタン
