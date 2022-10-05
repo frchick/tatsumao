@@ -543,13 +543,17 @@ class _MapViewState extends State<MapView>
                   ElevatedButton(
                     child: Icon(Icons.map, size: 50),
                     style: _appIconButtonStyle,
-                    onPressed: () async {
-                      await readTatsumaFromGPX();
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => TatsumasPage()),
+                      );
+/*                    await readTatsumaFromGPX();
                       // タツマデータからマーカー配列を作成
                       setState((){
                         updateTatsumaMarkers();
                       });
-                    },
+*/                    },
                   ),
 
                   // クリップボードへコピーボタン

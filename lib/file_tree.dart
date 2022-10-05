@@ -390,13 +390,13 @@ class FilesPage extends StatefulWidget
 
 class FilesPageState extends State<FilesPage>
 {
-  final _textStyle = TextStyle(
+  TextStyle _textStyle = const TextStyle(
     color:Colors.black, fontSize:18.0
   );
-  final _textStyleBold = TextStyle(
+  TextStyle _textStyleBold = const TextStyle(
     color:Colors.black, fontSize:18.0, fontWeight:FontWeight.bold
   );
-  final _borderStyle = Border(
+  Border _borderStyle = const Border(
     bottom: BorderSide(width:1.0, color:Colors.grey)
   );
 

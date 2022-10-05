@@ -227,3 +227,68 @@ void updateTatsumaMarkers()
     }
   });
 }
+
+//----------------------------------------------------------------------------
+//----------------------------------------------------------------------------
+// タツマ一覧画面
+class TatsumasPage extends StatefulWidget
+{
+  TatsumasPage({
+    super.key
+  }){}
+
+  @override
+  TatsumasPageState createState() => TatsumasPageState();
+}
+
+class TatsumasPageState extends State<TatsumasPage>
+{
+  Border _borderStyle = const Border(
+    bottom: BorderSide(width:1.0, color:Colors.grey)
+  );
+
+  @override
+  initState() {
+    super.initState();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text("タツマ一覧"),
+      ),
+      body: Stack(children: [
+        ListView.builder(
+          itemCount: tatsumas.length,
+          itemBuilder: (context, index){
+            return _menuItem(context, index);
+          }
+        ),
+      ]),
+    );
+  }
+
+  // ファイル一覧アイテムの作成
+  Widget _menuItem(BuildContext context, int index) {
+    final TatsumaData tatsuma = tatsumas[index];
+    final Icon icon =
+      (tatsuma.visible?
+        const Icon(Icons.visibility):
+        const Icon(Icons.visibility_off));
+
+    return Container(
+      // ファイル間の境界線
+      decoration: BoxDecoration(border:_borderStyle),
+      // アイコンとファイル名
+      child:ListTile(
+        leading: icon,
+        title: Text(tatsuma.name),
+        onTap: () {
+        },
+        onLongPress: () {
+        }
+      ),
+    );
+  }
+}
