@@ -1,19 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter_map/flutter_map.dart';
-import 'package:latlong2/latlong.dart';
 import 'package:flutter_map/plugin_api.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'firebase_options.dart';
 import 'mydragmarker.dart';
 import 'mydrag_target.dart';
-import 'package:firebase_core/firebase_core.dart';
-import 'firebase_options.dart';
 import 'dart:async';
 import 'package:flutter/services.dart';
+
 import 'file_tree.dart';
 import 'text_ballon_widget.dart';
+import 'tatsumas.dart';
 
 //----------------------------------------------------------------------------
 // グローバル変数
@@ -25,60 +25,6 @@ final ButtonStyle _appIconButtonStyle = ElevatedButton.styleFrom(
   shadowColor: Colors.transparent,
   fixedSize: Size(80,80),
 );
-
-//----------------------------------------------------------------------------
-//----------------------------------------------------------------------------
-// タツマデータ
-class TatsumaData {
-  TatsumaData({
-    required this.pos,
-    required this.name
-  });
-  late LatLng pos;
-  late String name;
-}
-
-List<TatsumaData> tatsumas = [
-  TatsumaData(pos:LatLng(35.306227, 139.049396), name:"岩清水索道"),
-  TatsumaData(pos:LatLng(35.307217, 139.051598), name:"岩清水中"),
-  TatsumaData(pos:LatLng(35.306809, 139.052676), name:"岩清水下"),
-  TatsumaData(pos:LatLng(35.306282, 139.047802), name:"岩清水"),
-  TatsumaData(pos:LatLng(35.305798, 139.054232), name:"赤エル"),
-  TatsumaData(pos:LatLng(35.30636, 139.05427), name:"裏赤エル"),
-  TatsumaData(pos:LatLng(35.305804, 139.055972), name:"ストッパー"),
-  TatsumaData(pos:LatLng(35.304213, 139.046478), name:"新トナカイ"),
-  TatsumaData(pos:LatLng(35.305561, 139.045259), name:"トナカイ"),
-  TatsumaData(pos:LatLng(35.302601, 139.04473), name:"ムロ岩の先"),
-  TatsumaData(pos:LatLng(35.302488, 139.044131), name:"ムロ岩"),
-  TatsumaData(pos:LatLng(35.301932, 139.043382), name:"スター"),
-  TatsumaData(pos:LatLng(35.301166, 139.043601), name:"アメリカ"),
-  TatsumaData(pos:LatLng(35.300012, 139.044023), name:"太平洋"),
-  TatsumaData(pos:LatLng(35.30026, 139.046538), name:"メキシコ"),
-  TatsumaData(pos:LatLng(35.29942, 139.04639), name:"沢の上"),
-];
-
-// タツマのマーカー配列
-List<Marker> tatsumaMarkers = [];
-
-// 座標からタツマデータを参照
-TatsumaData? searchTatsumaByPoint(LatLng point)
-{
-  // 同じ座標のタツマを探して返す。
-  // 誤差0.0001度(約1[m])での一致判定。
-  const double th = (0.0001 * 0.0001) + (0.0001 * 0.0001);
-  TatsumaData? res = null;
-  tatsumas.forEach((tatsuma){
-    final double dx = point.latitude - tatsuma.pos.latitude;
-    final double dy = point.longitude - tatsuma.pos.longitude;
-    final double d = (dx * dx) + (dy * dy);
-    if(d < th){
-      res = tatsuma;
-      return;
-    }
-  });
-
-  return res;
-}
 
 //----------------------------------------------------------------------------
 //----------------------------------------------------------------------------
@@ -268,6 +214,8 @@ LatLng snapToTatsuma(LatLng point)
   var pixelPos0 = mainMapController.latLngToScreenPoint(point);
   num minDist = (18.0 * 18.0);
   tatsumas.forEach((tatsuma) {
+    if(!tatsuma.visible) return;
+
     var pixelPos1 = mainMapController.latLngToScreenPoint(tatsuma.pos);
     if((pixelPos0 != null) && (pixelPos1 != null)){
       num dx = (pixelPos0.x - pixelPos1.x).abs();
@@ -508,21 +456,13 @@ class _MapViewState extends State<MapView>
   void initState() {
     super.initState();
 
-    // タツマデータからマーカー配列を作成
-    tatsumas.forEach((element) {
-      tatsumaMarkers.add(Marker(
-        point: element.pos,
-        width: 100.0,
-        height: 96.0,
-        builder: (ctx) => Column(
-          children: [
-            Text(""),
-            Image.asset("assets/misc/tatsu_pos_icon.png", width: 32, height: 32),
-            Text(element.name, style:TextStyle(fontWeight: FontWeight.bold))
-          ],
-          mainAxisAlignment: MainAxisAlignment.center,
-        )
-      ));
+    // データベースからタツマを読み込み
+    loadTatsumaFromDB().then((_)
+    {
+      // タツマデータからマーカー配列を作成
+      setState((){
+        updateTatsumaMarkers();
+      });
     });
 
     // メンバーデータからマーカー配列を作成
@@ -595,10 +535,33 @@ class _MapViewState extends State<MapView>
               // 家アイコン
               HomeButtonWidget(appState:this),
 
+              // 機能ボタン
               Column(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                // クリップボードへコピーボタン
+                  // タツマの編集と読み込み
+                  ElevatedButton(
+                    child: Icon(Icons.map, size: 50),
+                    style: _appIconButtonStyle,
+                    onPressed: () async {
+                      bool? changeTatsuma = await Navigator.of(context).push(
+                        MaterialPageRoute<bool>(
+                          builder: (context) => TatsumasPage()
+                        )
+                      );
+                      // タツマに変更があれば…
+                      if(changeTatsuma ?? false){
+                        // タツマをデータベースへ保存
+                        saveTatsumaToDB();
+                        // タツママーカーを再描画
+                        setState((){
+                          updateTatsumaMarkers();
+                        });
+                      }
+                    },
+                  ),
+
+                  // クリップボードへコピーボタン
                   ElevatedButton(
                     child: Icon(Icons.content_copy, size: 50),
                     style: _appIconButtonStyle,
@@ -607,6 +570,7 @@ class _MapViewState extends State<MapView>
                       showTextBallonMessage("配置をクリップボードへコピー");
                     },
                   ),
+
                   // ファイル一覧ボタン
                   ElevatedButton(
                     child: Icon(Icons.folder, size: 50),
