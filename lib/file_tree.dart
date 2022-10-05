@@ -407,83 +407,89 @@ class FilesPageState extends State<FilesPage>
 
   @override
   Widget build(BuildContext context) {
-    // カレントディレクトリのファイル/ディレクトリを表示
-    final int stackDepth = _directoryStack.length;
-    final List<FileItem>? currentDir = getCurrentDir();
-
+    final List<FileItem> currentDir = getCurrentDir();
     return Scaffold(
       appBar: AppBar(
         title: Text("階層：" + getCurrentPath()),
-      ),
-      body: Stack(children: [
-        // ファイル/フォルダー一覧
-        ListView.builder(
-          itemCount: currentDir!.length,
-          itemBuilder: (context, index){
-            // アイコンを選択
-            var file = currentDir[index];
-            IconData icon;
-            late String name;
-            if((1 < stackDepth) && (index == 0)){
-              //「上階層に戻る」
-              name = "上階層に戻る";
-              icon = Icons.drive_file_move_rtl;
-            }else{
-              // ファイルかフォルダ
-              name = file.name;
-              icon = (file.child == null)? Icons.description: Icons.folder;
-            }
-            return _menuItem(context, index, name, Icon(icon));
-          }
-        ),        
-
-        // ファイル/フォルダー追加ボタン
-        Align(
-          // 画面右下に配置
-          alignment: Alignment(1.0, 1.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-            // ファイル作成ボタン
-              ElevatedButton(
-                child: Icon(Icons.note_add, size: 50),
-                style: _appIconButtonStyle,
-                onPressed: () {
-                  createNewFileSub(context);
-                },
-              ),
-              // フォルダ作成ボタン
-              ElevatedButton(
-                child: Icon(Icons.create_new_folder, size: 50),
-                style: _appIconButtonStyle,
-                onPressed: () {
-                  createNewFolderSub(context);
-                },
-              )
-            ]
+        actions: [
+          // (左)フォルダ作成ボタン
+          IconButton(
+            icon: Icon(Icons.create_new_folder),
+            onPressed:() async {
+              createNewFolderSub(context);
+            },
           ),
-        ),
-      ])
+          // (右)ファイル作成ボタン
+          IconButton(
+            icon: Icon(Icons.note_add),
+            onPressed:() async {
+              createNewFileSub(context);
+            },
+          ),
+        ],
+      ),
+      // カレントディレクトリのファイル/ディレクトリを表示
+      body: ListView.builder(
+        itemCount: currentDir.length,
+        itemBuilder: (context, index){
+          return _menuItem(context, index);
+        }
+      ),        
     );
   }
 
   // ファイル一覧アイテムの作成
-  Widget _menuItem(BuildContext context, int index, String text, Icon icon) {
-    // 現在開いているファイルとその途中のフォルダは、強調表示する。
+  Widget _menuItem(BuildContext context, int index) {
+    // アイコンを選択
+    final int stackDepth = _directoryStack.length;
     final List<FileItem> currentDir = getCurrentDir();
+    var file = currentDir[index];
+    IconData icon;
+    late String name;
+    bool goParentDir;
+    if((1 < stackDepth) && (index == 0)){
+      //「上階層に戻る」
+      goParentDir = true;
+      name = "上階層に戻る";
+      icon = Icons.drive_file_move_rtl;
+    }else{
+      // ファイルかフォルダ
+      goParentDir = false;
+      name = file.name;
+      icon = (file.child == null)? Icons.description: Icons.folder;
+    }
+
+    // 現在開いているファイルとその途中のフォルダは、強調表示する。
     final String fullPath = getCurrentPath() + currentDir[index].name;
     final bool isCurrentFile = (_currentFilePath.indexOf(fullPath) == 0);
+
+    // 「上階層に戻る」と、現在開いているファイルの途中は、削除アイコン表示しない。
+    final bool showDeleteIcon = !(goParentDir || isCurrentFile);
 
     return Container(
       // ファイル間の境界線
       decoration: BoxDecoration(border:_borderStyle),
       // アイコンとファイル名
       child:ListTile(
-        leading: icon,
+        // (左側)ファイル/フォルダーアイコン
+        leading: Icon(icon),
         iconColor: (isCurrentFile? Colors.black: null),
-        title: Text(text,
+
+        // ファイル名
+        title: Text(name,
           style: (isCurrentFile? _textStyleBold: _textStyle),
         ),
+
+        // (右側)削除ボタン
+        trailing: !showDeleteIcon? null: IconButton(
+          icon: Icon(Icons.delete),
+          onPressed:() {
+            deleteFileSub(context, currentDir[index]).then((_){
+              setState((){});
+            });
+          },
+        ),
+
         // タップでファイルを切り替え
         onTap: () {
           if(currentDir[index].isFile()){
@@ -501,12 +507,6 @@ class FilesPageState extends State<FilesPage>
             });
           }
         },
-        // 長押しで削除
-        onLongPress: () {
-          deleteFileSub(context, currentDir[index]).then((_){
-            setState((){});
-          });
-        }
       ),
     );
   }
@@ -562,7 +562,8 @@ class FilesPageState extends State<FilesPage>
   {
     // ファイル削除ダイアログ
     final String typeText = item.isFile()? "ファイル": "フォルダ";
-    bool? ok = await showOkCancelDialog(context, text:typeText + "を削除しますか？");
+    final String message = typeText + "「" + item.name + "」を削除しますか？";
+    bool? ok = await showOkCancelDialog(context, text:message);
     if((ok != null)? !ok: true) return;
 
     // 削除処理
