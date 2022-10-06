@@ -3,10 +3,17 @@ import 'dart:async';
 
 final _textBallonStream = StreamController<String>();
 
+// Streamから取得されるメッセージが表示済みかどうかを判定するためのIDX
+int _textBallonMessageIdx = 0;
+int _lastTextBallonMessageIdx = 0;
+
 //-----------------------------------------------------------------------------
 // ポップアップメッセージの表示
 void showTextBallonMessage(String message)
 {
+  // NOTE: 画面の再構築に伴う TextBallonWidget.build() の呼び出しで、直前のメッセージが
+  // NOTE: 繰り返し表示されることを抑止するためのメッセージ識別IDXをカウントする。
+  _textBallonMessageIdx++;
   _textBallonStream.sink.add(message);
 }
 
@@ -20,6 +27,12 @@ class TextBallonWidget extends StatelessWidget
       // 指定したstreamにデータが流れてくると再描画される
       stream: _textBallonStream.stream,
       builder: (BuildContext context, AsyncSnapshot<String> snapShot) {
+        // NOTE: メッセージの更新がない、もしくはメッセージが空の場合には何も表示しない。
+        if((_lastTextBallonMessageIdx == _textBallonMessageIdx) || (snapShot.data == null)){
+          return Container();
+        }
+        _lastTextBallonMessageIdx = _textBallonMessageIdx;
+        // フェードアウトメッセージを表示
         return MyFadeOut(
           child: Container(
             padding: EdgeInsets.fromLTRB(25, 5, 25, 10),
@@ -28,7 +41,7 @@ class TextBallonWidget extends StatelessWidget
               borderRadius: BorderRadius.circular(5),
             ),
             child: Text(
-              (snapShot.data ?? ""),
+              snapShot.data!,
               style:TextStyle(
                 fontWeight: FontWeight.bold,
                 color: Colors.grey.shade200,
