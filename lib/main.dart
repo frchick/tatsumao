@@ -35,11 +35,19 @@ class Member {
     required this.iconPath,
     required this.pos,
     this.attended = false,
+    this.withdrawals = false,
   });
+  // 名前
   String name;
+  // ドラッグマーカーのアイコンの画像ファイル
   String iconPath;
+  // 配置座標
   LatLng pos;
+  // 参加しているか？(マップ上に配置されているか？)
   bool attended;
+  // 退会者か？
+  bool withdrawals;
+  // ドラッグマーカーのアイコン
   late Image icon0;
 }
 
@@ -67,7 +75,7 @@ List<Member> members = [
   Member(name:"秋田さん", iconPath:"assets/member_icon/022.png", pos:LatLng(35.302880, 139.05500)),
   Member(name:"やまP", iconPath:"assets/member_icon/023.png", pos:LatLng(35.302880, 139.05500)),
   Member(name:"梅澤さん", iconPath:"assets/member_icon/024.png", pos:LatLng(35.302880, 139.05500)),
-  Member(name:"マッスー", iconPath:"assets/member_icon/025.png", pos:LatLng(35.302880, 139.05500)),
+  Member(name:"マッスー", iconPath:"assets/member_icon/025.png", pos:LatLng(35.302880, 139.05500), withdrawals:true),
   Member(name:"福島さん", iconPath:"assets/member_icon/026.png", pos:LatLng(35.302880, 139.05500)),
   Member(name:"池田さん", iconPath:"assets/member_icon/027.png", pos:LatLng(35.302880, 139.05500)),
   Member(name:"山口さん", iconPath:"assets/member_icon/028.png", pos:LatLng(35.302880, 139.05500)),
@@ -106,6 +114,8 @@ Future initMemberSync(String path) async
 
     if (snapshot.hasChild(id)) {
       // メンバーデータがデータベースにあれば、初期値として取得(直前の状態)
+      // NOTE: 退会者かどうかのフラグは、配置データとは関係ない。
+      // NOTE: 過去の配置データに参加していれば、退会後もその配置データでは表示される。
       member.attended = snapshot.child(id + "/attended").value as bool;
       member.pos = LatLng(
         snapshot.child(id + "/latitude").value as double,
@@ -142,6 +152,9 @@ void syncMemberState(final int index) async
     "latitude": member.pos.latitude,
     "longitude": member.pos.longitude
   });
+
+  // NOTE: 退会者かどうかのフラグは、配置データとは関係ない。
+  // NOTE: 過去の配置データに参加していれば、退会後もその配置データでは表示される。
 }
 
 // 他の利用者からの同期通知による変更
@@ -355,11 +368,12 @@ class _HomeButtonWidgetState extends State<HomeButtonWidget>
                   // 出動していないメンバーのアイコンを並べる
                   // NOTE: メンバーをドラッグで地図に配置した際、この StatefulBuilder.builder() で
                   // NOTE: 再描画を行う。そのためアイコンリストの構築はココに実装する必要がある。
+                  // NOTE: 退会者はここに表示しないことで、新たにマップ上に配置できないようにする。
                   List<Widget> draggableIcons = [];
                   int index = 0;
                   members.forEach((member)
                   {
-                    if(!member.attended){
+                    if(!member.attended && !member.withdrawals){
                       draggableIcons.add(Align(
                         alignment: const Alignment(0.0, -0.8),
                         child: MyDraggable<int>(
