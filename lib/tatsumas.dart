@@ -8,7 +8,6 @@ import 'package:firebase_database/firebase_database.dart';
 import 'package:xml/xml.dart';
 import 'firebase_options.dart';
 import 'mydragmarker.dart';
-import 'text_edit_dialog.dart';
 
 //----------------------------------------------------------------------------
 // グローバル変数
@@ -29,6 +28,7 @@ class TatsumaData {
     this.pos,
     this.name,
     this.visible,
+    this.areaBits,
   );
 
   // 座標
@@ -37,26 +37,34 @@ class TatsumaData {
   String name;
   // 表示/非表示
   bool visible;
+  // エリア(ビット和)
+  int areaBits;
 }
 
 // タツマの適当な初期データ。
 List<TatsumaData> tatsumas = [
-  TatsumaData(LatLng(35.306227, 139.049396), "岩清水索道", true),
-  TatsumaData(LatLng(35.307217, 139.051598), "岩清水中", true),
-  TatsumaData(LatLng(35.306809, 139.052676), "岩清水下", true),
-  TatsumaData(LatLng(35.306282, 139.047802), "岩清水", true),
-  TatsumaData(LatLng(35.305798, 139.054232), "赤エル", true),
-  TatsumaData(LatLng(35.30636, 139.05427), "裏赤エル", true),
-  TatsumaData(LatLng(35.305804, 139.055972), "ストッパー", true),
-  TatsumaData(LatLng(35.304213, 139.046478), "新トナカイ", true),
-  TatsumaData(LatLng(35.305561, 139.045259), "トナカイ", true),
-  TatsumaData(LatLng(35.302601, 139.04473), "ムロ岩の先", true),
-  TatsumaData(LatLng(35.302488, 139.044131), "ムロ岩", true),
-  TatsumaData(LatLng(35.301932, 139.043382), "スター", true),
-  TatsumaData(LatLng(35.301166, 139.043601), "アメリカ", true),
-  TatsumaData(LatLng(35.300012, 139.044023), "太平洋", true),
-  TatsumaData(LatLng(35.30026, 139.046538), "メキシコ", true),
-  TatsumaData(LatLng(35.29942, 139.04639), "沢の上", true),
+  TatsumaData(LatLng(35.306227, 139.049396), "岩清水索道", true, 1),
+  TatsumaData(LatLng(35.307217, 139.051598), "岩清水中", true, 1),
+  TatsumaData(LatLng(35.306809, 139.052676), "岩清水下", true, 1),
+  TatsumaData(LatLng(35.306282, 139.047802), "岩清水", true, 1),
+  TatsumaData(LatLng(35.305798, 139.054232), "赤エル", true, 3),
+  TatsumaData(LatLng(35.30636, 139.05427), "裏赤エル", true, 3),
+  TatsumaData(LatLng(35.305804, 139.055972), "ストッパー", true, 3),
+  TatsumaData(LatLng(35.304213, 139.046478), "新トナカイ", true, 1),
+  TatsumaData(LatLng(35.305561, 139.045259), "トナカイ", true, 1),
+  TatsumaData(LatLng(35.302601, 139.04473), "ムロ岩の先", true, 1),
+  TatsumaData(LatLng(35.302488, 139.044131), "ムロ岩", true, 1),
+  TatsumaData(LatLng(35.301932, 139.043382), "スター", true, 1),
+  TatsumaData(LatLng(35.301166, 139.043601), "アメリカ", true, 1),
+  TatsumaData(LatLng(35.300012, 139.044023), "太平洋", true, 1),
+  TatsumaData(LatLng(35.30026, 139.046538), "メキシコ", true, 1),
+  TatsumaData(LatLng(35.29942, 139.04639), "沢の上", true, 1),
+];
+
+final List<Text> _areaLabels = [
+  Text("暗闇沢"), Text("ホンダメ"), Text("苅野上"), Text("笹原林道"),
+  Text("桧山"), Text("桧山下"), Text("桧山上"), Text("茗荷谷"),
+  Text("金太郎上"), Text("金太郎東"), Text("金太郎下"), Text(""),
 ];
 
 // マップ上のタツマのマーカー配列
@@ -98,6 +106,7 @@ void saveTatsumaToDB()
       "latitude": tatsuma.pos.latitude,
       "longitude": tatsuma.pos.longitude,
       "visible": tatsuma.visible,
+      "areaBits": tatsuma.areaBits,
     });
   });
 
@@ -132,9 +141,10 @@ Future loadTatsumaFromDB() async
       return;
     }
     tatsumas.add(TatsumaData(
-      /*pos:*/     LatLng(t["latitude"] as double, t["longitude"] as double),
-      /*name:*/    t["name"] as String,
-      /*visible:*/ t["visible"] as bool));
+      /*pos:*/      LatLng(t["latitude"] as double, t["longitude"] as double),
+      /*name:*/     t["name"] as String,
+      /*visible:*/  t["visible"] as bool,
+      /*areaBits:*/ t["areaBits"] as int));
   });
 }
 
@@ -159,7 +169,8 @@ Map<String,int>? readTatsumaFromGPX(String fileContent)
       newTatsumas.add(TatsumaData(
         LatLng(double.parse(lat), double.parse(lon)),
         name.text,
-        true));
+        true,
+        0));
     }
   });
 
@@ -313,11 +324,13 @@ class TatsumasPageState extends State<TatsumasPage>
           icon: Icon(Icons.more_horiz),
           onPressed:() {
             // タツマ名の変更ダイアログ
-            showChangeTatsumaDialog(context, index).then((name){
-              if(name != null){
+            showChangeTatsumaDialog(context, index).then((res){
+              if(res != null){
                 setState((){
                   changeFlag = true;
-                  tatsuma.name = name;
+                  tatsuma.name     = res["name"] as String;
+                  tatsuma.visible  = res["visible"] as bool;
+                  tatsuma.areaBits = res["areaBits"] as int;
                 });
               }
             });
@@ -335,15 +348,17 @@ class TatsumasPageState extends State<TatsumasPage>
 
   //----------------------------------------------------------------------------
   // タツマ名変更ダイアログ
-  Future<String?> showChangeTatsumaDialog(BuildContext context, int index)
+  Future<Map<String,dynamic>?> showChangeTatsumaDialog(BuildContext context, int index)
   {
-    return showDialog<String>(
+    return showDialog<Map<String,dynamic>>(
       context: context,
       useRootNavigator: true,
       builder: (context) {
-        return TextEditDialog(
-          titleText: "タツマ名の変更",
-          defaultText: tatsumas[index].name);
+        final TatsumaData tatsuma = tatsumas[index];
+        return TatsumaDialog(
+          name: tatsuma.name,
+          visible: tatsuma.visible,
+          areaBits: tatsuma.areaBits);
       },
     );
   }
@@ -387,5 +402,124 @@ class TatsumasPageState extends State<TatsumasPage>
     }
 
     return addTatsuma;
+  }
+}
+
+//----------------------------------------------------------------------------
+//----------------------------------------------------------------------------
+// タツマ入力ダイアログ
+
+class TatsumaDialog extends StatefulWidget
+{
+  TatsumaDialog({
+    super.key,
+    required this.name,
+    required this.visible,
+    required this.areaBits,
+  }){}
+
+  String name;
+  bool visible;
+  int  areaBits;
+
+  @override
+  State createState() => _TatsumaDialogDialogState();
+}
+
+class _TatsumaDialogDialogState extends State<TatsumaDialog>
+{
+  @override
+  Widget build(BuildContext context) {
+    final dateTextController = TextEditingController(text: widget.name);
+    final Icon visibilityIcon =
+      widget.visible? const Icon(Icons.visibility): const Icon(Icons.visibility_off);
+
+    return AlertDialog(
+      title: Text("タツマ"),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              // 表示/非表示アイコンボタン
+              IconButton(
+                icon: visibilityIcon,
+                onPressed: (){
+                  setState((){
+                    widget.visible = !widget.visible;
+                  });
+                },                
+              ),
+              const SizedBox(width: 10),
+
+              // 名前エディットボックス
+              Expanded(
+                child: TextField(
+                  controller: dateTextController,
+                  autofocus: true,
+                ),
+              )
+            ]
+          ),
+
+          // エリアON/OFFボタン
+          const SizedBox(height: 10), makeAreaButtonRow(0, 4, _areaLabels),
+          const SizedBox(height: 5),  makeAreaButtonRow(4, 4, _areaLabels),
+          const SizedBox(height: 5),  makeAreaButtonRow(8, 4, _areaLabels),
+        ]
+      ),
+      actions: [
+        ElevatedButton(
+          child: Text("キャンセル"),
+          onPressed: () {
+            Navigator.pop(context);
+          }
+        ),
+        ElevatedButton(
+          child: Text("OK"),
+          onPressed: () {
+            Navigator.pop<Map<String,dynamic>>(context, {
+              "name": dateTextController.text,
+              "visible": widget.visible,
+              "areaBits": widget.areaBits });
+          },
+        ),
+      ],
+    );
+  }
+
+  // エリア選択ボタンの横一列分を作成
+  ToggleButtons makeAreaButtonRow(int offset, int count, List<Text> areaLabels)
+  {
+    // 初期状態でのON/OFFフラグ配列を作成
+    List<bool> selectFlags = [];
+    for(int i = 0; i < count; i++){
+      final int maskBit = (1 << (offset + i));
+      final bool on = (widget.areaBits & maskBit) != 0;
+      selectFlags.add(on);
+    }
+
+    return ToggleButtons(
+      onPressed: (int index) {
+        setState(() {
+          final int maskBit = (1 << (offset + index));
+          if((widget.areaBits & maskBit) == 0){
+            widget.areaBits |= maskBit;
+          }else{
+            widget.areaBits &= ~maskBit;
+          }
+        });
+      },
+      isSelected: selectFlags,
+      children: areaLabels.sublist(offset, offset+count),
+
+      direction: Axis.horizontal,
+      borderRadius: const BorderRadius.all(Radius.circular(8)),
+      constraints: const BoxConstraints(minHeight: 30, minWidth: 80),
+      selectedBorderColor: Colors.orange[700],  // ON枠の色
+      selectedColor: Colors.white,              // ONフォントの色
+      fillColor: Colors.orange[200],            // ON背景の色
+      color: Colors.orange[400],                // OFFフォントの色
+    );
   }
 }

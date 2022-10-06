@@ -44,7 +44,6 @@ class _TextEditDialogState extends State<TextEditDialog>
         ElevatedButton(
           child: Text(widget.okText),
           onPressed: () {
-            int seconds = int.tryParse(dateTextController.text) ?? 0;
             Navigator.pop<String>(context, dateTextController.text);
           },
         ),
