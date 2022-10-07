@@ -53,8 +53,9 @@ LatLng snapToTatsuma(LatLng point)
   var pixelPos0 = mainMapController.latLngToScreenPoint(point);
   num minDist = (18.0 * 18.0);
   tatsumas.forEach((tatsuma) {
-    if(!tatsuma.visible) return;
-
+    // 非表示のタツマは除外
+    if(!tatsuma.isVisible()) return;
+ 
     var pixelPos1 = mainMapController.latLngToScreenPoint(tatsuma.pos);
     if((pixelPos0 != null) && (pixelPos1 != null)){
       num dx = (pixelPos0.x - pixelPos1.x).abs();

@@ -28,6 +28,14 @@ class TatsumaData {
   bool visible;
   // エリア(ビット和)
   int areaBits;
+
+  // 可視判定
+  bool isVisible(){
+    // 表示/非表示フラグと、エリアの表示判定をチェック
+    return
+      visible &&
+      ((areaBits == 0) || ((areaBits & areaFilterBits) != 0));
+  }
 }
 
 // タツマの適当な初期データ。
@@ -58,11 +66,20 @@ const List<String> _areaNames = [
   "金太郎上", "金太郎東", "金太郎下", "",
 ];
 
+// エリア表示フィルターのビット和
+int areaFilterBits = (1 << _areaNames.length) - 1;
+
 // マップ上のタツマのマーカー配列
 List<Marker> tatsumaMarkers = [];
 
 // タツマデータの保存と読み込みデータベース
 FirebaseDatabase database = FirebaseDatabase.instance;
+
+// タツマアイコン画像
+// NOTE: 表示回数が多くて静的なので、事前に作成しておく
+final Image _tatsumaIcon = Image.asset(
+  "assets/misc/tatsu_pos_icon.png",
+  width: 32, height: 32);
 
 //----------------------------------------------------------------------------
 // 座標からタツマデータを参照
@@ -208,22 +225,23 @@ void updateTatsumaMarkers()
 {
   // タツマデータからマーカー配列を作成
   tatsumaMarkers.clear();
-  tatsumas.forEach((element) {
-    if(element.visible){
-      tatsumaMarkers.add(Marker(
-        point: element.pos,
-        width: 100.0,
-        height: 96.0,
-        builder: (ctx) => Column(
-          children: [
-            Text(""),
-            Image.asset("assets/misc/tatsu_pos_icon.png", width: 32, height: 32),
-            Text(element.name, style:TextStyle(fontWeight: FontWeight.bold))
-          ],
-          mainAxisAlignment: MainAxisAlignment.center,
-        )
-      ));
-    }
+  tatsumas.forEach((tatsuma) {
+    // 非表示のタツマは除外
+    if(!tatsuma.isVisible()) return;
+
+    tatsumaMarkers.add(Marker(
+      point: tatsuma.pos,
+      width: 200.0,
+      height: 96.0,
+      builder: (ctx) => Column(
+        children: [
+          Text(""),
+          _tatsumaIcon,
+          Text(tatsuma.name, style:TextStyle(fontWeight: FontWeight.bold))
+        ],
+        mainAxisAlignment: MainAxisAlignment.center,
+      )
+    ));
   });
 }
 
@@ -294,6 +312,19 @@ class TatsumasPageState extends State<TatsumasPage>
               icon: const Icon(Icons.file_open),
               onPressed:() async {
                 readTatsumaFromGPXSub(context);
+              },
+            ),
+            // エリアフィルター
+            IconButton(
+              icon: const Icon(Icons.filter_alt),
+              onPressed:() {
+                showAreaFilter(context).then((bool? res){
+                  if(res ?? false){
+                    setState((){
+                      changeFlag = true;
+                    });
+                  }
+                });
               },
             ),
           ],
@@ -444,7 +475,6 @@ class TatsumasPageState extends State<TatsumasPage>
 //----------------------------------------------------------------------------
 //----------------------------------------------------------------------------
 // タツマ入力ダイアログ
-
 class TatsumaDialog extends StatefulWidget
 {
   TatsumaDialog({
@@ -566,4 +596,75 @@ class _TatsumaDialogDialogState extends State<TatsumaDialog>
       color: Colors.orange[400],                // OFFフォントの色
     );
   }
+}
+
+//----------------------------------------------------------------------------
+//----------------------------------------------------------------------------
+// エリア表示フィルターダイアログ
+class AreaFilterDialog extends StatefulWidget
+{
+  AreaFilterDialog(){
+    _areaFilterBits0 = areaFilterBits;
+  }
+
+  @override
+  AreaFilterDialogState createState() => AreaFilterDialogState();
+
+  // 表示前のエリアフィルターのフラグ(変更の有無を確認する用)
+  int _areaFilterBits0 = 0;
+}
+
+class AreaFilterDialogState  extends State<AreaFilterDialog>
+{
+  @override
+  Widget build(BuildContext context)
+  {
+    // エリアごとのリスト項目を作成
+    List<ListTile> areas = [];
+    for(int i = 0; i < _areaNames.length; i++){
+      final int maskBit = (1 << i);
+      final bool visible = (areaFilterBits & maskBit) != 0;
+
+      areas.add(ListTile(
+        title: Text(_areaNames[i]),
+
+        // (左側)表示非表示アイコンボタン
+        leading: IconButton(
+          icon: (visible? const Icon(Icons.visibility): const Icon(Icons.visibility_off)),
+          onPressed:() {
+            // 表示非表示を反転
+            setState((){
+              areaFilterBits = (areaFilterBits ^ maskBit);
+            });
+          },
+        ),
+      ));
+    };
+
+    // ダイアログ表示
+    return WillPopScope(
+      // ページの戻り値
+      onWillPop: (){
+        // エリアフィルターに変更があるかを返す
+        final bool changeFilter = (widget._areaFilterBits0 != areaFilterBits); 
+        Navigator.of(context).pop(changeFilter);
+        return Future.value(false);
+      },
+      child: SimpleDialog(
+        title: const Text("エリア表示フィルター"),
+        children: areas
+      )
+    );
+  }
+}
+
+Future<bool?> showAreaFilter(BuildContext context)
+{
+  return showDialog<bool>(
+    context: context,
+    useRootNavigator: true,
+    builder: (context){
+      return AreaFilterDialog();
+    },
+  );
 }
