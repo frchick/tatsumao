@@ -10,17 +10,6 @@ import 'firebase_options.dart';
 import 'mydragmarker.dart';
 
 //----------------------------------------------------------------------------
-// グローバル変数
-
-// アイコンボタン共通のスタイル
-final ButtonStyle _appIconButtonStyle = ElevatedButton.styleFrom(
-  foregroundColor: Colors.orange.shade900,
-  backgroundColor: Colors.transparent,
-  shadowColor: Colors.transparent,
-  fixedSize: Size(80,80),
-);
-
-//----------------------------------------------------------------------------
 //----------------------------------------------------------------------------
 // タツマデータ
 class TatsumaData {
@@ -61,10 +50,12 @@ List<TatsumaData> tatsumas = [
   TatsumaData(LatLng(35.29942, 139.04639), "沢の上", true, 1),
 ];
 
-final List<Text> _areaLabels = [
-  Text("暗闇沢"), Text("ホンダメ"), Text("苅野上"), Text("笹原林道"),
-  Text("桧山"), Text("桧山下"), Text("桧山上"), Text("茗荷谷"),
-  Text("金太郎上"), Text("金太郎東"), Text("金太郎下"), Text(""),
+// 猟場のエリア名
+// NOTE: 設定ボタン表示の都合で、4の倍数個で定義
+const List<String> _areaNames = [
+  "暗闇沢", "ホンダメ", "苅野上", "笹原林道",
+  "桧山", "桧山下", "桧山上", "茗荷谷",
+  "金太郎上", "金太郎東", "金太郎下", "",
 ];
 
 // マップ上のタツマのマーカー配列
@@ -251,16 +242,38 @@ class TatsumasPage extends StatefulWidget
 
 class TatsumasPageState extends State<TatsumasPage>
 {
-  Border _borderStyle = const Border(
-    bottom: BorderSide(width:1.0, color:Colors.grey)
-  );
-
   // タツマデータに変更があったかのフラグ
   bool changeFlag = false;
+
+  // タツマ一覧に表示する、エリアタグ
+  // NOTE: 表示回数多いし静的なので事前作成
+  List<Container> _areaTags = [];
 
   @override
   initState() {
     super.initState();
+
+    // エリアラベルを作成
+    // NOTE: 初回のみ
+    if(_areaTags.length == 0){
+      final BoxDecoration boxDecoration = BoxDecoration(
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: Colors.orange, width:2),
+        color: Colors.orange[200],
+      );
+      for(int i = 0; i < _areaNames.length; i++){
+        _areaTags.add(Container(
+          margin: const EdgeInsets.only(right: 5),
+          padding: const EdgeInsets.symmetric(vertical:2, horizontal:8),
+          decoration: boxDecoration,
+          child: Text(
+            _areaNames[i],
+            textScaleFactor:0.9,
+            style: const TextStyle(color: Colors.white)
+          ),
+        ));
+      }
+    }
   }
 
   @override
@@ -278,7 +291,7 @@ class TatsumasPageState extends State<TatsumasPage>
           actions: [
             // GPXファイル読み込み
             IconButton(
-              icon: Icon(Icons.file_open),
+              icon: const Icon(Icons.file_open),
               onPressed:() async {
                 readTatsumaFromGPXSub(context);
               },
@@ -300,16 +313,49 @@ class TatsumasPageState extends State<TatsumasPage>
   Widget _menuItem(BuildContext context, int index) {
     final TatsumaData tatsuma = tatsumas[index];
 
+    // 表示するエリアタグを選択
+    List<Widget> areaTagsAndButton = [];
+    for(int i = 0; i < _areaTags.length; i++){
+      if((tatsuma.areaBits & (1 << i)) != 0){
+        areaTagsAndButton.add(_areaTags[i]);
+      }
+    }
+    if(tatsuma.areaBits != 0){
+      areaTagsAndButton.add(const SizedBox(width:5));
+    }
+
+    // 編集ボタンも追加しておく
+    areaTagsAndButton.add(IconButton(
+      icon: const Icon(Icons.more_horiz),
+      onPressed:() {
+        // タツマ名の変更ダイアログ
+        showChangeTatsumaDialog(context, index).then((res){
+          if(res != null){
+            setState((){
+              changeFlag = true;
+              tatsuma.name     = res["name"] as String;
+              tatsuma.visible  = res["visible"] as bool;
+              tatsuma.areaBits = res["areaBits"] as int;
+            });
+          }
+        });
+      }
+    ));
+    
     return Container(
       // 境界線
-      decoration: BoxDecoration(border:_borderStyle),
+      decoration: const BoxDecoration(
+        border:Border(
+          bottom: const BorderSide(width:1.0, color:Colors.grey)
+        ),
+      ),
       // 表示/非表示アイコンとタツマ名
       child:ListTile(
         title: Text(tatsuma.name),
 
         // (左側)表示非表示アイコンボタン
         leading: IconButton(
-          icon: Icon(tatsuma.visible? Icons.visibility: Icons.visibility_off),
+          icon: (tatsuma.visible? const Icon(Icons.visibility): const Icon(Icons.visibility_off)),
           onPressed:() {
             // 表示非表示の切り替え
             setState((){
@@ -319,22 +365,12 @@ class TatsumasPageState extends State<TatsumasPage>
           },
         ),
 
-        // (右側)編集ボタン
-        trailing: IconButton(
-          icon: Icon(Icons.more_horiz),
-          onPressed:() {
-            // タツマ名の変更ダイアログ
-            showChangeTatsumaDialog(context, index).then((res){
-              if(res != null){
-                setState((){
-                  changeFlag = true;
-                  tatsuma.name     = res["name"] as String;
-                  tatsuma.visible  = res["visible"] as bool;
-                  tatsuma.areaBits = res["areaBits"] as int;
-                });
-              }
-            });
-          },
+        // (右側)エリアタグと編集ボタン
+        trailing: Row(
+          mainAxisAlignment: MainAxisAlignment.end,
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: areaTagsAndButton
         ),
 
         onTap: (){
@@ -418,8 +454,11 @@ class TatsumaDialog extends StatefulWidget
     required this.areaBits,
   }){}
 
+  // 名前
   String name;
+  // 表示非表示フラグ
   bool visible;
+  // エリアビット
   int  areaBits;
 
   @override
@@ -435,7 +474,7 @@ class _TatsumaDialogDialogState extends State<TatsumaDialog>
       widget.visible? const Icon(Icons.visibility): const Icon(Icons.visibility_off);
 
     return AlertDialog(
-      title: Text("タツマ"),
+      title: const Text("タツマ"),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -463,20 +502,20 @@ class _TatsumaDialogDialogState extends State<TatsumaDialog>
           ),
 
           // エリアON/OFFボタン
-          const SizedBox(height: 10), makeAreaButtonRow(0, 4, _areaLabels),
-          const SizedBox(height: 5),  makeAreaButtonRow(4, 4, _areaLabels),
-          const SizedBox(height: 5),  makeAreaButtonRow(8, 4, _areaLabels),
+          const SizedBox(height: 10), makeAreaButtonRow(0, 4, _areaNames),
+          const SizedBox(height: 5),  makeAreaButtonRow(4, 4, _areaNames),
+          const SizedBox(height: 5),  makeAreaButtonRow(8, 4, _areaNames),
         ]
       ),
       actions: [
         ElevatedButton(
-          child: Text("キャンセル"),
+          child: const Text("キャンセル"),
           onPressed: () {
             Navigator.pop(context);
           }
         ),
         ElevatedButton(
-          child: Text("OK"),
+          child: const Text("OK"),
           onPressed: () {
             Navigator.pop<Map<String,dynamic>>(context, {
               "name": dateTextController.text,
@@ -489,7 +528,7 @@ class _TatsumaDialogDialogState extends State<TatsumaDialog>
   }
 
   // エリア選択ボタンの横一列分を作成
-  ToggleButtons makeAreaButtonRow(int offset, int count, List<Text> areaLabels)
+  ToggleButtons makeAreaButtonRow(int offset, int count, List<String> areaNames)
   {
     // 初期状態でのON/OFFフラグ配列を作成
     List<bool> selectFlags = [];
@@ -497,6 +536,11 @@ class _TatsumaDialogDialogState extends State<TatsumaDialog>
       final int maskBit = (1 << (offset + i));
       final bool on = (widget.areaBits & maskBit) != 0;
       selectFlags.add(on);
+    }
+    // テキストラベルを作成
+    List<Text> areaLables = [];
+    for(int i = 0; i < count; i++){
+      areaLables.add(Text(areaNames[offset+i]));
     }
 
     return ToggleButtons(
@@ -511,7 +555,7 @@ class _TatsumaDialogDialogState extends State<TatsumaDialog>
         });
       },
       isSelected: selectFlags,
-      children: areaLabels.sublist(offset, offset+count),
+      children: areaLables,
 
       direction: Axis.horizontal,
       borderRadius: const BorderRadius.all(Radius.circular(8)),
