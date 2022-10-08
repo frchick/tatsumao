@@ -18,6 +18,7 @@ class TatsumaData {
     this.name,
     this.visible,
     this.areaBits,
+    this.originalIndex,
   );
 
   // 座標
@@ -28,6 +29,8 @@ class TatsumaData {
   bool visible;
   // エリア(ビット和)
   int areaBits;
+  // もとの表示順
+  int originalIndex;
 
   // 可視判定
   bool isVisible(){
@@ -40,22 +43,22 @@ class TatsumaData {
 
 // タツマの適当な初期データ。
 List<TatsumaData> tatsumas = [
-  TatsumaData(LatLng(35.306227, 139.049396), "岩清水索道", true, 1),
-  TatsumaData(LatLng(35.307217, 139.051598), "岩清水中", true, 1),
-  TatsumaData(LatLng(35.306809, 139.052676), "岩清水下", true, 1),
-  TatsumaData(LatLng(35.306282, 139.047802), "岩清水", true, 1),
-  TatsumaData(LatLng(35.305798, 139.054232), "赤エル", true, 3),
-  TatsumaData(LatLng(35.30636, 139.05427), "裏赤エル", true, 3),
-  TatsumaData(LatLng(35.305804, 139.055972), "ストッパー", true, 3),
-  TatsumaData(LatLng(35.304213, 139.046478), "新トナカイ", true, 1),
-  TatsumaData(LatLng(35.305561, 139.045259), "トナカイ", true, 1),
-  TatsumaData(LatLng(35.302601, 139.04473), "ムロ岩の先", true, 1),
-  TatsumaData(LatLng(35.302488, 139.044131), "ムロ岩", true, 1),
-  TatsumaData(LatLng(35.301932, 139.043382), "スター", true, 1),
-  TatsumaData(LatLng(35.301166, 139.043601), "アメリカ", true, 1),
-  TatsumaData(LatLng(35.300012, 139.044023), "太平洋", true, 1),
-  TatsumaData(LatLng(35.30026, 139.046538), "メキシコ", true, 1),
-  TatsumaData(LatLng(35.29942, 139.04639), "沢の上", true, 1),
+  TatsumaData(LatLng(35.306227, 139.049396), "岩清水索道", true, 1, 0),
+  TatsumaData(LatLng(35.307217, 139.051598), "岩清水中", true, 1, 1),
+  TatsumaData(LatLng(35.306809, 139.052676), "岩清水下", true, 1, 2),
+  TatsumaData(LatLng(35.306282, 139.047802), "岩清水", true, 1, 3),
+  TatsumaData(LatLng(35.305798, 139.054232), "赤エル", true, 3, 4),
+  TatsumaData(LatLng(35.30636, 139.05427), "裏赤エル", true, 3, 5),
+  TatsumaData(LatLng(35.305804, 139.055972), "ストッパー", true, 3, 6),
+  TatsumaData(LatLng(35.304213, 139.046478), "新トナカイ", true, 1, 7),
+  TatsumaData(LatLng(35.305561, 139.045259), "トナカイ", true, 1, 8),
+  TatsumaData(LatLng(35.302601, 139.04473), "ムロ岩の先", true, 1, 9),
+  TatsumaData(LatLng(35.302488, 139.044131), "ムロ岩", true, 1, 10),
+  TatsumaData(LatLng(35.301932, 139.043382), "スター", true, 1, 11),
+  TatsumaData(LatLng(35.301166, 139.043601), "アメリカ", true, 1, 12),
+  TatsumaData(LatLng(35.300012, 139.044023), "太平洋", true, 1, 13),
+  TatsumaData(LatLng(35.30026, 139.046538), "メキシコ", true, 1, 14),
+  TatsumaData(LatLng(35.29942, 139.04639), "沢の上", true, 1, 15),
 ];
 
 // 猟場のエリア名
@@ -68,6 +71,9 @@ const List<String> _areaNames = [
 
 // エリア表示フィルターのビット和
 int areaFilterBits = (1 << _areaNames.length) - 1;
+
+// ソートされているか
+bool _isListSorted = false;
 
 // マップ上のタツマのマーカー配列
 List<Marker> tatsumaMarkers = [];
@@ -106,9 +112,13 @@ TatsumaData? searchTatsumaByPoint(LatLng point)
 // タツマをデータベースへ保存
 void saveTatsumaToDB()
 {
+  // ソートされている場合でも、元の順番で書き出す。
+  List<TatsumaData> tempList = [...tatsumas];
+  tempList.sort((a, b){ return a.originalIndex - b.originalIndex; });
+
   // タツマデータをJSONの配列に変換
   List<Map<String, dynamic>> data = [];
-  tatsumas.forEach((tatsuma){
+  tempList.forEach((tatsuma){
     data.add({
       "name": tatsuma.name,
       "latitude": tatsuma.pos.latitude,
@@ -140,6 +150,7 @@ Future loadTatsumaFromDB() async
   }
 
   // タツマデータを更新
+  int index = 0;
   tatsumas.clear();
   data.forEach((d){
     Map<String, dynamic> t;
@@ -149,10 +160,12 @@ Future loadTatsumaFromDB() async
       return;
     }
     tatsumas.add(TatsumaData(
-      /*pos:*/      LatLng(t["latitude"] as double, t["longitude"] as double),
-      /*name:*/     t["name"] as String,
-      /*visible:*/  t["visible"] as bool,
-      /*areaBits:*/ t["areaBits"] as int));
+      /*pos:*/ LatLng(t["latitude"] as double, t["longitude"] as double),
+      /*name:*/ t["name"] as String,
+      /*visible:*/ t["visible"] as bool,
+      /*areaBits:*/ t["areaBits"] as int,
+      /*originalIndex*/ index));
+    index++;
   });
 }
 
@@ -178,6 +191,7 @@ Map<String,int>? readTatsumaFromGPX(String fileContent)
         LatLng(double.parse(lat), double.parse(lon)),
         name.text,
         true,
+        0,
         0));
     }
   });
@@ -199,8 +213,9 @@ int mergeTatsumas(List<TatsumaData> newTatsumas)
   // 同じ座標のタツマは上書きしない。
   // 新しい座標のタツマのみを取り込む。
   // 結果として、本ツール上で変更した名前と表示/非表示フラグは維持される。
-  int addCount = 0;
   final int numTatsumas = tatsumas.length;
+  int addCount = 0;
+  int index = numTatsumas;
   newTatsumas.forEach((newTatsuma){
     bool existed = false;
     for(int i = 0; i < numTatsumas; i++){
@@ -210,8 +225,10 @@ int mergeTatsumas(List<TatsumaData> newTatsumas)
       }
     }
     if(!existed){
+      newTatsuma.originalIndex = index;
       tatsumas.add(newTatsuma);
       addCount++;
+      index++;
     }
   });
 
@@ -219,6 +236,28 @@ int mergeTatsumas(List<TatsumaData> newTatsumas)
   return addCount;
 }
 
+//----------------------------------------------------------------------------
+// タツマ一覧をソート
+void sortTatsumas()
+{
+  tatsumas.sort((a, b){
+    // まずは表示を前に、非表示を後ろに
+    final int v = (a.isVisible()? 0: 1) - (b.isVisible()? 0: 1);
+    if(v != 0) return v;
+    // エリア毎にまとめる
+    if(a.areaBits != b.areaBits) return (a.areaBits - b.areaBits);
+    // 最後に元の順番
+    return (a.originalIndex - b.originalIndex);
+  });
+}
+
+// タツマ一覧のソートを解除
+void unsortTatsumas()
+{
+  tatsumas.sort((a, b){ return a.originalIndex - b.originalIndex; });
+}
+
+//----------------------------------------------------------------------------
 //----------------------------------------------------------------------------
 // タツママーカーを更新
 void updateTatsumaMarkers()
@@ -267,6 +306,9 @@ class TatsumasPageState extends State<TatsumasPage>
   // NOTE: 表示回数多いし静的なので事前作成
   List<Container> _areaTags = [];
   List<Container> _hideAreaTags = [];
+
+  // リストビューのスクロールコントロール
+  ScrollController _listScrollController = ScrollController();
 
   @override
   initState() {
@@ -318,6 +360,8 @@ class TatsumasPageState extends State<TatsumasPage>
 
   @override
   Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+
     return WillPopScope(
       // ページの戻り値
       onWillPop: (){
@@ -336,6 +380,46 @@ class TatsumasPageState extends State<TatsumasPage>
                 readTatsumaFromGPXSub(context);
               },
             ),
+
+            // ソート(ON/OFF)
+            if(_isListSorted) Ink(
+              decoration: ShapeDecoration(
+                color: theme.colorScheme.onPrimary,
+                shape: CircleBorder(),
+              ),
+              child: IconButton(
+                icon: const Icon(Icons.sort),
+                color: theme.primaryColor,
+                // ON->OFF
+                onPressed:() {
+                  setState((){
+                    unsortTatsumas();
+                    _isListSorted = false;
+                  });
+                  _listScrollController.animateTo(
+                    0,
+                    duration: Duration(seconds: 1),
+                    curve: Curves.easeOut,
+                  );
+                },
+              ),
+            ),
+            if(!_isListSorted) IconButton(
+              icon: const Icon(Icons.sort),
+              // OFF->ON
+              onPressed:() {
+                setState((){
+                  sortTatsumas();
+                  _isListSorted = true;
+                });
+                _listScrollController.animateTo(
+                  0,
+                  duration: Duration(seconds: 1),
+                  curve: Curves.easeOut,
+                );
+              },
+            ),
+
             // エリアフィルター
             IconButton(
               icon: const Icon(Icons.filter_alt),
@@ -352,11 +436,13 @@ class TatsumasPageState extends State<TatsumasPage>
           ],
         ),
 
+        // タツマ一覧
         body: ListView.builder(
           itemCount: tatsumas.length,
           itemBuilder: (context, index){
             return _menuItem(context, index);
-          }
+          },
+          controller: _listScrollController,
         ),
       )
     );
@@ -407,8 +493,6 @@ class TatsumasPageState extends State<TatsumasPage>
       ),
       // 表示/非表示アイコンとタツマ名
       child:ListTile(
-        title: Text(tatsuma.name),
-
         // (左側)表示非表示アイコンボタン
         leading: IconButton(
           icon: (tatsuma.visible? const Icon(Icons.visibility): const Icon(Icons.visibility_off)),
@@ -421,6 +505,13 @@ class TatsumasPageState extends State<TatsumasPage>
           },
         ),
 
+        // タツマ名
+        // 非表示の場合はグレー
+        title: Text(
+          tatsuma.name,
+          style: (tatsuma.isVisible()? null: const TextStyle(color: Colors.grey)),
+        ),
+
         // (右側)エリアタグと編集ボタン
         trailing: Row(
           mainAxisAlignment: MainAxisAlignment.end,
@@ -430,9 +521,6 @@ class TatsumasPageState extends State<TatsumasPage>
         ),
 
         onTap: (){
-        },
-
-        onLongPress: (){
         },
       ),
     );
