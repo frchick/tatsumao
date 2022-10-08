@@ -266,6 +266,7 @@ class TatsumasPageState extends State<TatsumasPage>
   // タツマ一覧に表示する、エリアタグ
   // NOTE: 表示回数多いし静的なので事前作成
   List<Container> _areaTags = [];
+  List<Container> _hideAreaTags = [];
 
   @override
   initState() {
@@ -274,20 +275,41 @@ class TatsumasPageState extends State<TatsumasPage>
     // エリアラベルを作成
     // NOTE: 初回のみ
     if(_areaTags.length == 0){
-      final BoxDecoration boxDecoration = BoxDecoration(
+      // 表示のスタイル
+      final BoxDecoration visibleBoxDec = BoxDecoration(
         borderRadius: BorderRadius.circular(4),
         border: Border.all(color: Colors.orange, width:2),
         color: Colors.orange[200],
       );
+      final TextStyle visibleTexStyle = const TextStyle(color: Colors.white);
+      // 非表示のスタイル
+      final BoxDecoration hideBoxDec = BoxDecoration(
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: Colors.grey, width:2),
+      );
+      final TextStyle hideTexStyle = const TextStyle(color: Colors.grey);
+
       for(int i = 0; i < _areaNames.length; i++){
+        // 表示のエリアラベル
         _areaTags.add(Container(
           margin: const EdgeInsets.only(right: 5),
           padding: const EdgeInsets.symmetric(vertical:2, horizontal:8),
-          decoration: boxDecoration,
+          decoration: visibleBoxDec,
           child: Text(
             _areaNames[i],
             textScaleFactor:0.9,
-            style: const TextStyle(color: Colors.white)
+            style: visibleTexStyle
+          ),
+        ));
+        // 非表示のエリアラベル
+        _hideAreaTags.add(Container(
+          margin: const EdgeInsets.only(right: 5),
+          padding: const EdgeInsets.symmetric(vertical:2, horizontal:8),
+          decoration: hideBoxDec,
+          child: Text(
+            _areaNames[i],
+            textScaleFactor:0.9,
+            style: hideTexStyle
           ),
         ));
       }
@@ -347,10 +369,13 @@ class TatsumasPageState extends State<TatsumasPage>
     // 表示するエリアタグを選択
     List<Widget> areaTagsAndButton = [];
     for(int i = 0; i < _areaTags.length; i++){
-      if((tatsuma.areaBits & (1 << i)) != 0){
-        areaTagsAndButton.add(_areaTags[i]);
+      final int areaMask = (1 << i);
+      if((tatsuma.areaBits & areaMask) != 0){
+        final bool visibleArea = (areaFilterBits & areaMask) != 0;
+        areaTagsAndButton.add(visibleArea? _areaTags[i]: _hideAreaTags[i]);
       }
     }
+    // 編集ボタンとの間のスペース調整
     if(tatsuma.areaBits != 0){
       areaTagsAndButton.add(const SizedBox(width:5));
     }
@@ -619,6 +644,21 @@ class AreaFilterDialogState  extends State<AreaFilterDialog>
   @override
   Widget build(BuildContext context)
   {
+    // 表示エリアのスタイル
+    final visibleBoxDec = BoxDecoration(
+      borderRadius: BorderRadius.circular(5),
+      border: Border.all(color: Colors.orange, width:2),
+      color: Colors.orange[200],
+    );
+    final visibleTexStyle = const TextStyle(color: Colors.white);
+
+    // 非表示エリアのスタイル
+    final hideBoxDec = BoxDecoration(
+      borderRadius: BorderRadius.circular(5),
+      border: Border.all(color: Colors.grey, width:2),
+    );
+    final hideTexStyle = const TextStyle(color: Colors.grey);
+  
     // エリアごとのリスト項目を作成
     List<ListTile> areas = [];
     for(int i = 0; i < _areaNames.length; i++){
@@ -626,18 +666,30 @@ class AreaFilterDialogState  extends State<AreaFilterDialog>
       final bool visible = (areaFilterBits & maskBit) != 0;
 
       areas.add(ListTile(
-        title: Text(_areaNames[i]),
+        // (左側)表示/非表示アイコン
+        leading: (visible? const Icon(Icons.visibility): const Icon(Icons.visibility_off)),
 
-        // (左側)表示非表示アイコンボタン
-        leading: IconButton(
-          icon: (visible? const Icon(Icons.visibility): const Icon(Icons.visibility_off)),
-          onPressed:() {
-            // 表示非表示を反転
-            setState((){
-              areaFilterBits = (areaFilterBits ^ maskBit);
-            });
-          },
+        // エリア名タグ
+        // 表示/非表示で枠を変える
+        title: Row( // このRow入れないと、タグのサイズが横いっぱいになってしまう。
+          children: [
+            Container(
+              child: Text(
+                _areaNames[i],
+                style: (visible? visibleTexStyle: hideTexStyle),
+              ),
+              decoration: (visible? visibleBoxDec: hideBoxDec),
+              padding: const EdgeInsets.symmetric(vertical:3, horizontal:10),
+            ),
+          ]
         ),
+        // タップで
+        onTap: (){
+          // 表示非表示を反転
+          setState((){
+            areaFilterBits = (areaFilterBits ^ maskBit);
+          });
+        },
       ));
     };
 
@@ -651,7 +703,32 @@ class AreaFilterDialogState  extends State<AreaFilterDialog>
         return Future.value(false);
       },
       child: SimpleDialog(
-        title: const Text("エリア表示フィルター"),
+        title: Row(
+          children:[
+            const Text("エリア表示フィルター"),
+            // 一律表示
+            IconButton(
+              icon: const Icon(Icons.visibility),
+              onPressed:() {
+                // 表示非表示を反転
+                setState((){
+                  areaFilterBits = (1 << _areaNames.length) - 1;
+                });
+              },
+            ),
+            // 一律非表示
+            IconButton(
+              icon: const Icon(Icons.visibility_off),
+              onPressed:() {
+                // 表示非表示を反転
+                setState((){
+                  areaFilterBits = 0;
+                });
+              },
+            ),
+          ]
+        ),
+        // エリア一覧
         children: areas
       )
     );
