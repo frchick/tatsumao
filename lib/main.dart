@@ -347,7 +347,32 @@ class _MapViewState extends State<MapView>
      
       // 半透明のアプリケーションバー
       appBar: AppBar(
-        title: Text(getCurrentFilePath()),
+        // ファイルパスとファイルアイコン
+        title: Row(
+          children: [
+            // ファイル一覧ボタン
+            IconButton(
+              icon: Icon(Icons.folder),
+              onPressed: () {
+                // ファイル一覧画面に遷移して、ファイルの切り替え
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => FilesPage(
+                    onSelectFile: (path) async {
+                      await initMemberSync(path, updateMapView);
+                      await loadAreaFilterFromDB(path);
+                      // appBarの再描画もしたいので…
+                      setState((){
+                        updateTatsumaMarkers();
+                      });
+                    }
+                  ))
+                );
+              }
+            ),
+            Text(getCurrentFilePath()),
+          ],
+        ),
         backgroundColor: Theme.of(context).primaryColor.withOpacity(0.4),
         elevation: 0,
         
@@ -359,27 +384,6 @@ class _MapViewState extends State<MapView>
               copyAssignToClipboard();
               showTextBallonMessage("配置をクリップボードへコピー");
             },
-          ),
-
-          // ファイル一覧ボタン
-          IconButton(
-            icon: Icon(Icons.folder),
-            onPressed: () {
-              // ファイル一覧画面に遷移して、ファイルの切り替え
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => FilesPage(
-                  onSelectFile: (path) async {
-                    await initMemberSync(path, updateMapView);
-                    await loadAreaFilterFromDB(path);
-                    // appBarの再描画もしたいので…
-                    setState((){
-                      updateTatsumaMarkers();
-                    });
-                  }
-                ))
-              );
-            }
           ),
 
           // タツマの編集と読み込み
