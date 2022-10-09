@@ -9,6 +9,7 @@ import 'package:xml/xml.dart';
 import 'firebase_options.dart';
 import 'mydragmarker.dart';
 import 'onoff_icon_button.dart';
+import 'file_tree.dart';
 
 //----------------------------------------------------------------------------
 //----------------------------------------------------------------------------
@@ -71,7 +72,8 @@ const List<String> _areaNames = [
 ];
 
 // エリア表示フィルターのビット和
-int areaFilterBits = (1 << _areaNames.length) - 1;
+int areaFilterBits = _areaFullBits;
+final int _areaFullBits = (1 << _areaNames.length) - 1;
 
 // ソートされているか
 bool _isListSorted = false;
@@ -262,6 +264,52 @@ void unsortTatsumas()
 
 //----------------------------------------------------------------------------
 //----------------------------------------------------------------------------
+// エリア表示フィルターを文字列に変換
+List<String> areaFilterToStrings()
+{
+  // 特に指定がない場合には特殊キーワード "All" を返す
+  if(areaFilterBits == _areaFullBits){
+    return ["All"];
+  }
+
+  // 可視なエリア名を配列で返す
+  List<String> res = [];
+  for(int i = 0; i < _areaNames.length; i++){
+    final int maskBit = (1 << i);
+    if((areaFilterBits & maskBit) != 0){
+      res.add(_areaNames[i]);
+    }
+  }
+  return res;
+}
+
+// 文字列からエリア表示フィルターを設定
+int stringsToAreaFilter(List<String>? areas)
+{
+  // 特に指定がない場合には現状のママ
+  if(areas == null){
+    return areaFilterBits;
+  }
+
+  // 特殊キーワード "All" の場合はすべて表示
+  if((areas.length == 1) && (areas[0] == "All")){
+    areaFilterBits = _areaFullBits;
+    return areaFilterBits;
+  }
+
+  // 文字列に含まれるエリアを可視に
+  areaFilterBits = 0;
+  areas.forEach((name){
+    final int index = _areaNames.indexOf(name);
+    if(0 <= index){
+      areaFilterBits |= (1 << index);
+    }
+  });
+  return areaFilterBits;
+}
+
+//----------------------------------------------------------------------------
+//----------------------------------------------------------------------------
 // タツママーカーを更新
 void updateTatsumaMarkers()
 {
@@ -409,6 +457,8 @@ class TatsumasPageState extends State<TatsumasPage>
                     setState((){
                       changeFlag = true;
                     });
+                    // エリアフィルターの設定をデータベースへ保存
+                    saveAreaFilterToDB(getCurrentFilePath());
                   }
                 });
               },
@@ -780,7 +830,7 @@ class AreaFilterDialogState  extends State<AreaFilterDialog>
               onPressed:() {
                 // 表示非表示を反転
                 setState((){
-                  areaFilterBits = (1 << _areaNames.length) - 1;
+                  areaFilterBits = _areaFullBits;
                 });
               },
             ),
@@ -812,4 +862,30 @@ Future<bool?> showAreaFilter(BuildContext context)
       return AreaFilterDialog();
     },
   );
+}
+
+// エリア表示フィルターの設定をデータベースへ保存
+void saveAreaFilterToDB(String path)
+{
+  final String dbPath = "assign" + path + "/areaFilter";
+  final DatabaseReference ref = database.ref(dbPath);
+  List<String> data = areaFilterToStrings();
+  ref.set(data);
+}
+
+// エリア表示フィルターの設定をデータベースから読み込み
+Future loadAreaFilterFromDB(String path) async
+{
+  final String dbPath = "assign" + path + "/areaFilter";
+  final DatabaseReference ref = database.ref(dbPath);
+  final DataSnapshot snapshot = await ref.get();
+  if(snapshot.exists){
+    List<String> data = [];
+    try {
+      var temp = snapshot.value as List<dynamic>;
+      List<String> stringList = [];
+      temp.forEach((t){ data.add(t as String); });
+    } catch(e) {}
+    stringsToAreaFilter(data);
+  }
 }

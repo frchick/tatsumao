@@ -297,15 +297,6 @@ class _MapViewState extends State<MapView>
   void initState() {
     super.initState();
 
-    // データベースからタツマを読み込み
-    loadTatsumaFromDB().then((_)
-    {
-      // タツマデータからマーカー配列を作成
-      setState((){
-        updateTatsumaMarkers();
-      });
-    });
-
     // メンバーデータからマーカー配列を作成
     int memberIndex = 0;
     members.forEach((member) {
@@ -326,13 +317,25 @@ class _MapViewState extends State<MapView>
       memberIndex++;
     });
 
-    // ファイルツリーのデータベースを初期化
-    initFileTree();
-
-    // メンバーデータの初期値をデータベースから取得
-    initMemberSync("/default_data", updateMapView).then((res){
-      setState((){});
+    // データベースからもろもろ読み込み
+    initStateSub().then((_){
+      // タツマデータからマーカー配列を作成
+      setState((){
+        updateTatsumaMarkers();
+      });
     });
+  }
+
+  Future initStateSub() async
+  {
+    // ファイルツリーのデータベースを初期化
+    await initFileTree();
+    // メンバーデータの初期値をデータベースから取得
+    await initMemberSync("/default_data", updateMapView);
+    // ファイルに紐づくパラメータをデータベースから取得
+    await loadAreaFilterFromDB("/default_data");
+    // タツマデータをデータベースから取得
+    await loadTatsumaFromDB();
   }
 
   // 地図画面
@@ -362,13 +365,17 @@ class _MapViewState extends State<MapView>
           IconButton(
             icon: Icon(Icons.folder),
             onPressed: () {
+              // ファイル一覧画面に遷移して、ファイルの切り替え
               Navigator.push(
                 context,
                 MaterialPageRoute(builder: (context) => FilesPage(
-                  onSelectFile: (path){
-                    initMemberSync(path, updateMapView);
+                  onSelectFile: (path) async {
+                    await initMemberSync(path, updateMapView);
+                    await loadAreaFilterFromDB(path);
                     // appBarの再描画もしたいので…
-                    setState((){});
+                    setState((){
+                      updateTatsumaMarkers();
+                    });
                   }
                 ))
               );
@@ -405,6 +412,8 @@ class _MapViewState extends State<MapView>
                   setState((){
                     updateTatsumaMarkers();
                   });
+                  // エリアフィルターの設定をデータベースへ保存
+                  saveAreaFilterToDB(getCurrentFilePath());
                 }
               });
             },
