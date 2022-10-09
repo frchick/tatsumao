@@ -249,12 +249,14 @@ void sortTatsumas()
     // 最後に元の順番
     return (a.originalIndex - b.originalIndex);
   });
+  _isListSorted = true;
 }
 
 // タツマ一覧のソートを解除
 void unsortTatsumas()
 {
   tatsumas.sort((a, b){ return a.originalIndex - b.originalIndex; });
+  _isListSorted = false;
 }
 
 //----------------------------------------------------------------------------
@@ -358,10 +360,9 @@ class TatsumasPageState extends State<TatsumasPage>
     }
   }
 
+  // タツマ一覧
   @override
   Widget build(BuildContext context) {
-    final ThemeData theme = Theme.of(context);
-
     return WillPopScope(
       // ページの戻り値
       onWillPop: (){
@@ -382,42 +383,20 @@ class TatsumasPageState extends State<TatsumasPage>
             ),
 
             // ソート(ON/OFF)
-            if(_isListSorted) Ink(
-              decoration: ShapeDecoration(
-                color: theme.colorScheme.onPrimary,
-                shape: CircleBorder(),
-              ),
-              child: IconButton(
-                icon: const Icon(Icons.sort),
-                color: theme.primaryColor,
-                // ON->OFF
-                onPressed:() {
-                  setState((){
-                    unsortTatsumas();
-                    _isListSorted = false;
-                  });
-                  _listScrollController.animateTo(
-                    0,
-                    duration: Duration(seconds: 1),
-                    curve: Curves.easeOut,
-                  );
-                },
-              ),
-            ),
-            if(!_isListSorted) IconButton(
+            OnOffIconButton(
               icon: const Icon(Icons.sort),
-              // OFF->ON
-              onPressed:() {
+              onSwitch: _isListSorted,
+              onChange: ((onSwitch){
                 setState((){
-                  sortTatsumas();
-                  _isListSorted = true;
+                  if(onSwitch) sortTatsumas();
+                  else unsortTatsumas();
                 });
                 _listScrollController.animateTo(
                   0,
-                  duration: Duration(seconds: 1),
+                  duration: Duration(milliseconds: 500),
                   curve: Curves.easeOut,
                 );
-              },
+              }),
             ),
 
             // エリアフィルター
@@ -832,4 +811,59 @@ Future<bool?> showAreaFilter(BuildContext context)
       return AreaFilterDialog();
     },
   );
+}
+
+//----------------------------------------------------------------------------
+//----------------------------------------------------------------------------
+// ON/OFFアイコンボタン
+// NOTE: ON/OFFの状態があるので StatefulWidget の気がするが、
+// NOTE: ON/OFF変更時に毎回、親から状態を指定されて再構築されるので、結局 StatelessWidget でよい。
+class OnOffIconButton extends StatelessWidget
+{
+  OnOffIconButton({
+    super.key,
+    required this.icon,
+    required this.onSwitch,
+    this.onChange,
+  });
+
+  // アイコン
+  Icon icon;
+  // ON/OFF
+  bool onSwitch;
+  // ON/OFF切り替え処理
+  Function(bool)? onChange;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+
+    if(onSwitch){
+      // ON状態
+      // 丸型の座布団敷いて色反転
+      return Ink(
+        decoration: ShapeDecoration(
+          color: theme.colorScheme.onPrimary,
+          shape: CircleBorder(),
+        ),
+        child: IconButton(
+          icon: icon,
+          color: theme.primaryColor,
+          // ON->OFF
+          onPressed:() {
+            onChange?.call(false);
+          },
+        ),
+      );
+    }else{
+      // OFF状態
+      return IconButton(
+        icon: icon,
+        // OFF->ON
+        onPressed:() {
+          onChange?.call(true);
+        },
+      );
+    }
+  }
 }

@@ -410,7 +410,7 @@ class FilesPageState extends State<FilesPage>
     final List<FileItem> currentDir = getCurrentDir();
     return Scaffold(
       appBar: AppBar(
-        title: Text("階層：" + getCurrentPath()),
+        title: Text("ファイル：" + getCurrentPath()),
         actions: [
           // (左)フォルダ作成ボタン
           IconButton(

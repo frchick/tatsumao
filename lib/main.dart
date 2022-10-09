@@ -335,10 +335,82 @@ class _MapViewState extends State<MapView>
     });
   }
 
+  // 地図画面
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       key: scaffoldKey,
+      extendBodyBehindAppBar: true,
+     
+      // 半透明のアプリケーションバー
+      appBar: AppBar(
+        title: Text(getCurrentFilePath()),
+        backgroundColor: Theme.of(context).primaryColor.withOpacity(0.4),
+        elevation: 0,
+        
+        actions: [
+          // クリップボードへコピーボタン
+          IconButton(
+            icon: Icon(Icons.content_copy),
+            onPressed: () {
+              copyAssignToClipboard();
+              showTextBallonMessage("配置をクリップボードへコピー");
+            },
+          ),
+
+          // ファイル一覧ボタン
+          IconButton(
+            icon: Icon(Icons.folder),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => FilesPage(
+                  onSelectFile: (path){
+                    initMemberSync(path, updateMapView);
+                    // appBarの再描画もしたいので…
+                    setState((){});
+                  }
+                ))
+              );
+            }
+          ),
+
+          // タツマの編集と読み込み
+          IconButton(
+            icon: const Icon(Icons.map),
+            onPressed:() async {
+              bool? changeTatsuma = await Navigator.of(context).push(
+                MaterialPageRoute<bool>(
+                  builder: (context) => TatsumasPage()
+                )
+              );
+              // タツマに変更があれば…
+              if(changeTatsuma ?? false){
+                // タツマをデータベースへ保存
+                saveTatsumaToDB();
+                // タツママーカーを再描画
+                setState((){
+                  updateTatsumaMarkers();
+                });
+              }
+            },
+          ),
+
+          // エリアフィルター
+          IconButton(
+            icon: const Icon(Icons.filter_alt),
+            onPressed:() {
+              showAreaFilter(context).then((bool? res){
+                if(res ?? false){
+                  setState((){
+                    updateTatsumaMarkers();
+                  });
+                }
+              });
+            },
+          ),
+        ],
+      ),
       body: Center(
         child: Container(
           child: Stack(
@@ -375,61 +447,6 @@ class _MapViewState extends State<MapView>
 
               // 家アイコン
               HomeButtonWidget(appState:this),
-
-              // 機能ボタン
-              Column(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  // タツマの編集と読み込み
-                  ElevatedButton(
-                    child: Icon(Icons.map, size: 50),
-                    style: _appIconButtonStyle,
-                    onPressed: () async {
-                      bool? changeTatsuma = await Navigator.of(context).push(
-                        MaterialPageRoute<bool>(
-                          builder: (context) => TatsumasPage()
-                        )
-                      );
-                      // タツマに変更があれば…
-                      if(changeTatsuma ?? false){
-                        // タツマをデータベースへ保存
-                        saveTatsumaToDB();
-                        // タツママーカーを再描画
-                        setState((){
-                          updateTatsumaMarkers();
-                        });
-                      }
-                    },
-                  ),
-
-                  // クリップボードへコピーボタン
-                  ElevatedButton(
-                    child: Icon(Icons.content_copy, size: 50),
-                    style: _appIconButtonStyle,
-                    onPressed: () {
-                      copyAssignToClipboard();
-                      showTextBallonMessage("配置をクリップボードへコピー");
-                    },
-                  ),
-
-                  // ファイル一覧ボタン
-                  ElevatedButton(
-                    child: Icon(Icons.folder, size: 50),
-                    style: _appIconButtonStyle,
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (context) => FilesPage(
-                          onSelectFile: (path){
-                            initMemberSync(path, updateMapView);
-                            updateMapView();
-                          }
-                        ))
-                      );
-                    }
-                  )
-                ]
-              ),
 
               // ポップアップメッセージ
               Align(
