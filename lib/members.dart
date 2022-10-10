@@ -80,6 +80,7 @@ String _assignPath = "";
 // 地図再描画のコールバック
 Function()? _updateMapViewFunc;
 
+//---------------------------------------------------------------------------
 // 初期化
 Future initMemberSync(String path, Function() updateMapViewFunc) async
 {
@@ -124,15 +125,17 @@ Future initMemberSync(String path, Function() updateMapViewFunc) async
   }
 }
 
+//---------------------------------------------------------------------------
 // メンバーマーカーの移動を他のユーザーへ同期
-void syncMemberState(final int index) async
+void syncMemberState(final int index, { bool goEveryoneHome=false}) async
 {
   final Member member = members[index];
   final String id = index.toString().padLeft(3, '0');
+  final String senderId = goEveryoneHome? "GoEveryoneHome": _appInstKey;
 
   DatabaseReference memberRef = database.ref(_assignPath + "/" + id);
   memberRef.update({
-    "sender_id": _appInstKey,
+    "sender_id": senderId,
     "attended": member.attended,
     "latitude": member.pos.latitude,
     "longitude": member.pos.longitude
@@ -142,6 +145,7 @@ void syncMemberState(final int index) async
   // NOTE: 過去の配置データに参加していれば、退会後もその配置データでは表示される。
 }
 
+//---------------------------------------------------------------------------
 // 他の利用者からの同期通知による変更
 void onChangeMemberState(final int index, DatabaseEvent event)
 {
@@ -174,7 +178,12 @@ void onChangeMemberState(final int index, DatabaseEvent event)
 
     // 家に帰った/参加したポップアップメッセージ
     if(returnToHome){
-      final String msg = members[index].name + " は家に帰った";
+      late String msg;
+      if(sender_id == "GoEveryoneHome"){
+        msg = "全員家に帰った";
+      }else{
+        msg = members[index].name + " は家に帰った";
+      }
       showTextBallonMessage(msg);
     }
     else if(joinToTeam){
@@ -185,4 +194,20 @@ void onChangeMemberState(final int index, DatabaseEvent event)
   else{
     print("onChangeMemberState(index:${index}) -> myself");
   }
+}
+
+//---------------------------------------------------------------------------
+// 全員家に帰る
+bool goEveryoneHome()
+{
+  bool goHome = false;
+  for(int i = 0; i < members.length; i++){
+    if(members[i].attended){
+      members[i].attended = false;
+      memberMarkers[i].visible = false;
+      syncMemberState(i, goEveryoneHome:true);
+      goHome = true;
+    }
+  }
+  return goHome;
 }

@@ -237,6 +237,40 @@ class _HomeButtonWidgetState extends State<HomeButtonWidget>
             },
           );
         },
+
+        // 長押しでサブメニュー
+        onLongPress: (){
+          double x = context.size!.width;
+          double y = context.size!.height - 150;
+         
+          showMenu(
+            context: context,
+            position: RelativeRect.fromLTRB(x, y, 0, 0),
+            items: [
+              PopupMenuItem(
+                value: 1,
+                child: Row(
+                  children: [
+                    Icon(Icons.hotel, color: Colors.black45),
+                    const SizedBox(width: 5),
+                    const Text('全員帰る'),
+                  ]
+                ),
+                height: (kMinInteractiveDimension * 0.8),
+              ),
+            ],
+            elevation: 8.0,
+          ).then((value) {
+            switch(value ?? 0){
+            case 1:
+              // 全員を家に帰す
+              if(goEveryoneHome()){
+                updateMapView();
+              }
+              break;
+            }
+          });
+        },
       )
     );
   }
