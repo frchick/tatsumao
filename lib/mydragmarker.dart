@@ -21,7 +21,8 @@ class MyDragMarkerPlugin implements MapPlugin {
     if (options is MyDragMarkerPluginOptions) {
       return StreamBuilder<void>(
         stream: stream,
-        builder: (BuildContext context, AsyncSnapshot<void> snapshot) {
+        builder: (BuildContext context, AsyncSnapshot<void> snapshot)
+        {
           var dragMarkers = <Widget>[];
           for (var marker in options.markers) {
             if (!_boundsContainsMarker(mapState, marker)) continue;
