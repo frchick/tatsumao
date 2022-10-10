@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:firebase_database/firebase_database.dart';
@@ -80,6 +82,9 @@ String _assignPath = "";
 // 地図再描画のコールバック
 Function()? _updateMapViewFunc;
 
+// 現在のデータベース変更通知のリスナー
+List<StreamSubscription<DatabaseEvent>> _membersListener = [];
+
 //---------------------------------------------------------------------------
 // 初期化
 Future initMemberSync(String path, Function() updateMapViewFunc) async
@@ -115,13 +120,19 @@ Future initMemberSync(String path, Function() updateMapViewFunc) async
     }    
   }
 
-  // 他の利用者からの変更通知を登録
+  // 他のユーザーからの変更通知を受け取るリスナーを設定
+  // 直前のリスナーは停止しておく
+  _membersListener.forEach((listener){
+    listener.cancel();
+  });
+  _membersListener.clear();
   for(int index = 0; index < members.length; index++){
     final String id = index.toString().padLeft(3, '0');
     final DatabaseReference ref = database.ref(_assignPath + "/" + id);
-    ref.onValue.listen((DatabaseEvent event){
+    var listener = ref.onValue.listen((DatabaseEvent event){
       onChangeMemberState(index, event);
     });
+    _membersListener.add(listener);
   }
 }
 
