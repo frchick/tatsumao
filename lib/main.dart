@@ -16,6 +16,7 @@ import 'file_tree.dart';
 import 'text_ballon_widget.dart';
 import 'members.dart';
 import 'tatsumas.dart';
+import 'ok_cancel_dialog.dart';
 
 //----------------------------------------------------------------------------
 // グローバル変数
@@ -444,17 +445,26 @@ class _MapViewState extends State<MapView>
   @override
   Widget build(BuildContext context)
   {
-    // Action領域の、編集ロックボタン
+    // AppBar-Action領域の、編集ロックボタン
     _lockEditingButton = OnOffIconButton(
       icon: const Icon(Icons.lock),
       iconOff: const Icon(Icons.lock_open),
       onSwitch: lockEditing,
-      onChange: (lock) {
-        // ロック変更時の共通処理
-        onLockChangeSub(lock);
-        // データベース経由で他のユーザーに同期
-        saveLockEditingToDB(getCurrentFilePath());
-      }
+      onChange: (lock) async {
+        // ロックを解除するときには確認を促す
+        bool ok = true;
+        if(lock == false){
+          ok = await showOkCancelDialog(context,
+            title: "編集ロックの解除",
+            text: "注意：記録として保存してあるデータは変更しないで下さい。") ?? false;
+        }
+        if(ok){
+          // ロック変更時の共通処理
+          onLockChangeSub(lock);
+          // データベース経由で他のユーザーに同期
+          saveLockEditingToDB(getCurrentFilePath());
+        }
+      },
     );
 
     // マップ上のメンバーマーカーの作成オプション
