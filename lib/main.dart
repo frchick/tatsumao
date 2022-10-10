@@ -4,6 +4,8 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_map/plugin_api.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_database/firebase_database.dart';
+import 'package:tatsumao/onoff_icon_button.dart';
 import 'firebase_options.dart';
 import 'mydragmarker.dart';
 import 'mydrag_target.dart';
@@ -14,6 +16,7 @@ import 'file_tree.dart';
 import 'text_ballon_widget.dart';
 import 'members.dart';
 import 'tatsumas.dart';
+import 'ok_cancel_dialog.dart';
 
 //----------------------------------------------------------------------------
 // グローバル変数
@@ -26,10 +29,18 @@ final ButtonStyle _appIconButtonStyle = ElevatedButton.styleFrom(
   fixedSize: Size(80,80),
 );
 
+//---------------------------------------------------------------------------
+//---------------------------------------------------------------------------
+// メンバーデータの同期(firebase realtime database)
+FirebaseDatabase database = FirebaseDatabase.instance;
+
 //----------------------------------------------------------------------------
 //----------------------------------------------------------------------------
 // 地図
 late MapController mainMapController;
+
+// 編集がロックされているか
+bool lockEditing = false;
 
 // 地図上のマーカーの再描画
 void updateMapView()
@@ -232,6 +243,8 @@ class _HomeButtonWidgetState extends State<HomeButtonWidget>
                             height: 72,
                           ),
                           onDragEnd: onDragEndFunc,
+                          // 編集がロックされいたらドラッグによる出動を抑止
+                          maxSimultaneousDrags: (lockEditing? 0: null),
                         )
                       ));
                     }
@@ -261,6 +274,9 @@ class _HomeButtonWidgetState extends State<HomeButtonWidget>
         // 長押しでサブメニュー
         // Note: アイコンカラーは ListTile のデフォルトカラー合わせ
         onLongPress: (){
+          // 編集ロックならサブメニュー出さない
+          if(lockEditing) return;
+
           final double x = context.size!.width;
           final double y = context.size!.height - 150;
          
@@ -392,13 +408,71 @@ class _MapViewState extends State<MapView>
     await initMemberSync("/default_data", updateMapView);
     // ファイルに紐づくパラメータをデータベースから取得
     await loadAreaFilterFromDB("/default_data");
+    await loadLockEditingFromDB("/default_data", onLockChange:onLockChangeByOther);
     // タツマデータをデータベースから取得
     await loadTatsumaFromDB();
   }
 
+  // AppBar-Action領域の、編集ロックボタン
+  // コールバック内で自分自身のメソッドを呼び出すために、インスタンスをアクセス可能に定義する
+  late OnOffIconButton _lockEditingButton;
+
+  // 編集ロックを他のユーザーが変更したときの通知ハンドラ
+  void onLockChangeByOther(bool lock)
+  {
+    // ロック変更時の共通処理
+    onLockChangeSub(lock);
+    // ポップアップメッセージ
+    showTextBallonMessage("他のユーザーが" + (lock? "ロック": "ロック解除"));
+  }
+
+  void onLockChangeSub(bool lock)
+  {
+    // ボタン押し込みによるON/OFF切り替えを取り込む
+    lockEditing = lock;
+    // ON/OFFボタンを再描画
+    _lockEditingButton?.changeState(lock);
+    // マップ上のマーカーのドラッグ許可/禁止を更新
+    _myDragMarkerPluginOptions.draggable = !lockEditing;
+    updateMapView();
+  }
+
+  // マップ上のメンバーマーカーの作成オプション
+  // ドラッグ許可/禁止を後から変更するために、インスタンスをアクセス可能に定義する
+  late MyDragMarkerPluginOptions _myDragMarkerPluginOptions;
+
   // 地図画面
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context)
+  {
+    // AppBar-Action領域の、編集ロックボタン
+    _lockEditingButton = OnOffIconButton(
+      icon: const Icon(Icons.lock),
+      iconOff: const Icon(Icons.lock_open),
+      onSwitch: lockEditing,
+      onChange: (lock) async {
+        // ロックを解除するときには確認を促す
+        bool ok = true;
+        if(lock == false){
+          ok = await showOkCancelDialog(context,
+            title: "編集ロックの解除",
+            text: "注意：記録として保存してあるデータは変更しないで下さい。") ?? false;
+        }
+        if(ok){
+          // ロック変更時の共通処理
+          onLockChangeSub(lock);
+          // データベース経由で他のユーザーに同期
+          saveLockEditingToDB(getCurrentFilePath());
+        }
+      },
+    );
+
+    // マップ上のメンバーマーカーの作成オプション
+    _myDragMarkerPluginOptions = MyDragMarkerPluginOptions(
+      markers: memberMarkers,
+      draggable: !lockEditing,
+    );
+
     return Scaffold(
       key: scaffoldKey,
       extendBodyBehindAppBar: true,
@@ -419,6 +493,7 @@ class _MapViewState extends State<MapView>
                     onSelectFile: (path) async {
                       await initMemberSync(path, updateMapView);
                       await loadAreaFilterFromDB(path);
+                      await loadLockEditingFromDB(path, onLockChange:onLockChangeByOther);
                       // メンバーの位置へ地図を移動
                       moveMapToLocationOfMembers();
                       // appBarの再描画もしたいので…
@@ -437,6 +512,9 @@ class _MapViewState extends State<MapView>
         elevation: 0,
         
         actions: [
+          // 編集ロックボタン
+          _lockEditingButton,
+
           // クリップボードへコピーボタン
           IconButton(
             icon: Icon(Icons.content_copy),
@@ -511,9 +589,7 @@ class _MapViewState extends State<MapView>
                   MarkerLayerOptions(
                     markers: tatsumaMarkers
                   ),
-                  MyDragMarkerPluginOptions(
-                    markers: memberMarkers,
-                  ),
+                  _myDragMarkerPluginOptions,
                 ],
                 mapController: mainMapController,
               ),
@@ -641,4 +717,50 @@ class _MapViewState extends State<MapView>
     final data = ClipboardData(text: text);
     await Clipboard.setData(data);    
   }
+}
+
+//---------------------------------------------------------------------------
+// 編集ロックの設定をデータベースへ保存
+void saveLockEditingToDB(String path)
+{
+  final String dbPath = "assign" + path + "/lockEditing";
+  final DatabaseReference ref = database.ref(dbPath);
+  ref.set(lockEditing);
+}
+
+//---------------------------------------------------------------------------
+StreamSubscription<DatabaseEvent>? _lockEditingListener;
+
+//---------------------------------------------------------------------------
+// 編集ロックの設定をデータベースから読み込み
+Future loadLockEditingFromDB(String path, { Function(bool)? onLockChange }) async
+{
+  final String dbPath = "assign" + path + "/lockEditing";
+  final DatabaseReference ref = database.ref(dbPath);
+  final DataSnapshot snapshot = await ref.get();
+  if(snapshot.exists){
+    try {
+      lockEditing = snapshot.value as bool;
+    } catch(e) {}
+  }else{
+    // データベースに未登録なら初期値で作成する
+    lockEditing = false;
+    ref.set(lockEditing);
+  }
+
+  // 他のユーザーによるロック変更を受け取るリスナーを設定
+  // 直前のリスナーは停止しておく
+  _lockEditingListener?.cancel();
+  _lockEditingListener = ref.onValue.listen((DatabaseEvent event){
+    bool lock = lockEditing;
+    try {
+      lock = event.snapshot.value as bool;
+    }
+    catch(e){}
+
+    // 変更があった場合のみコールバックを呼び出す
+    if(lockEditing != lock){
+      onLockChange?.call(lock);
+    }
+  });
 }
