@@ -283,7 +283,7 @@ class _HomeButtonWidgetState extends State<HomeButtonWidget>
             ],
           ).then((value) {
             switch(value ?? -1){
-            case 1:
+            case 0:
               // 全員を家に帰す
               if(goEveryoneHome()){
                 updateMapView();
