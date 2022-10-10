@@ -73,6 +73,26 @@ LatLng snapToTatsuma(LatLng point)
 }
 
 //----------------------------------------------------------------------------
+// メンバー達の位置へマップを移動する
+void moveMapToLocationOfMembers()
+{
+  // 参加しているメンバーの座標の範囲に、マップをフィットさせる
+  List<LatLng> points = [];
+  members.forEach((member){
+    if(member.attended){
+      points.add(member.pos);
+    }
+  });
+  if(points.length == 0) return;
+  var bounds = LatLngBounds.fromPoints(points);
+
+  mainMapController.fitBounds(bounds,
+    options: FitBoundsOptions(
+      padding: EdgeInsets.all(64),
+      maxZoom: 16));
+}
+
+//----------------------------------------------------------------------------
 // メンバーマーカーの拡張クラス
 class MyDragMarker2 extends MyDragMarker {
   MyDragMarker2({
@@ -358,7 +378,10 @@ class _MapViewState extends State<MapView>
       setState((){
         updateTatsumaMarkers();
       });
+      // マップの初期位置をメンバーたちの位置へ移動
+      moveMapToLocationOfMembers();
     });
+
   }
 
   Future initStateSub() async
@@ -396,6 +419,8 @@ class _MapViewState extends State<MapView>
                     onSelectFile: (path) async {
                       await initMemberSync(path, updateMapView);
                       await loadAreaFilterFromDB(path);
+                      // メンバーの位置へ地図を移動
+                      moveMapToLocationOfMembers();
                       // appBarの再描画もしたいので…
                       setState((){
                         updateTatsumaMarkers();
@@ -471,7 +496,7 @@ class _MapViewState extends State<MapView>
                   plugins: [
                     MyDragMarkerPlugin(),
                   ],
-                  center: LatLng(35.302894, 139.053848),
+                  center: LatLng(35.309934, 139.076056),  // 丸太の森P
                   zoom: 16,
                   maxZoom: 18,
                 ),
