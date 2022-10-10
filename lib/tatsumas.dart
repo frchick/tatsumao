@@ -778,36 +778,40 @@ class AreaFilterDialogState  extends State<AreaFilterDialog>
     final hideTexStyle = const TextStyle(color: Colors.grey);
   
     // エリアごとのリスト項目を作成
-    List<ListTile> areas = [];
+    List<Container> areas = [];
     for(int i = 0; i < _areaNames.length; i++){
       final int maskBit = (1 << i);
       final bool visible = (areaFilterBits & maskBit) != 0;
 
-      areas.add(ListTile(
-        // (左側)表示/非表示アイコン
-        leading: (visible? const Icon(Icons.visibility): const Icon(Icons.visibility_off)),
+      areas.add(Container(
+        height: 42,
+      
+        child: ListTile(
+          // (左側)表示/非表示アイコン
+          leading: (visible? const Icon(Icons.visibility): const Icon(Icons.visibility_off)),
 
-        // エリア名タグ
-        // 表示/非表示で枠を変える
-        title: Row( // このRow入れないと、タグのサイズが横いっぱいになってしまう。
-          children: [
-            Container(
-              child: Text(
-                _areaNames[i],
-                style: (visible? visibleTexStyle: hideTexStyle),
+          // エリア名タグ
+          // 表示/非表示で枠を変える
+          title: Row( // このRow入れないと、タグのサイズが横いっぱいになってしまう。
+            children: [
+              Container(
+                child: Text(
+                  _areaNames[i],
+                  style: (visible? visibleTexStyle: hideTexStyle),
+                ),
+                decoration: (visible? visibleBoxDec: hideBoxDec),
+                padding: const EdgeInsets.symmetric(vertical:3, horizontal:10),
               ),
-              decoration: (visible? visibleBoxDec: hideBoxDec),
-              padding: const EdgeInsets.symmetric(vertical:3, horizontal:10),
-            ),
-          ]
+            ]
+          ),
+          // タップで
+          onTap: (){
+            // 表示非表示を反転
+            setState((){
+              areaFilterBits = (areaFilterBits ^ maskBit);
+            });
+          },
         ),
-        // タップで
-        onTap: (){
-          // 表示非表示を反転
-          setState((){
-            areaFilterBits = (areaFilterBits ^ maskBit);
-          });
-        },
       ));
     };
 
@@ -821,9 +825,10 @@ class AreaFilterDialogState  extends State<AreaFilterDialog>
         return Future.value(false);
       },
       child: SimpleDialog(
+        titlePadding: const EdgeInsets.fromLTRB(12.0, 12.0, 12.0, 0.0),
         title: Row(
           children:[
-            const Text("エリア表示フィルター"),
+            const Text("エリアフィルター"),
             // 一律表示
             IconButton(
               icon: const Icon(Icons.visibility),
