@@ -4,8 +4,15 @@ import 'package:latlong2/latlong.dart';
 import 'package:flutter_map/plugin_api.dart';
 
 class MyDragMarkerPluginOptions extends LayerOptions {
+  // マーカー一覧
   List<MyDragMarker> markers;
-  MyDragMarkerPluginOptions({this.markers = const []});
+  // ドラッグを許可するか
+  bool draggable;
+
+  MyDragMarkerPluginOptions({
+    this.markers = const [],
+    this.draggable = true,
+  });
 }
 
 class MyDragMarkerPlugin implements MapPlugin {
@@ -13,23 +20,24 @@ class MyDragMarkerPlugin implements MapPlugin {
   Widget createLayer(LayerOptions options, MapState mapState, stream) {
     if (options is MyDragMarkerPluginOptions) {
       return StreamBuilder<void>(
-          stream: stream,
-          builder: (BuildContext context, AsyncSnapshot<void> snapshot) {
-            var dragMarkers = <Widget>[];
-            for (var marker in options.markers) {
-              if (!_boundsContainsMarker(mapState, marker)) continue;
+        stream: stream,
+        builder: (BuildContext context, AsyncSnapshot<void> snapshot) {
+          var dragMarkers = <Widget>[];
+          for (var marker in options.markers) {
+            if (!_boundsContainsMarker(mapState, marker)) continue;
 
-              // 非表示のマーカーは登録しない！
-              if(marker.visible){
-                dragMarkers.add(MyDragMarkerWidget(
-                    mapState: mapState,
-                    marker: marker,
-                    stream: stream,
-                    options: options));
-              }
+            // 非表示のマーカーは登録しない！
+            if(marker.visible){
+              dragMarkers.add(MyDragMarkerWidget(
+                  mapState: mapState,
+                  marker: marker,
+                  stream: stream,
+                  options: options));
             }
-            return Stack(children: dragMarkers);
-          });
+          }
+          return Stack(children: dragMarkers);
+        }
+      );
     }
 
     throw Exception('Unknown options type for MyCustom'
@@ -54,7 +62,8 @@ class MyDragMarkerPlugin implements MapPlugin {
   }
 }
 
-class MyDragMarkerWidget extends StatefulWidget {
+class MyDragMarkerWidget extends StatefulWidget
+{
   const MyDragMarkerWidget(
       {Key? key,
       this.mapState,
@@ -69,13 +78,14 @@ class MyDragMarkerWidget extends StatefulWidget {
   //final Anchor anchor;
   final MyDragMarker marker;
   final Stream<void>? stream;
-  final LayerOptions? options;
+  final MyDragMarkerPluginOptions? options;
 
   @override
   State<MyDragMarkerWidget> createState() => _MyDragMarkerWidgetState();
 }
 
-class _MyDragMarkerWidgetState extends State<MyDragMarkerWidget> {
+class _MyDragMarkerWidgetState extends State<MyDragMarkerWidget>
+{
   CustomPoint pixelPosition = const CustomPoint(0.0, 0.0);
   late LatLng dragPosStart;
   late LatLng markerPointStart;
@@ -100,11 +110,12 @@ class _MyDragMarkerWidgetState extends State<MyDragMarkerWidget> {
         ? marker.feedbackBuilder!(context)
         : marker.builder!(context);
 
+    final bool draggable = widget.options?.draggable ?? true;
     return GestureDetector(
       behavior: HitTestBehavior.deferToChild,
-      onPanStart: onPanStart,
-      onPanUpdate: onPanUpdate,
-      onPanEnd: onPanEnd,
+      onPanStart: (draggable? onPanStart: null),
+      onPanUpdate: (draggable? onPanUpdate: null),
+      onPanEnd: (draggable? onPanEnd: null),
       onTap: () {
         if (marker.onTap != null) {
           marker.onTap!(marker.point);

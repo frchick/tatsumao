@@ -4,6 +4,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_map/plugin_api.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:tatsumao/onoff_icon_button.dart';
 import 'firebase_options.dart';
 import 'mydragmarker.dart';
 import 'mydrag_target.dart';
@@ -30,6 +31,9 @@ final ButtonStyle _appIconButtonStyle = ElevatedButton.styleFrom(
 //----------------------------------------------------------------------------
 // 地図
 late MapController mainMapController;
+
+// 編集がロックされているか
+bool lockMembersLocation = false;
 
 // 地図上のマーカーの再描画
 void updateMapView()
@@ -232,6 +236,8 @@ class _HomeButtonWidgetState extends State<HomeButtonWidget>
                             height: 72,
                           ),
                           onDragEnd: onDragEndFunc,
+                          // 編集がロックされいたらドラッグによる出動を抑止
+                          maxSimultaneousDrags: (lockMembersLocation? 0: null),
                         )
                       ));
                     }
@@ -261,6 +267,9 @@ class _HomeButtonWidgetState extends State<HomeButtonWidget>
         // 長押しでサブメニュー
         // Note: アイコンカラーは ListTile のデフォルトカラー合わせ
         onLongPress: (){
+          // 編集ロックならサブメニュー出さない
+          if(lockMembersLocation) return;
+
           final double x = context.size!.width;
           final double y = context.size!.height - 150;
          
@@ -437,6 +446,17 @@ class _MapViewState extends State<MapView>
         elevation: 0,
         
         actions: [
+          // 編集をロックボタン
+          OnOffIconButton(
+            icon: lockMembersLocation? const Icon(Icons.lock): const Icon(Icons.lock_open),
+            onSwitch: lockMembersLocation,
+            onChange: (lock) {
+              setState((){
+                lockMembersLocation = lock;
+              });
+            }
+          ),
+
           // クリップボードへコピーボタン
           IconButton(
             icon: Icon(Icons.content_copy),
@@ -513,6 +533,7 @@ class _MapViewState extends State<MapView>
                   ),
                   MyDragMarkerPluginOptions(
                     markers: memberMarkers,
+                    draggable: !lockMembersLocation,
                   ),
                 ],
                 mapController: mainMapController,
