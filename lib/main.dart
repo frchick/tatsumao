@@ -7,10 +7,12 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:tatsumao/onoff_icon_button.dart';
 import 'firebase_options.dart';
-import 'mydragmarker.dart';
-import 'mydrag_target.dart';
 import 'dart:async';
 import 'package:flutter/services.dart';   // for クリップボード
+import 'package:google_fonts/google_fonts.dart';  // フォント
+
+import 'mydragmarker.dart';   // マップ上のマーカー
+import 'mydrag_target.dart';  // メンバー一覧のマーカー
 
 import 'file_tree.dart';
 import 'text_ballon_widget.dart';
@@ -433,6 +435,9 @@ class MyApp extends StatelessWidget {
       scrollBehavior: MyCustomScrollBehavior(),
       title: 'TatsumaO',
       home: MapView(),
+      theme: ThemeData(
+        textTheme: GoogleFonts.kosugiMaruTextTheme(Theme.of(context).textTheme)
+      ),
     );
   }
 }

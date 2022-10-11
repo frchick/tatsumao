@@ -35,7 +35,7 @@ class TextBallonWidget extends StatelessWidget
         // フェードアウトメッセージを表示
         return MyFadeOut(
           child: Container(
-            padding: EdgeInsets.fromLTRB(25, 5, 25, 10),
+            padding: EdgeInsets.fromLTRB(25, 8, 25, 8),
             decoration: BoxDecoration(
               color: Colors.black,
               borderRadius: BorderRadius.circular(5),
