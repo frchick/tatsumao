@@ -119,12 +119,12 @@ class _MyDragMarkerWidgetState extends State<MyDragMarkerWidget>
       onPanEnd: (draggable? onPanEnd: null),
       onTap: () {
         if (marker.onTap != null) {
-          marker.onTap!(marker.point);
+          marker.onTap!(marker.point, marker.index);
         }
       },
       onLongPress: () {
         if (marker.onLongPress != null) {
-          marker.onLongPress!(marker.point);
+          marker.onLongPress!(marker.point, marker.index);
         }
       },
       child: Stack(children: [
@@ -316,11 +316,12 @@ class MyDragMarker {
   final double height;
   final Offset offset;
   final Offset feedbackOffset;
-  final Function(DragStartDetails, LatLng, int)? onDragStart;
-  final Function(DragUpdateDetails, LatLng, int)? onDragUpdate;
-  final LatLng Function(DragEndDetails, LatLng, Offset, int, MapState?)? onDragEnd;
-  final Function(LatLng)? onTap;
-  final Function(LatLng)? onLongPress;
+  // NOTE: 派生クラスでメンバー変数を代入するため、final を外した
+  /*final*/ Function(DragStartDetails, LatLng, int)? onDragStart;
+  /*final*/ Function(DragUpdateDetails, LatLng, int)? onDragUpdate;
+  /*final*/ LatLng Function(DragEndDetails, LatLng, Offset, int, MapState?)? onDragEnd;
+  /*final*/ Function(LatLng, int)? onTap;
+  /*final*/ Function(LatLng, int)? onLongPress;
   final bool updateMapNearEdge;
   final double nearEdgeRatio;
   final double nearEdgeSpeed;

@@ -104,8 +104,15 @@ void moveMapToLocationOfMembers()
 }
 
 //----------------------------------------------------------------------------
+//----------------------------------------------------------------------------
 // メンバーマーカーの拡張クラス
-class MyDragMarker2 extends MyDragMarker {
+class MyDragMarker2 extends MyDragMarker
+{
+  // 最後にデータベースに同期したドラッグ座標
+  static LatLng _lastDraggingPoiny = LatLng(0,0);
+  // ドラッグ中の連続同期のためのタイマー
+  static Timer? _draggingTimer;
+
   MyDragMarker2({
     required super.point,
     super.builder,
@@ -114,10 +121,6 @@ class MyDragMarker2 extends MyDragMarker {
     super.height = 72.0,
     super.offset = const Offset(0.0, -36.0),
     super.feedbackOffset = const Offset(0.0, -36.0),
-    super.onDragStart,
-    super.onDragUpdate,
-    super.onDragEnd,
-    super.onTap,
     super.onLongPress,
     super.updateMapNearEdge = false, // experimental
     super.nearEdgeRatio = 2.0,
@@ -126,7 +129,86 @@ class MyDragMarker2 extends MyDragMarker {
     AnchorPos? anchorPos,
     required super.index,
     super.visible = true,
-  }) {
+  })
+  {
+    super.onDragStart = onDragStartFunc;
+    super.onDragUpdate = onDragUpdateFunc;
+    super.onDragEnd = onDragEndFunc;
+    super.onTap = onTapFunc;
+  }
+
+  //---------------------------------------------------------------------------
+  // メンバーマーカーのドラッグ
+
+  // ドラッグ中、マーカー座標をデータベースに同期する実装
+  void onDragStartFunc(DragStartDetails details, LatLng point, int index)
+  {
+    // ドラッグ中の連続同期のためのタイマーをスタート
+    Timer.periodic(Duration(milliseconds: 500), (Timer timer){
+      _draggingTimer = timer;
+      // 直前に同期した座標から動いていたら変更を通知
+      if(_lastDraggingPoiny != members[index].pos){
+        _lastDraggingPoiny = members[index].pos;
+        syncMemberState(index);
+      }
+    });
+  }
+
+  void onDragUpdateFunc(DragUpdateDetails detils, LatLng point, int index)
+  {
+    // メンバーデータを更新(ドラッグ中の連続同期のために)
+    members[index].pos = point;
+  }
+
+  // ドラッグ終了時の処理
+  LatLng onDragEndFunc(DragEndDetails details, LatLng point, Offset offset, int index, MapState? mapState)
+  {
+    // ドラッグ中の連続同期のためのタイマーを停止
+    if(_draggingTimer != null){
+      _draggingTimer!.cancel();
+      _draggingTimer = null;
+    }
+
+    // 家アイコンに投げ込まれたら削除する
+    // 画面右下にサイズ80x80で表示されている前提
+    final bool dropToHome = 
+      (0.0 < (offset.dx - (getScreenWidth()  - 80))) &&
+      (0.0 < (offset.dy - (getScreenHeight() - 80)));
+    if(dropToHome){
+        // メンバーマーカーを非表示にして再描画
+        memberMarkers[index].visible = false;
+        members[index].attended = false;
+        updateMapView();
+
+        // データベースに変更を通知
+        syncMemberState(index);
+
+        // ポップアップメッセージ
+        String msg = members[index].name + " は家に帰った";
+        showTextBallonMessage(msg);
+        
+        return point;
+    }
+
+    // タツママーカーにスナップ
+    point = snapToTatsuma(point);
+
+    // メンバーデータを更新
+    members[index].pos = point;
+
+    // データベースに変更を通知
+    syncMemberState(index);
+
+    print("End index $index, point $point");
+    return point;
+  }
+
+  //---------------------------------------------------------------------------
+  // タップしてメンバー名表示
+  void onTapFunc(LatLng point, int index)
+  {
+    // ポップアップメッセージ
+    showTextBallonMessage(members[index].name);
   }
 }
 
@@ -137,11 +219,7 @@ class HomeButtonWidget extends StatefulWidget
 {
   HomeButtonWidget({
     super.key,
-    required this.appState,
   });
-
-  // アプリケーションインスタンスへの参照
-  _MapViewState appState;
 
   @override
   State<HomeButtonWidget> createState() => _HomeButtonWidgetState();
@@ -163,7 +241,7 @@ class _HomeButtonWidgetState extends State<HomeButtonWidget>
     // ドラッグ座標はマーカー左上なので、下矢印の位置にオフセットする。
     var px = details.offset.dx + 32;
     var py = details.offset.dy + 72;
-    final double screenHeight = widget.appState.getScreenHeight();
+    final double screenHeight = getScreenHeight();
     if((screenHeight - menuHeight) < py) return;
   
     // ドラッグ座標からマーカーの緯度経度を計算
@@ -232,19 +310,27 @@ class _HomeButtonWidgetState extends State<HomeButtonWidget>
                   members.forEach((member)
                   {
                     if(!member.attended && !member.withdrawals){
+                      final String name = members[index].name;
                       draggableIcons.add(Align(
                         alignment: const Alignment(0.0, -0.8),
-                        child: MyDraggable<int>(
-                          data: index,
-                          child: member.icon0,
-                          feedback: member.icon0,
-                          childWhenDragging: Container(
-                            width: 64,
-                            height: 72,
+                        child: GestureDetector(
+                          child: MyDraggable<int>(
+                            data: index,
+                            child: member.icon0,
+                            feedback: member.icon0,
+                            childWhenDragging: Container(
+                              width: 64,
+                              height: 72,
+                            ),
+                            onDragEnd: onDragEndFunc,
+                            // 編集がロックされいたらドラッグによる出動を抑止
+                            maxSimultaneousDrags: (lockEditing? 0: null),
                           ),
-                          onDragEnd: onDragEndFunc,
-                          // 編集がロックされいたらドラッグによる出動を抑止
-                          maxSimultaneousDrags: (lockEditing? 0: null),
+                          // タップして名前表示
+                          onTap: (){
+                            // ポップアップメッセージ
+                            showTextBallonMessage(name);
+                          }
                         )
                       ));
                     }
@@ -359,10 +445,11 @@ class MapView extends StatefulWidget {
   _MapViewState createState() => _MapViewState();
 }
 
+// ウィンドウサイズを参照するためのキー
+GlobalKey _scaffoldKey = GlobalKey();
+
 class _MapViewState extends State<MapView>
 {
-  // ウィンドウサイズを参照するためのキー
-  GlobalKey scaffoldKey = GlobalKey();
 
   @override
   void initState() {
@@ -379,9 +466,6 @@ class _MapViewState extends State<MapView>
           point: member.pos,
           builder: (ctx) => Image.asset(member.iconPath),
           index: memberIndex,
-          onDragStart: onDragStartFunc,
-          onDragUpdate: onDragUpdateFunc,
-          onDragEnd: onDragEndFunc,
           visible: member.attended,
         )
       );
@@ -474,7 +558,7 @@ class _MapViewState extends State<MapView>
     );
 
     return Scaffold(
-      key: scaffoldKey,
+      key: _scaffoldKey,
       extendBodyBehindAppBar: true,
      
       // 半透明のアプリケーションバー
@@ -595,7 +679,7 @@ class _MapViewState extends State<MapView>
               ),
 
               // 家アイコン
-              HomeButtonWidget(appState:this),
+              HomeButtonWidget(),
 
               // ポップアップメッセージ
               Align(
@@ -607,88 +691,6 @@ class _MapViewState extends State<MapView>
         ),
       ),
     );
-  }
-
-  // 画面サイズの取得(幅)
-  double getScreenWidth()
-  {
-    return (scaffoldKey.currentContext?.size?.width ?? 0.0);
-  }
-  // 画面サイズの取得(高さ)
-  double getScreenHeight()
-  {
-    return (scaffoldKey.currentContext?.size?.height ?? 0.0);
-  }
-
-  //---------------------------------------------------------------------------
-  // メンバーマーカーのドラッグ
-
-  // ドラッグ中、マーカー座標をデータベースに同期する実装
-  void onDragStartFunc(DragStartDetails details, LatLng point, int index)
-  {
-    // ドラッグ中の連続同期のためのタイマーをスタート
-    Timer.periodic(Duration(milliseconds: 500), (Timer timer){
-      _draggingTimer = timer;
-      // 直前に同期した座標から動いていたら変更を通知
-      if(_lastDraggingPoiny != members[index].pos){
-        _lastDraggingPoiny = members[index].pos;
-        syncMemberState(index);
-      }
-    });
-  }
-
-  void onDragUpdateFunc(DragUpdateDetails detils, LatLng point, int index)
-  {
-    // メンバーデータを更新(ドラッグ中の連続同期のために)
-    members[index].pos = point;
-  }
-
-  // 最後にデータベースに同期したドラッグ座標
-  LatLng _lastDraggingPoiny = LatLng(0,0);
-  // ドラッグ中の連続同期のためのタイマー
-  Timer? _draggingTimer;
-
-  // ドラッグ終了時の処理
-  LatLng onDragEndFunc(DragEndDetails details, LatLng point, Offset offset, int index, MapState? mapState)
-  {
-    // ドラッグ中の連続同期のためのタイマーを停止
-    if(_draggingTimer != null){
-      _draggingTimer!.cancel();
-      _draggingTimer = null;
-    }
-
-    // 家アイコンに投げ込まれたら削除する
-    // 画面右下にサイズ80x80で表示されている前提
-    final bool dropToHome = 
-      (0.0 < (offset.dx - (getScreenWidth()  - 80))) &&
-      (0.0 < (offset.dy - (getScreenHeight() - 80)));
-    if(dropToHome){
-        // メンバーマーカーを非表示にして再描画
-        memberMarkers[index].visible = false;
-        members[index].attended = false;
-        updateMapView();
-
-        // データベースに変更を通知
-        syncMemberState(index);
-
-        // ポップアップメッセージ
-        String msg = members[index].name + " は家に帰った";
-        showTextBallonMessage(msg);
-        
-        return point;
-    }
-
-    // タツママーカーにスナップ
-    point = snapToTatsuma(point);
-
-    // メンバーデータを更新
-    members[index].pos = point;
-
-    // データベースに変更を通知
-    syncMemberState(index);
-
-    print("End index $index, point $point");
-    return point;
   }
 
   //---------------------------------------------------------------------------
@@ -717,6 +719,17 @@ class _MapViewState extends State<MapView>
     final data = ClipboardData(text: text);
     await Clipboard.setData(data);    
   }
+}
+
+// 画面サイズの取得(幅)
+double getScreenWidth()
+{
+  return (_scaffoldKey.currentContext?.size?.width ?? 0.0);
+}
+// 画面サイズの取得(高さ)
+double getScreenHeight()
+{
+  return (_scaffoldKey.currentContext?.size?.height ?? 0.0);
 }
 
 //---------------------------------------------------------------------------
