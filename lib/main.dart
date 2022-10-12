@@ -56,6 +56,10 @@ void updateMapView()
   var zoom = mainMapController.zoom;
   mainMapController.move(center, zoom + jitter);
   mainMapController.move(center, zoom);
+
+  // NOTE:
+  // MapController._state.rebuildLayers() を呼び出せればスマートに再描画できるが、
+  // _state がプライベートメンバーでアクセッサもないので断念。
 }
 
 // 地図上のマーカーにスナップ

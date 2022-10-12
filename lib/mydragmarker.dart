@@ -19,22 +19,26 @@ class MyDragMarkerPlugin implements MapPlugin {
   @override
   Widget createLayer(LayerOptions options, MapState mapState, stream) {
     if (options is MyDragMarkerPluginOptions) {
+      // 画面が移動やズームすると毎フレームこのビルドが実行される！！
       return StreamBuilder<void>(
         stream: stream,
         builder: (BuildContext context, AsyncSnapshot<void> snapshot)
         {
           var dragMarkers = <Widget>[];
           for (var marker in options.markers) {
+            // 非表示のマーカーは除外
+            if(!marker.visible) continue;
+
+            // 画面外のマーカーは除外
             if (!_boundsContainsMarker(mapState, marker)) continue;
 
-            // 非表示のマーカーは登録しない！
-            if(marker.visible){
-              dragMarkers.add(MyDragMarkerWidget(
-                  mapState: mapState,
-                  marker: marker,
-                  stream: stream,
-                  options: options));
-            }
+            // 画面に見えるマーカーを作成
+            // NOTE: 毎フレーム作成するのは無駄に感じるが、この中で表示座標の計算もしているのでキャッシュできない。
+            dragMarkers.add(MyDragMarkerWidget(
+              mapState: mapState,
+              marker: marker,
+              stream: stream,
+              options: options));
           }
           return Stack(children: dragMarkers);
         }
