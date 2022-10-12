@@ -62,33 +62,6 @@ void updateMapView()
   // _state がプライベートメンバーでアクセッサもないので断念。
 }
 
-// 地図上のマーカーにスナップ
-LatLng snapToTatsuma(LatLng point)
-{
-  // 画面座標に変換してマーカーとの距離を判定
-  // マーカーサイズが16x16である前提
-  var pixelPos0 = mainMapController.latLngToScreenPoint(point);
-  num minDist = (18.0 * 18.0);
-  tatsumas.forEach((tatsuma) {
-    // 非表示のタツマは除外
-    if(!tatsuma.isVisible()) return;
- 
-    var pixelPos1 = mainMapController.latLngToScreenPoint(tatsuma.pos);
-    if((pixelPos0 != null) && (pixelPos1 != null)){
-      num dx = (pixelPos0.x - pixelPos1.x).abs();
-      num dy = (pixelPos0.y - pixelPos1.y).abs();
-      if ((dx < 16) && (dy < 16)) {
-        num d = (dx * dx) + (dy * dy);
-        if(d < minDist){
-          minDist = d;
-          point = tatsuma.pos;
-        }
-      }
-    }
-  });
-  return point;
-}
-
 //----------------------------------------------------------------------------
 // メンバー達の位置へマップを移動する
 void moveMapToLocationOfMembers()
@@ -197,7 +170,7 @@ class MyDragMarker2 extends MyDragMarker
     }
 
     // タツママーカーにスナップ
-    point = snapToTatsuma(point);
+    point = snapToTatsuma(mainMapController, point);
 
     // メンバーデータを更新
     members[index].pos = point;
@@ -255,7 +228,7 @@ class _HomeButtonWidgetState extends State<HomeButtonWidget>
     if(point == null) return;
 
     // タツママーカーにスナップ
-    point = snapToTatsuma(point);
+    point = snapToTatsuma(mainMapController, point);
 
     // メニュー領域の再描画
     final int index = details.data;
