@@ -3,6 +3,8 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_map/plugin_api.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:positioned_tap_detector_2/positioned_tap_detector_2.dart'; // マップのタップ
+
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:tatsumao/onoff_icon_button.dart';
@@ -507,6 +509,24 @@ class _MapViewState extends State<MapView>
                   center: LatLng(35.309934, 139.076056),  // 丸太の森P
                   zoom: 16,
                   maxZoom: 18,
+                  onTap: (TapPosition tapPos, LatLng point){
+                    // タツマをタップしたら、タツマ編集ダイアログ
+                    int? index = searchTatsumaByScreenPos(
+                      mainMapController, tapPos.global.dx, tapPos.global.dy);
+                    if(index != null){
+                      showChangeTatsumaDialog(context, index).then((res){
+                        if(res != null){
+                          var tatsuma = tatsumas[index];
+                          setState((){
+                            tatsuma.name     = res["name"] as String;
+                            tatsuma.visible  = res["visible"] as bool;
+                            tatsuma.areaBits = res["areaBits"] as int;
+                            updateTatsumaMarkers();
+                          });
+                        }
+                      });
+                    }        
+                  },
                 ),
                 nonRotatedLayers: [
                   TileLayerOptions(

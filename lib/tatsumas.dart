@@ -112,6 +112,35 @@ TatsumaData? searchTatsumaByPoint(LatLng point)
 }
 
 //----------------------------------------------------------------------------
+// 画面座標からタツマデータを参照
+int? searchTatsumaByScreenPos(MapController mapController, num x, num y)
+{
+  // マーカーサイズが16x16である前提
+  num minDist = (18.0 * 18.0);
+  int? index;
+  for(int i = 0; i < tatsumas.length; i++){
+    final TatsumaData tatsuma = tatsumas[i];
+
+    // 非表示のタツマは除外
+    if(!tatsuma.isVisible()) continue;
+ 
+    final CustomPoint<num>? pixelPos = mapController.latLngToScreenPoint(tatsuma.pos);
+    if(pixelPos != null){
+      final num dx = (x - pixelPos.x).abs();
+      final num dy = (y - pixelPos.y).abs();
+      if ((dx < 16.0) && (dy < 16.0)) {
+        num d = (dx * dx) + (dy * dy);
+        if(d < minDist){
+          minDist = d;
+          index = i;
+        }
+      }
+    }
+  }
+  return index;
+}
+
+//----------------------------------------------------------------------------
 // 地図上のマーカーにスナップ
 LatLng snapToTatsuma(MapController mapController, LatLng point)
 {
@@ -128,8 +157,8 @@ LatLng snapToTatsuma(MapController mapController, LatLng point)
  
     final CustomPoint<num>? pixelPos1 = mapController.latLngToScreenPoint(tatsuma.pos);
     if(pixelPos1 != null){
-      num dx = (pixelPos0.x - pixelPos1.x).abs();
-      num dy = (pixelPos0.y - pixelPos1.y).abs();
+      final num dx = (pixelPos0.x - pixelPos1.x).abs();
+      final num dy = (pixelPos0.y - pixelPos1.y).abs();
       if ((dx < 16) && (dy < 16)) {
         num d = (dx * dx) + (dy * dy);
         if(d < minDist){
@@ -588,23 +617,6 @@ class TatsumasPageState extends State<TatsumasPage>
   }
 
   //----------------------------------------------------------------------------
-  // タツマ名変更ダイアログ
-  Future<Map<String,dynamic>?> showChangeTatsumaDialog(BuildContext context, int index)
-  {
-    return showDialog<Map<String,dynamic>>(
-      context: context,
-      useRootNavigator: true,
-      builder: (context) {
-        final TatsumaData tatsuma = tatsumas[index];
-        return TatsumaDialog(
-          name: tatsuma.name,
-          visible: tatsuma.visible,
-          areaBits: tatsuma.areaBits);
-      },
-    );
-  }
-
-  //----------------------------------------------------------------------------
   // GPXからのタツマ読み込み処理
   Future<bool> readTatsumaFromGPXSub(BuildContext context) async
   {
@@ -770,6 +782,23 @@ class _TatsumaDialogDialogState extends State<TatsumaDialog>
       color: Colors.orange[400],                // OFFフォントの色
     );
   }
+}
+
+//----------------------------------------------------------------------------
+// タツマ名変更ダイアログ
+Future<Map<String,dynamic>?> showChangeTatsumaDialog(BuildContext context, int index)
+{
+  return showDialog<Map<String,dynamic>>(
+    context: context,
+    useRootNavigator: true,
+    builder: (context) {
+      final TatsumaData tatsuma = tatsumas[index];
+      return TatsumaDialog(
+        name: tatsuma.name,
+        visible: tatsuma.visible,
+        areaBits: tatsuma.areaBits);
+    },
+  );
 }
 
 //----------------------------------------------------------------------------
