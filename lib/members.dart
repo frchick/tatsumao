@@ -2,9 +2,13 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:flutter_map/plugin_api.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'mydragmarker.dart';
 import 'text_ballon_widget.dart';
+import 'tatsumas.dart';
+import 'globals.dart';
 
 //----------------------------------------------------------------------------
 //----------------------------------------------------------------------------
@@ -79,20 +83,14 @@ final String _appInstKey = UniqueKey().toString();
 // メンバーのアサインデータへのパス
 String _assignPath = "";
 
-// 地図再描画のコールバック
-Function()? _updateMapViewFunc;
-
 // 現在のデータベース変更通知のリスナー
 List<StreamSubscription<DatabaseEvent>> _membersListener = [];
 
 //---------------------------------------------------------------------------
 // 初期化
-Future initMemberSync(String path, Function() updateMapViewFunc) async
+Future initMemberSync(String path) async
 {
   print(">initMemberSync($path)");
-
-  // 地図再描画のコールバックを設定
-  _updateMapViewFunc = updateMapViewFunc;
 
   // 配置データのパス
   _assignPath = "assign" + path;
@@ -183,9 +181,7 @@ void onChangeMemberState(final int index, DatabaseEvent event)
     memberMarker.point = member.pos;
 
     // マーカーの再描画
-    if(_updateMapViewFunc != null){
-      _updateMapViewFunc!();
-    }
+    updateMapView();
 
     // 家に帰った/参加したポップアップメッセージ
     if(returnToHome){
@@ -222,3 +218,113 @@ bool goEveryoneHome()
   }
   return goHome;
 }
+
+//----------------------------------------------------------------------------
+//----------------------------------------------------------------------------
+// メンバーマーカーの拡張クラス
+class MyDragMarker2 extends MyDragMarker
+{
+  // 最後にデータベースに同期したドラッグ座標
+  static LatLng _lastDraggingPoiny = LatLng(0,0);
+  // ドラッグ中の連続同期のためのタイマー
+  static Timer? _draggingTimer;
+
+  MyDragMarker2({
+    required super.point,
+    super.builder,
+    super.feedbackBuilder,
+    super.width = 64.0,
+    super.height = 72.0,
+    super.offset = const Offset(0.0, -36.0),
+    super.feedbackOffset = const Offset(0.0, -36.0),
+    super.onLongPress,
+    super.updateMapNearEdge = false, // experimental
+    super.nearEdgeRatio = 2.0,
+    super.nearEdgeSpeed = 1.0,
+    super.rotateMarker = false,
+    AnchorPos? anchorPos,
+    required super.index,
+    super.visible = true,
+  })
+  {
+    super.onDragStart = onDragStartFunc;
+    super.onDragUpdate = onDragUpdateFunc;
+    super.onDragEnd = onDragEndFunc;
+    super.onTap = onTapFunc;
+  }
+
+  //---------------------------------------------------------------------------
+  // メンバーマーカーのドラッグ
+
+  // ドラッグ中、マーカー座標をデータベースに同期する実装
+  void onDragStartFunc(DragStartDetails details, LatLng point, int index)
+  {
+    // ドラッグ中の連続同期のためのタイマーをスタート
+    Timer.periodic(Duration(milliseconds: 500), (Timer timer){
+      _draggingTimer = timer;
+      // 直前に同期した座標から動いていたら変更を通知
+      if(_lastDraggingPoiny != members[index].pos){
+        _lastDraggingPoiny = members[index].pos;
+        syncMemberState(index);
+      }
+    });
+  }
+
+  void onDragUpdateFunc(DragUpdateDetails detils, LatLng point, int index)
+  {
+    // メンバーデータを更新(ドラッグ中の連続同期のために)
+    members[index].pos = point;
+  }
+
+  // ドラッグ終了時の処理
+  LatLng onDragEndFunc(DragEndDetails details, LatLng point, Offset offset, int index, MapState? mapState)
+  {
+    // ドラッグ中の連続同期のためのタイマーを停止
+    if(_draggingTimer != null){
+      _draggingTimer!.cancel();
+      _draggingTimer = null;
+    }
+
+    // 家アイコンに投げ込まれたら削除する
+    // 画面右下にサイズ80x80で表示されている前提
+    final bool dropToHome = 
+      (0.0 < (offset.dx - (getScreenWidth()  - 80))) &&
+      (0.0 < (offset.dy - (getScreenHeight() - 80)));
+    if(dropToHome){
+        // メンバーマーカーを非表示にして再描画
+        memberMarkers[index].visible = false;
+        members[index].attended = false;
+        updateMapView();
+
+        // データベースに変更を通知
+        syncMemberState(index);
+
+        // ポップアップメッセージ
+        String msg = members[index].name + " は家に帰った";
+        showTextBallonMessage(msg);
+        
+        return point;
+    }
+
+    // タツママーカーにスナップ
+    point = snapToTatsuma(mainMapController, point);
+
+    // メンバーデータを更新
+    members[index].pos = point;
+
+    // データベースに変更を通知
+    syncMemberState(index);
+
+    print("End index $index, point $point");
+    return point;
+  }
+
+  //---------------------------------------------------------------------------
+  // タップしてメンバー名表示
+  void onTapFunc(LatLng point, int index)
+  {
+    // ポップアップメッセージ
+    showTextBallonMessage(members[index].name);
+  }
+}
+

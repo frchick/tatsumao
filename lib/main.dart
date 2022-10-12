@@ -19,6 +19,7 @@ import 'text_ballon_widget.dart';
 import 'members.dart';
 import 'tatsumas.dart';
 import 'ok_cancel_dialog.dart';
+import 'globals.dart';
 
 //----------------------------------------------------------------------------
 // グローバル変数
@@ -36,31 +37,8 @@ final ButtonStyle _appIconButtonStyle = ElevatedButton.styleFrom(
 // メンバーデータの同期(firebase realtime database)
 FirebaseDatabase database = FirebaseDatabase.instance;
 
-//----------------------------------------------------------------------------
-//----------------------------------------------------------------------------
-// 地図
-late MapController mainMapController;
-
 // 編集がロックされているか
 bool lockEditing = false;
-
-// 地図上のマーカーの再描画
-void updateMapView()
-{
-  if(mainMapController == null) return;
-
-  // ここからは通常の方法で更新できないので、MapController 経由で地図を微妙に動かして再描画を走らせる。
-  // MyDragMarkerPlugin.createLayer() で作成した StreamBuilder が動作する。
-  const double jitter = 1.0/4096.0;
-  var center = mainMapController.center;
-  var zoom = mainMapController.zoom;
-  mainMapController.move(center, zoom + jitter);
-  mainMapController.move(center, zoom);
-
-  // NOTE:
-  // MapController._state.rebuildLayers() を呼び出せればスマートに再描画できるが、
-  // _state がプライベートメンバーでアクセッサもないので断念。
-}
 
 //----------------------------------------------------------------------------
 // メンバー達の位置へマップを移動する
@@ -80,115 +58,6 @@ void moveMapToLocationOfMembers()
     options: FitBoundsOptions(
       padding: EdgeInsets.all(64),
       maxZoom: 16));
-}
-
-//----------------------------------------------------------------------------
-//----------------------------------------------------------------------------
-// メンバーマーカーの拡張クラス
-class MyDragMarker2 extends MyDragMarker
-{
-  // 最後にデータベースに同期したドラッグ座標
-  static LatLng _lastDraggingPoiny = LatLng(0,0);
-  // ドラッグ中の連続同期のためのタイマー
-  static Timer? _draggingTimer;
-
-  MyDragMarker2({
-    required super.point,
-    super.builder,
-    super.feedbackBuilder,
-    super.width = 64.0,
-    super.height = 72.0,
-    super.offset = const Offset(0.0, -36.0),
-    super.feedbackOffset = const Offset(0.0, -36.0),
-    super.onLongPress,
-    super.updateMapNearEdge = false, // experimental
-    super.nearEdgeRatio = 2.0,
-    super.nearEdgeSpeed = 1.0,
-    super.rotateMarker = false,
-    AnchorPos? anchorPos,
-    required super.index,
-    super.visible = true,
-  })
-  {
-    super.onDragStart = onDragStartFunc;
-    super.onDragUpdate = onDragUpdateFunc;
-    super.onDragEnd = onDragEndFunc;
-    super.onTap = onTapFunc;
-  }
-
-  //---------------------------------------------------------------------------
-  // メンバーマーカーのドラッグ
-
-  // ドラッグ中、マーカー座標をデータベースに同期する実装
-  void onDragStartFunc(DragStartDetails details, LatLng point, int index)
-  {
-    // ドラッグ中の連続同期のためのタイマーをスタート
-    Timer.periodic(Duration(milliseconds: 500), (Timer timer){
-      _draggingTimer = timer;
-      // 直前に同期した座標から動いていたら変更を通知
-      if(_lastDraggingPoiny != members[index].pos){
-        _lastDraggingPoiny = members[index].pos;
-        syncMemberState(index);
-      }
-    });
-  }
-
-  void onDragUpdateFunc(DragUpdateDetails detils, LatLng point, int index)
-  {
-    // メンバーデータを更新(ドラッグ中の連続同期のために)
-    members[index].pos = point;
-  }
-
-  // ドラッグ終了時の処理
-  LatLng onDragEndFunc(DragEndDetails details, LatLng point, Offset offset, int index, MapState? mapState)
-  {
-    // ドラッグ中の連続同期のためのタイマーを停止
-    if(_draggingTimer != null){
-      _draggingTimer!.cancel();
-      _draggingTimer = null;
-    }
-
-    // 家アイコンに投げ込まれたら削除する
-    // 画面右下にサイズ80x80で表示されている前提
-    final bool dropToHome = 
-      (0.0 < (offset.dx - (getScreenWidth()  - 80))) &&
-      (0.0 < (offset.dy - (getScreenHeight() - 80)));
-    if(dropToHome){
-        // メンバーマーカーを非表示にして再描画
-        memberMarkers[index].visible = false;
-        members[index].attended = false;
-        updateMapView();
-
-        // データベースに変更を通知
-        syncMemberState(index);
-
-        // ポップアップメッセージ
-        String msg = members[index].name + " は家に帰った";
-        showTextBallonMessage(msg);
-        
-        return point;
-    }
-
-    // タツママーカーにスナップ
-    point = snapToTatsuma(mainMapController, point);
-
-    // メンバーデータを更新
-    members[index].pos = point;
-
-    // データベースに変更を通知
-    syncMemberState(index);
-
-    print("End index $index, point $point");
-    return point;
-  }
-
-  //---------------------------------------------------------------------------
-  // タップしてメンバー名表示
-  void onTapFunc(LatLng point, int index)
-  {
-    // ポップアップメッセージ
-    showTextBallonMessage(members[index].name);
-  }
 }
 
 //----------------------------------------------------------------------------
@@ -427,9 +296,6 @@ class MapView extends StatefulWidget {
   _MapViewState createState() => _MapViewState();
 }
 
-// ウィンドウサイズを参照するためのキー
-GlobalKey _scaffoldKey = GlobalKey();
-
 class _MapViewState extends State<MapView>
 {
 
@@ -471,7 +337,7 @@ class _MapViewState extends State<MapView>
     // ファイルツリーのデータベースを初期化
     await initFileTree();
     // メンバーデータの初期値をデータベースから取得
-    await initMemberSync("/default_data", updateMapView);
+    await initMemberSync("/default_data");
     // ファイルに紐づくパラメータをデータベースから取得
     await loadAreaFilterFromDB("/default_data");
     await loadLockEditingFromDB("/default_data", onLockChange:onLockChangeByOther);
@@ -540,7 +406,7 @@ class _MapViewState extends State<MapView>
     );
 
     return Scaffold(
-      key: _scaffoldKey,
+      key: appScaffoldKey,
       extendBodyBehindAppBar: true,
      
       // 半透明のアプリケーションバー
@@ -557,7 +423,7 @@ class _MapViewState extends State<MapView>
                   context,
                   MaterialPageRoute(builder: (context) => FilesPage(
                     onSelectFile: (path) async {
-                      await initMemberSync(path, updateMapView);
+                      await initMemberSync(path);
                       await loadAreaFilterFromDB(path);
                       await loadLockEditingFromDB(path, onLockChange:onLockChangeByOther);
                       // メンバーの位置へ地図を移動
@@ -701,17 +567,6 @@ class _MapViewState extends State<MapView>
     final data = ClipboardData(text: text);
     await Clipboard.setData(data);    
   }
-}
-
-// 画面サイズの取得(幅)
-double getScreenWidth()
-{
-  return (_scaffoldKey.currentContext?.size?.width ?? 0.0);
-}
-// 画面サイズの取得(高さ)
-double getScreenHeight()
-{
-  return (_scaffoldKey.currentContext?.size?.height ?? 0.0);
 }
 
 //---------------------------------------------------------------------------

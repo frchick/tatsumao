@@ -112,6 +112,37 @@ TatsumaData? searchTatsumaByPoint(LatLng point)
 }
 
 //----------------------------------------------------------------------------
+// 地図上のマーカーにスナップ
+LatLng snapToTatsuma(MapController mapController, LatLng point)
+{
+  // 画面座標に変換してマーカーとの距離を判定
+  // 指定された座標が画面外なら何もしない
+  final CustomPoint<num>? pixelPos0 = mapController.latLngToScreenPoint(point);
+  if(pixelPos0 == null) return point;
+
+  // マーカーサイズが16x16である前提
+  num minDist = (18.0 * 18.0);
+  tatsumas.forEach((tatsuma) {
+    // 非表示のタツマは除外
+    if(!tatsuma.isVisible()) return;
+ 
+    final CustomPoint<num>? pixelPos1 = mapController.latLngToScreenPoint(tatsuma.pos);
+    if(pixelPos1 != null){
+      num dx = (pixelPos0.x - pixelPos1.x).abs();
+      num dy = (pixelPos0.y - pixelPos1.y).abs();
+      if ((dx < 16) && (dy < 16)) {
+        num d = (dx * dx) + (dy * dy);
+        if(d < minDist){
+          minDist = d;
+          point = tatsuma.pos;
+        }
+      }
+    }
+  });
+  return point;
+}
+
+//----------------------------------------------------------------------------
 // タツマをデータベースへ保存
 void saveTatsumaToDB()
 {
