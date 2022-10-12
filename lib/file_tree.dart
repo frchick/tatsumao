@@ -6,18 +6,6 @@ import 'text_edit_dialog.dart';
 import 'text_ballon_widget.dart';
 
 //----------------------------------------------------------------------------
-// グローバル変数
-
-// アイコンボタン共通のスタイル
-final ButtonStyle _appIconButtonStyle = ElevatedButton.styleFrom(
-  foregroundColor: Colors.orange.shade900,
-  backgroundColor: Colors.transparent,
-  shadowColor: Colors.transparent,
-  fixedSize: Size(80,80),
-);
-
-
-//----------------------------------------------------------------------------
 //----------------------------------------------------------------------------
 // ファイル/ディレクトリ階層構造
 
