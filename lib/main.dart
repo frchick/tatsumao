@@ -8,9 +8,7 @@ import 'package:firebase_database/firebase_database.dart';
 import 'package:tatsumao/onoff_icon_button.dart';
 import 'firebase_options.dart';
 import 'dart:async';
-import 'package:flutter/services.dart';   // for クリップボード
 import 'package:google_fonts/google_fonts.dart';  // フォント
-
 import 'mydragmarker.dart';   // マップ上のマーカー
 import 'mydrag_target.dart';  // メンバー一覧のマーカー
 
@@ -539,33 +537,6 @@ class _MapViewState extends State<MapView>
         ),
       ),
     );
-  }
-
-  //---------------------------------------------------------------------------
-  // タツマ配置をクリップボートへコピー
-  void copyAssignToClipboard() async
-  {
-    String text = "";
-    members.forEach((member){
-      if(member.attended){
-        TatsumaData? tatsuma = searchTatsumaByPoint(member.pos);
-        String line;
-        if(tatsuma != null){
-          line = member.name + ": " + tatsuma.name;
-        }
-        else{
-          // タツマに立っていない？
-          line = member.name + ": ["
-            + member.pos.latitude.toStringAsFixed(4) + ","
-            + member.pos.longitude.toStringAsFixed(4) + "]";
-        }
-        text += line + "\n";
-      }
-    });
-    print(text);
-
-    final data = ClipboardData(text: text);
-    await Clipboard.setData(data);    
   }
 }
 

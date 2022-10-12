@@ -5,6 +5,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_map/plugin_api.dart';
 import 'package:firebase_database/firebase_database.dart';
+import 'package:flutter/services.dart';   // for クリップボード
 import 'mydragmarker.dart';
 import 'text_ballon_widget.dart';
 import 'tatsumas.dart';
@@ -217,6 +218,36 @@ bool goEveryoneHome()
     }
   }
   return goHome;
+}
+
+//---------------------------------------------------------------------------
+// タツマ配置をクリップボートへコピー
+void copyAssignToClipboard() async
+{
+  // クリップボードにコピーする文字列を作成
+  String text = "";
+  members.forEach((member){
+    if(member.attended){
+      TatsumaData? tatsuma = searchTatsumaByPoint(member.pos);
+      String line;
+      if(tatsuma != null){
+        // メンバー名 + タツマ名
+        line = member.name + ": " + tatsuma.name;
+      }
+      else{
+        // タツマに立っていない？
+        line = member.name + ": ["
+          + member.pos.latitude.toStringAsFixed(4) + ","
+          + member.pos.longitude.toStringAsFixed(4) + "]";
+      }
+      text += line + "\n";
+    }
+  });
+  // 確認用
+  print(text);
+
+  final data = ClipboardData(text: text);
+  await Clipboard.setData(data);    
 }
 
 //----------------------------------------------------------------------------
