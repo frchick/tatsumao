@@ -2,12 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_map/plugin_api.dart';
 import 'package:latlong2/latlong.dart';
+
 import 'package:file_selector/file_selector.dart';
+
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_database/firebase_database.dart';
-import 'package:xml/xml.dart';
 import 'firebase_options.dart';
+import 'dart:async';    // for StreamSubscription<>
+
+import 'package:xml/xml.dart';
 import 'mydragmarker.dart';
+
 import 'onoff_icon_button.dart';
 import 'file_tree.dart';
 import 'globals.dart';
@@ -87,6 +92,12 @@ List<Marker> tatsumaMarkers = [];
 
 // タツマデータの保存と読み込みデータベース
 FirebaseDatabase database = FirebaseDatabase.instance;
+
+// 変更通知
+StreamSubscription<DatabaseEvent>? _changesTatsumaListener;
+
+// 他のユーザーによるタツマデータの変更通知があった場合のコールバック
+Function(int)? onTatsumaChanged;
 
 // タツマアイコン画像
 // NOTE: 表示回数が多くて静的なので、事前に作成しておく
@@ -261,6 +272,35 @@ Future loadTatsumaFromDB() async
       /*originalIndex*/ index));
     index++;
   });
+
+  // 変更通知
+  // 直前の変更通知を終了しておく
+  _changesTatsumaListener?.cancel();
+  _changesTatsumaListener = ref.onChildChanged.listen(_onTatsumaChangedFromDB);
+}
+
+// 他のユーザーによるタツマデータの変更通知
+void _onTatsumaChangedFromDB(DatabaseEvent event)
+{
+  DataSnapshot snapshot = event.snapshot;
+  if((snapshot.key == null) || (snapshot.value == null)) return;
+
+  // 変更のあったタツマに対して、
+  final int index = int.parse(snapshot.key!);
+  TatsumaData tatsuma = tatsumas[index];
+  // 変更通知から値を代入
+  var data = snapshot.value! as Map<String, dynamic>;
+  tatsuma.name = data["name"] as String;
+  tatsuma.visible = data["visible"] as bool;
+  tatsuma.areaBits = data["areaBits"] as int;
+  tatsuma.pos.latitude = data["latitude"] as double;
+  tatsuma.pos.longitude = data["longitude"] as double;
+
+  // 再描画(マップ)
+  updateTatsumaMarkers();
+  updateMapView();
+  // マップ以外の再描画
+  onTatsumaChanged?.call(index);
 }
 
 //----------------------------------------------------------------------------
@@ -532,10 +572,17 @@ class TatsumasPageState extends State<TatsumasPage>
 
   // タツマ一覧
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context)
+  {
+    // 他のユーザーによるタツマ変更のコールバックを設定
+    onTatsumaChanged = (_){ setState((){}); };
+
     return WillPopScope(
-      // ページの戻り値
+      // ページ閉じる際の処理
       onWillPop: (){
+        // 他のユーザーによるタツマ変更のコールバックをクリア
+        onTatsumaChanged = null;
+        // ページの戻り値
         Navigator.of(context).pop(changeFlag);
         return Future.value(false);
       },
