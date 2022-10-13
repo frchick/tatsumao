@@ -49,7 +49,7 @@ class TatsumaData {
   }
 }
 
-// タツマの適当な初期データ。
+// タツマの適当な初期データ(16個)
 List<TatsumaData> tatsumas = [
   TatsumaData(LatLng(35.306227, 139.049396), "岩清水索道", true, 1, 0),
   TatsumaData(LatLng(35.307217, 139.051598), "岩清水中", true, 1, 1),
@@ -83,6 +83,9 @@ final int _areaFullBits = (1 << _areaNames.length) - 1;
 
 // ソートされているか
 bool _isListSorted = false;
+
+// タツマ一覧での表示順(初期データと同じ16個)
+List<int> _tatsumaOrderArray = [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15];
 
 // 非表示/フィルターされたアイコンをグレー表示するか
 bool showFilteredIcon = false;
@@ -195,13 +198,9 @@ LatLng snapToTatsuma(MapController mapController, LatLng point)
 // タツマをデータベースへ保存(全体)
 void saveAllTatsumasToDB()
 {
-  // ソートされている場合でも、元の順番で書き出す。
-  List<TatsumaData> tempList = [...tatsumas];
-  tempList.sort((a, b){ return a.originalIndex - b.originalIndex; });
-
   // タツマデータをJSONの配列に変換
   List<Map<String, dynamic>> data = [];
-  tempList.forEach((tatsuma){
+  tatsumas.forEach((tatsuma){
     data.add({
       "name": tatsuma.name,
       "latitude": tatsuma.pos.latitude,
@@ -273,7 +272,12 @@ Future loadTatsumaFromDB() async
     index++;
   });
 
-  // 変更通知
+  // タツマ一覧での表示順をリセット
+  // 結果としてソートされていないことになる
+  _tatsumaOrderArray = List<int>.generate(tatsumas.length, (i)=>i);
+  _isListSorted = false;
+
+  // 他のユーザーからの変更通知
   // 直前の変更通知を終了しておく
   _changesTatsumaListener?.cancel();
   _changesTatsumaListener = ref.onChildChanged.listen(_onTatsumaChangedFromDB);
@@ -296,11 +300,14 @@ void _onTatsumaChangedFromDB(DatabaseEvent event)
   tatsuma.pos.latitude = data["latitude"] as double;
   tatsuma.pos.longitude = data["longitude"] as double;
 
-  // 再描画(マップ)
+  // 再描画
+  // コールバックが設定されていたらそちら、なければマップを再描画
   updateTatsumaMarkers();
-  updateMapView();
-  // マップ以外の再描画
-  onTatsumaChanged?.call(index);
+  if(onTatsumaChanged != null){
+    onTatsumaChanged!(index);
+  }else{
+    updateMapView();
+  }
 }
 
 //----------------------------------------------------------------------------
@@ -361,6 +368,7 @@ int mergeTatsumas(List<TatsumaData> newTatsumas)
     if(!existed){
       newTatsuma.originalIndex = index;
       tatsumas.add(newTatsuma);
+      _tatsumaOrderArray.add(index);
       addCount++;
       index++;
     }
@@ -372,25 +380,24 @@ int mergeTatsumas(List<TatsumaData> newTatsumas)
 
 //----------------------------------------------------------------------------
 // タツマ一覧をソート
-void sortTatsumas()
+List<int> makeTatsumaOrderArray(bool sort)
 {
-  tatsumas.sort((a, b){
-    // まずは表示を前に、非表示を後ろに
-    final int v = (a.isVisible()? 0: 1) - (b.isVisible()? 0: 1);
-    if(v != 0) return v;
-    // エリア毎にまとめる
-    if(a.areaBits != b.areaBits) return (a.areaBits - b.areaBits);
-    // 最後に元の順番
-    return (a.originalIndex - b.originalIndex);
-  });
-  _isListSorted = true;
-}
-
-// タツマ一覧のソートを解除
-void unsortTatsumas()
-{
-  tatsumas.sort((a, b){ return a.originalIndex - b.originalIndex; });
-  _isListSorted = false;
+  // タツマデータそのものではなく、インデックスのバッファをソートする
+  var buf = List<int>.generate(tatsumas.length, (i)=>i);
+  if(sort){
+    buf.sort((idxa, idxb){
+      final TatsumaData a = tatsumas[idxa];
+      final TatsumaData b = tatsumas[idxb];
+      // まずは表示を前に、非表示を後ろに
+      final int v = (a.isVisible()? 0: 1) - (b.isVisible()? 0: 1);
+      if(v != 0) return v;
+      // エリア毎にまとめる
+      if(a.areaBits != b.areaBits) return (a.areaBits - b.areaBits);
+      // 最後に元の順番
+      return (a.originalIndex - b.originalIndex);
+    });
+  }
+  return buf;
 }
 
 //----------------------------------------------------------------------------
@@ -441,7 +448,7 @@ int stringsToAreaFilter(List<String>? areas)
 
 //----------------------------------------------------------------------------
 //----------------------------------------------------------------------------
-// タツママーカーを更新
+// マップ上のタツママーカーを更新
 void updateTatsumaMarkers()
 {
   // テキストスタイル
@@ -605,8 +612,8 @@ class TatsumasPageState extends State<TatsumasPage>
               onSwitch: _isListSorted,
               onChange: ((onSwitch){
                 setState((){
-                  if(onSwitch) sortTatsumas();
-                  else unsortTatsumas();
+                  _isListSorted = onSwitch;
+                  _tatsumaOrderArray = makeTatsumaOrderArray(_isListSorted);
                 });
                 _listScrollController.animateTo(
                   0,
@@ -634,11 +641,12 @@ class TatsumasPageState extends State<TatsumasPage>
           ],
         ),
 
-        // タツマ一覧
+        // タツマ一覧の作成
+        // ソート順をここで反映する
         body: ListView.builder(
           itemCount: tatsumas.length,
           itemBuilder: (context, index){
-            return _menuItem(context, index);
+            return _menuItem(context, _tatsumaOrderArray[index]);
           },
           controller: _listScrollController,
         ),
@@ -647,7 +655,8 @@ class TatsumasPageState extends State<TatsumasPage>
   }
 
   // タツマ一覧アイテムの作成
-  Widget _menuItem(BuildContext context, int index) {
+  Widget _menuItem(BuildContext context, int index)
+  {
     final TatsumaData tatsuma = tatsumas[index];
 
     // 表示するエリアタグを選択
@@ -669,7 +678,7 @@ class TatsumasPageState extends State<TatsumasPage>
       icon: const Icon(Icons.more_horiz),
       onPressed:() {
         // タツマ名の変更ダイアログ
-        showChangeTatsumaDialog(context, index).then((res){
+        showChangeTatsumaDialog(context, tatsuma).then((res){
           if(res != null){
             setState((){
               changeFlag = true;
@@ -701,6 +710,8 @@ class TatsumasPageState extends State<TatsumasPage>
             setState((){
               changeFlag = true;
               tatsuma.visible = !tatsuma.visible;
+              // データベースに同期
+              updateTatsumaToDB(index);
             });
           },
         ),
@@ -896,13 +907,13 @@ class _TatsumaDialogDialogState extends State<TatsumaDialog>
 
 //----------------------------------------------------------------------------
 // タツマ名変更ダイアログ
-Future<Map<String,dynamic>?> showChangeTatsumaDialog(BuildContext context, int index)
+Future<Map<String,dynamic>?>
+  showChangeTatsumaDialog(BuildContext context, TatsumaData tatsuma)
 {
   return showDialog<Map<String,dynamic>>(
     context: context,
     useRootNavigator: true,
     builder: (context) {
-      final TatsumaData tatsuma = tatsumas[index];
       return TatsumaDialog(
         name: tatsuma.name,
         visible: tatsuma.visible,
