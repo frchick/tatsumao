@@ -539,7 +539,9 @@ class _MapViewState extends State<MapView>
                     opacity: 0.64
                   ),
                   MarkerLayerOptions(
-                    markers: tatsumaMarkers
+                    markers: tatsumaMarkers,
+                    // NOTE: usePxCache=trueだと、非表示グレーマーカーで並び順が変わったときにバグる
+                    usePxCache: false,
                   ),
                   _myDragMarkerPluginOptions,
                 ],

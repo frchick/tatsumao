@@ -456,14 +456,12 @@ void updateTatsumaMarkers()
   final TextStyle testStyleGray = const TextStyle(color: Color(0xFF616161)/*grey[700]*/);
 
   // タツマデータからマーカー配列を作成
+  // 非表示グレーマーカーが、可視のマーカーの下になるように描画順を制御
   tatsumaMarkers.clear();
-  
-  // グレー表示されるアイコンが先(下)
-  if(showFilteredIcon){
-    tatsumas.forEach((tatsuma) {
-      // 非表示アイコンのみをグレー表示
-      if(tatsuma.isVisible()) return;
-
+  List<Marker> markers2 = [];
+  tatsumas.forEach((tatsuma) {
+    // スイッチONで非表示アイコンをグレー表示
+    if(showFilteredIcon && !tatsuma.isVisible()){
       tatsumaMarkers.add(Marker(
         point: tatsuma.pos,
         width: 200.0,
@@ -480,27 +478,24 @@ void updateTatsumaMarkers()
           mainAxisAlignment: MainAxisAlignment.center,
         )
       ));
-    });
-  }
-  // 非表示でないアイコンを上に
-  // 非表示のタツマは除外
-  tatsumas.forEach((tatsuma) {
-    if(!tatsuma.isVisible()) return;
-
-    tatsumaMarkers.add(Marker(
-      point: tatsuma.pos,
-      width: 200.0,
-      height: 96.0,
-      builder: (ctx) => Column(
-        children: [
-          Text(""),
-          _tatsumaIcon,
-          Text(tatsuma.name, style: testStyle),
-        ],
-        mainAxisAlignment: MainAxisAlignment.center,
-      )
-    ));
+    }else if(tatsuma.isVisible()){
+      // 表示状態のアイコン
+      markers2.add(Marker(
+        point: tatsuma.pos,
+        width: 200.0,
+        height: 96.0,
+        builder: (ctx) => Column(
+          children: [
+            Text(""),
+            _tatsumaIcon,
+            Text(tatsuma.name, style: testStyle),
+          ],
+          mainAxisAlignment: MainAxisAlignment.center,
+        )
+      ));
+    }
   });
+  tatsumaMarkers.addAll(markers2);
 }
 
 //----------------------------------------------------------------------------
