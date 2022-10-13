@@ -181,8 +181,8 @@ LatLng snapToTatsuma(MapController mapController, LatLng point)
 }
 
 //----------------------------------------------------------------------------
-// タツマをデータベースへ保存
-void saveTatsumaToDB()
+// タツマをデータベースへ保存(全体)
+void saveAllTatsumasToDB()
 {
   // ソートされている場合でも、元の順番で書き出す。
   List<TatsumaData> tempList = [...tatsumas];
@@ -202,6 +202,28 @@ void saveTatsumaToDB()
 
   // データベースに上書き保存
   final DatabaseReference ref = database.ref("tatsumas");
+  try { ref.set(data); } catch(e) {}
+}
+
+//----------------------------------------------------------------------------
+// タツマをデータベースへ保存(個別)
+void updateTatsumaToDB(int index)
+{
+  // タツマデータ
+  final TatsumaData tatsuma = tatsumas[index];
+  final Map<String, dynamic> data = {
+    "name": tatsuma.name,
+    "latitude": tatsuma.pos.latitude,
+    "longitude": tatsuma.pos.longitude,
+    "visible": tatsuma.visible,
+    "areaBits": tatsuma.areaBits,
+  };
+
+  // データベースに上書き保存
+  // ソートされている場合でも、元の順番で書き出す。
+  final String path = "tatsumas/" + tatsuma.originalIndex.toString();
+  print(path);
+  final DatabaseReference ref = database.ref(path);
   try { ref.set(data); } catch(e) {}
 }
 
@@ -608,6 +630,8 @@ class TatsumasPageState extends State<TatsumasPage>
               tatsuma.visible  = res["visible"] as bool;
               tatsuma.areaBits = res["areaBits"] as int;
             });
+            // データベースに同期
+            updateTatsumaToDB(index);
           }
         });
       }
@@ -686,7 +710,7 @@ class TatsumasPageState extends State<TatsumasPage>
     // タツマをデータベースへ保存して再描画(追加があれば)
     final bool addTatsuma = (0 < mergeCount);
     if(addTatsuma){
-      saveTatsumaToDB();
+      saveAllTatsumasToDB();
       setState((){
         changeFlag = true;
         updateTatsumaMarkers();
