@@ -468,7 +468,7 @@ class _MapViewState extends State<MapView>
               // タツマに変更があれば…
               if(changeTatsuma ?? false){
                 // タツマをデータベースへ保存
-                saveTatsumaToDB();
+                saveAllTatsumasToDB();
                 // タツママーカーを再描画
                 setState((){
                   updateTatsumaMarkers();
@@ -514,15 +514,17 @@ class _MapViewState extends State<MapView>
                     int? index = searchTatsumaByScreenPos(
                       mainMapController, tapPos.global.dx, tapPos.global.dy);
                     if(index != null){
-                      showChangeTatsumaDialog(context, index).then((res){
+                      var tatsuma = tatsumas[index];
+                      showChangeTatsumaDialog(context, tatsuma).then((res){
                         if(res != null){
-                          var tatsuma = tatsumas[index];
                           setState((){
                             tatsuma.name     = res["name"] as String;
                             tatsuma.visible  = res["visible"] as bool;
                             tatsuma.areaBits = res["areaBits"] as int;
                             updateTatsumaMarkers();
                           });
+                          // データベースに同期
+                          updateTatsumaToDB(index);
                         }
                       });
                     }        

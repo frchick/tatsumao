@@ -2,12 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_map/plugin_api.dart';
 import 'package:latlong2/latlong.dart';
+
 import 'package:file_selector/file_selector.dart';
+
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_database/firebase_database.dart';
-import 'package:xml/xml.dart';
 import 'firebase_options.dart';
+import 'dart:async';    // for StreamSubscription<>
+
+import 'package:xml/xml.dart';
 import 'mydragmarker.dart';
+
 import 'onoff_icon_button.dart';
 import 'file_tree.dart';
 import 'globals.dart';
@@ -44,7 +49,7 @@ class TatsumaData {
   }
 }
 
-// タツマの適当な初期データ。
+// タツマの適当な初期データ(16個)
 List<TatsumaData> tatsumas = [
   TatsumaData(LatLng(35.306227, 139.049396), "岩清水索道", true, 1, 0),
   TatsumaData(LatLng(35.307217, 139.051598), "岩清水中", true, 1, 1),
@@ -79,6 +84,9 @@ final int _areaFullBits = (1 << _areaNames.length) - 1;
 // ソートされているか
 bool _isListSorted = false;
 
+// タツマ一覧での表示順(初期データと同じ16個)
+List<int> _tatsumaOrderArray = [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15];
+
 // 非表示/フィルターされたアイコンをグレー表示するか
 bool showFilteredIcon = false;
 
@@ -87,6 +95,12 @@ List<Marker> tatsumaMarkers = [];
 
 // タツマデータの保存と読み込みデータベース
 FirebaseDatabase database = FirebaseDatabase.instance;
+
+// 変更通知
+StreamSubscription<DatabaseEvent>? _changesTatsumaListener;
+
+// 他のユーザーによるタツマデータの変更通知があった場合のコールバック
+Function(int)? onTatsumaChanged;
 
 // タツマアイコン画像
 // NOTE: 表示回数が多くて静的なので、事前に作成しておく
@@ -181,16 +195,12 @@ LatLng snapToTatsuma(MapController mapController, LatLng point)
 }
 
 //----------------------------------------------------------------------------
-// タツマをデータベースへ保存
-void saveTatsumaToDB()
+// タツマをデータベースへ保存(全体)
+void saveAllTatsumasToDB()
 {
-  // ソートされている場合でも、元の順番で書き出す。
-  List<TatsumaData> tempList = [...tatsumas];
-  tempList.sort((a, b){ return a.originalIndex - b.originalIndex; });
-
   // タツマデータをJSONの配列に変換
   List<Map<String, dynamic>> data = [];
-  tempList.forEach((tatsuma){
+  tatsumas.forEach((tatsuma){
     data.add({
       "name": tatsuma.name,
       "latitude": tatsuma.pos.latitude,
@@ -202,6 +212,28 @@ void saveTatsumaToDB()
 
   // データベースに上書き保存
   final DatabaseReference ref = database.ref("tatsumas");
+  try { ref.set(data); } catch(e) {}
+}
+
+//----------------------------------------------------------------------------
+// タツマをデータベースへ保存(個別)
+void updateTatsumaToDB(int index)
+{
+  // タツマデータ
+  final TatsumaData tatsuma = tatsumas[index];
+  final Map<String, dynamic> data = {
+    "name": tatsuma.name,
+    "latitude": tatsuma.pos.latitude,
+    "longitude": tatsuma.pos.longitude,
+    "visible": tatsuma.visible,
+    "areaBits": tatsuma.areaBits,
+  };
+
+  // データベースに上書き保存
+  // ソートされている場合でも、元の順番で書き出す。
+  final String path = "tatsumas/" + tatsuma.originalIndex.toString();
+  print(path);
+  final DatabaseReference ref = database.ref(path);
   try { ref.set(data); } catch(e) {}
 }
 
@@ -239,6 +271,43 @@ Future loadTatsumaFromDB() async
       /*originalIndex*/ index));
     index++;
   });
+
+  // タツマ一覧での表示順をリセット
+  // 結果としてソートされていないことになる
+  _tatsumaOrderArray = List<int>.generate(tatsumas.length, (i)=>i);
+  _isListSorted = false;
+
+  // 他のユーザーからの変更通知
+  // 直前の変更通知を終了しておく
+  _changesTatsumaListener?.cancel();
+  _changesTatsumaListener = ref.onChildChanged.listen(_onTatsumaChangedFromDB);
+}
+
+// 他のユーザーによるタツマデータの変更通知
+void _onTatsumaChangedFromDB(DatabaseEvent event)
+{
+  DataSnapshot snapshot = event.snapshot;
+  if((snapshot.key == null) || (snapshot.value == null)) return;
+
+  // 変更のあったタツマに対して、
+  final int index = int.parse(snapshot.key!);
+  TatsumaData tatsuma = tatsumas[index];
+  // 変更通知から値を代入
+  var data = snapshot.value! as Map<String, dynamic>;
+  tatsuma.name = data["name"] as String;
+  tatsuma.visible = data["visible"] as bool;
+  tatsuma.areaBits = data["areaBits"] as int;
+  tatsuma.pos.latitude = data["latitude"] as double;
+  tatsuma.pos.longitude = data["longitude"] as double;
+
+  // 再描画
+  // コールバックが設定されていたらそちら、なければマップを再描画
+  updateTatsumaMarkers();
+  if(onTatsumaChanged != null){
+    onTatsumaChanged!(index);
+  }else{
+    updateMapView();
+  }
 }
 
 //----------------------------------------------------------------------------
@@ -299,6 +368,7 @@ int mergeTatsumas(List<TatsumaData> newTatsumas)
     if(!existed){
       newTatsuma.originalIndex = index;
       tatsumas.add(newTatsuma);
+      _tatsumaOrderArray.add(index);
       addCount++;
       index++;
     }
@@ -310,25 +380,24 @@ int mergeTatsumas(List<TatsumaData> newTatsumas)
 
 //----------------------------------------------------------------------------
 // タツマ一覧をソート
-void sortTatsumas()
+List<int> makeTatsumaOrderArray(bool sort)
 {
-  tatsumas.sort((a, b){
-    // まずは表示を前に、非表示を後ろに
-    final int v = (a.isVisible()? 0: 1) - (b.isVisible()? 0: 1);
-    if(v != 0) return v;
-    // エリア毎にまとめる
-    if(a.areaBits != b.areaBits) return (a.areaBits - b.areaBits);
-    // 最後に元の順番
-    return (a.originalIndex - b.originalIndex);
-  });
-  _isListSorted = true;
-}
-
-// タツマ一覧のソートを解除
-void unsortTatsumas()
-{
-  tatsumas.sort((a, b){ return a.originalIndex - b.originalIndex; });
-  _isListSorted = false;
+  // タツマデータそのものではなく、インデックスのバッファをソートする
+  var buf = List<int>.generate(tatsumas.length, (i)=>i);
+  if(sort){
+    buf.sort((idxa, idxb){
+      final TatsumaData a = tatsumas[idxa];
+      final TatsumaData b = tatsumas[idxb];
+      // まずは表示を前に、非表示を後ろに
+      final int v = (a.isVisible()? 0: 1) - (b.isVisible()? 0: 1);
+      if(v != 0) return v;
+      // エリア毎にまとめる
+      if(a.areaBits != b.areaBits) return (a.areaBits - b.areaBits);
+      // 最後に元の順番
+      return (a.originalIndex - b.originalIndex);
+    });
+  }
+  return buf;
 }
 
 //----------------------------------------------------------------------------
@@ -379,7 +448,7 @@ int stringsToAreaFilter(List<String>? areas)
 
 //----------------------------------------------------------------------------
 //----------------------------------------------------------------------------
-// タツママーカーを更新
+// マップ上のタツママーカーを更新
 void updateTatsumaMarkers()
 {
   // テキストスタイル
@@ -510,10 +579,17 @@ class TatsumasPageState extends State<TatsumasPage>
 
   // タツマ一覧
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context)
+  {
+    // 他のユーザーによるタツマ変更のコールバックを設定
+    onTatsumaChanged = (_){ setState((){}); };
+
     return WillPopScope(
-      // ページの戻り値
+      // ページ閉じる際の処理
       onWillPop: (){
+        // 他のユーザーによるタツマ変更のコールバックをクリア
+        onTatsumaChanged = null;
+        // ページの戻り値
         Navigator.of(context).pop(changeFlag);
         return Future.value(false);
       },
@@ -536,8 +612,8 @@ class TatsumasPageState extends State<TatsumasPage>
               onSwitch: _isListSorted,
               onChange: ((onSwitch){
                 setState((){
-                  if(onSwitch) sortTatsumas();
-                  else unsortTatsumas();
+                  _isListSorted = onSwitch;
+                  _tatsumaOrderArray = makeTatsumaOrderArray(_isListSorted);
                 });
                 _listScrollController.animateTo(
                   0,
@@ -565,11 +641,12 @@ class TatsumasPageState extends State<TatsumasPage>
           ],
         ),
 
-        // タツマ一覧
+        // タツマ一覧の作成
+        // ソート順をここで反映する
         body: ListView.builder(
           itemCount: tatsumas.length,
           itemBuilder: (context, index){
-            return _menuItem(context, index);
+            return _menuItem(context, _tatsumaOrderArray[index]);
           },
           controller: _listScrollController,
         ),
@@ -578,7 +655,8 @@ class TatsumasPageState extends State<TatsumasPage>
   }
 
   // タツマ一覧アイテムの作成
-  Widget _menuItem(BuildContext context, int index) {
+  Widget _menuItem(BuildContext context, int index)
+  {
     final TatsumaData tatsuma = tatsumas[index];
 
     // 表示するエリアタグを選択
@@ -600,7 +678,7 @@ class TatsumasPageState extends State<TatsumasPage>
       icon: const Icon(Icons.more_horiz),
       onPressed:() {
         // タツマ名の変更ダイアログ
-        showChangeTatsumaDialog(context, index).then((res){
+        showChangeTatsumaDialog(context, tatsuma).then((res){
           if(res != null){
             setState((){
               changeFlag = true;
@@ -608,6 +686,8 @@ class TatsumasPageState extends State<TatsumasPage>
               tatsuma.visible  = res["visible"] as bool;
               tatsuma.areaBits = res["areaBits"] as int;
             });
+            // データベースに同期
+            updateTatsumaToDB(index);
           }
         });
       }
@@ -630,6 +710,8 @@ class TatsumasPageState extends State<TatsumasPage>
             setState((){
               changeFlag = true;
               tatsuma.visible = !tatsuma.visible;
+              // データベースに同期
+              updateTatsumaToDB(index);
             });
           },
         ),
@@ -686,7 +768,7 @@ class TatsumasPageState extends State<TatsumasPage>
     // タツマをデータベースへ保存して再描画(追加があれば)
     final bool addTatsuma = (0 < mergeCount);
     if(addTatsuma){
-      saveTatsumaToDB();
+      saveAllTatsumasToDB();
       setState((){
         changeFlag = true;
         updateTatsumaMarkers();
@@ -825,13 +907,13 @@ class _TatsumaDialogDialogState extends State<TatsumaDialog>
 
 //----------------------------------------------------------------------------
 // タツマ名変更ダイアログ
-Future<Map<String,dynamic>?> showChangeTatsumaDialog(BuildContext context, int index)
+Future<Map<String,dynamic>?>
+  showChangeTatsumaDialog(BuildContext context, TatsumaData tatsuma)
 {
   return showDialog<Map<String,dynamic>>(
     context: context,
     useRootNavigator: true,
     builder: (context) {
-      final TatsumaData tatsuma = tatsumas[index];
       return TatsumaDialog(
         name: tatsuma.name,
         visible: tatsuma.visible,
