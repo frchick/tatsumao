@@ -10,6 +10,7 @@ import 'firebase_options.dart';
 import 'mydragmarker.dart';
 import 'onoff_icon_button.dart';
 import 'file_tree.dart';
+import 'globals.dart';
 
 //----------------------------------------------------------------------------
 //----------------------------------------------------------------------------
@@ -39,7 +40,7 @@ class TatsumaData {
     // 表示/非表示フラグと、エリアの表示判定をチェック
     return
       visible &&
-      ((areaBits == 0) || ((areaBits & areaFilterBits) != 0));
+      ((areaBits & areaFilterBits) != 0);
   }
 }
 
@@ -78,6 +79,9 @@ final int _areaFullBits = (1 << _areaNames.length) - 1;
 // ソートされているか
 bool _isListSorted = false;
 
+// 非表示/フィルターされたアイコンをグレー表示するか
+bool showFilteredIcon = false;
+
 // マップ上のタツマのマーカー配列
 List<Marker> tatsumaMarkers = [];
 
@@ -88,6 +92,10 @@ FirebaseDatabase database = FirebaseDatabase.instance;
 // NOTE: 表示回数が多くて静的なので、事前に作成しておく
 final Image _tatsumaIcon = Image.asset(
   "assets/misc/tatsu_pos_icon.png",
+  width: 32, height: 32);
+
+final Image _tatsumaIconGray = Image.asset(
+  "assets/misc/tatsu_pos_icon_gray.png",
   width: 32, height: 32);
 
 //----------------------------------------------------------------------------
@@ -122,7 +130,8 @@ int? searchTatsumaByScreenPos(MapController mapController, num x, num y)
     final TatsumaData tatsuma = tatsumas[i];
 
     // 非表示のタツマは除外
-    if(!tatsuma.isVisible()) continue;
+    final bool visible = showFilteredIcon || tatsuma.isVisible();
+    if(!visible) continue;
  
     final CustomPoint<num>? pixelPos = mapController.latLngToScreenPoint(tatsuma.pos);
     if(pixelPos != null){
@@ -373,10 +382,40 @@ int stringsToAreaFilter(List<String>? areas)
 // タツママーカーを更新
 void updateTatsumaMarkers()
 {
+  // テキストスタイル
+  final TextStyle testStyle = const TextStyle(fontWeight: FontWeight.bold);
+  final TextStyle testStyleGray = const TextStyle(color: Color(0xFF616161)/*grey[700]*/);
+
   // タツマデータからマーカー配列を作成
   tatsumaMarkers.clear();
+  
+  // グレー表示されるアイコンが先(下)
+  if(showFilteredIcon){
+    tatsumas.forEach((tatsuma) {
+      // 非表示アイコンのみをグレー表示
+      if(tatsuma.isVisible()) return;
+
+      tatsumaMarkers.add(Marker(
+        point: tatsuma.pos,
+        width: 200.0,
+        height: 96.0,
+        builder: (ctx) => Column(
+          children: [
+            // アイコンを中央寄せにするために、上部にダミーの空テキスト(マシな方法ないか？)
+            Text(""),
+            // 十字アイコン
+            _tatsumaIconGray,
+            // タツマ名
+            Text(tatsuma.name, style: testStyleGray),
+          ],
+          mainAxisAlignment: MainAxisAlignment.center,
+        )
+      ));
+    });
+  }
+  // 非表示でないアイコンを上に
+  // 非表示のタツマは除外
   tatsumas.forEach((tatsuma) {
-    // 非表示のタツマは除外
     if(!tatsuma.isVisible()) return;
 
     tatsumaMarkers.add(Marker(
@@ -387,7 +426,7 @@ void updateTatsumaMarkers()
         children: [
           Text(""),
           _tatsumaIcon,
-          Text(tatsuma.name, style:TextStyle(fontWeight: FontWeight.bold))
+          Text(tatsuma.name, style: testStyle),
         ],
         mainAxisAlignment: MainAxisAlignment.center,
       )
@@ -806,12 +845,15 @@ Future<Map<String,dynamic>?> showChangeTatsumaDialog(BuildContext context, int i
 // エリア表示フィルターダイアログ
 class AreaFilterDialog extends StatefulWidget
 {
-  AreaFilterDialog(){
+  AreaFilterDialog({ this.showMapDrawOptions=false }){
     _areaFilterBits0 = areaFilterBits;
   }
 
   @override
   AreaFilterDialogState createState() => AreaFilterDialogState();
+
+  // マップ表示オプションを表示するか
+  bool showMapDrawOptions;
 
   // 表示前のエリアフィルターのフラグ(変更の有無を確認する用)
   int _areaFilterBits0 = 0;
@@ -885,31 +927,52 @@ class AreaFilterDialogState  extends State<AreaFilterDialog>
         return Future.value(false);
       },
       child: SimpleDialog(
+        // ヘッダ部
+        // グレー表示スイッチ含む
         titlePadding: const EdgeInsets.fromLTRB(12.0, 12.0, 12.0, 0.0),
-        title: Row(
+        title: Column(
           children:[
-            const Text("エリアフィルター"),
-            // 一律表示
-            IconButton(
-              icon: const Icon(Icons.visibility),
-              onPressed:() {
-                // 表示非表示を反転
-                setState((){
-                  areaFilterBits = _areaFullBits;
-                });
-              },
-            ),
-            // 一律非表示
-            IconButton(
-              icon: const Icon(Icons.visibility_off),
-              onPressed:() {
-                // 表示非表示を反転
-                setState((){
-                  areaFilterBits = 0;
-                });
-              },
-            ),
-          ]
+            Row(children:[
+              const Text("エリアフィルター"),
+              // 一律表示
+              IconButton(
+                icon: const Icon(Icons.visibility),
+                onPressed:() {
+                  // 表示非表示を反転
+                  setState((){
+                    areaFilterBits = _areaFullBits;
+                  });
+                },
+              ),
+              // 一律非表示
+              IconButton(
+                icon: const Icon(Icons.visibility_off),
+                onPressed:() {
+                  // 表示非表示を反転
+                  setState((){
+                    areaFilterBits = 0;
+                  });
+                },
+              ),
+            ]),
+            // マップ表示オプションスイッチ
+            if(widget.showMapDrawOptions) Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                Text("グレー表示", style: Theme.of(context).textTheme.subtitle1),
+                Switch(
+                  value:showFilteredIcon,
+                  onChanged:(r){
+                    setState((){
+                      showFilteredIcon = r;
+                    });
+                    updateTatsumaMarkers();
+                    updateMapView();
+                  },
+                ),
+              ],
+            )
+          ],
         ),
         // エリア一覧
         children: areas
@@ -918,13 +981,13 @@ class AreaFilterDialogState  extends State<AreaFilterDialog>
   }
 }
 
-Future<bool?> showAreaFilter(BuildContext context)
+Future<bool?> showAreaFilter(BuildContext context, { bool showMapDrawOptions=false })
 {
   return showDialog<bool>(
     context: context,
     useRootNavigator: true,
     builder: (context){
-      return AreaFilterDialog();
+      return AreaFilterDialog(showMapDrawOptions: showMapDrawOptions);
     },
   );
 }

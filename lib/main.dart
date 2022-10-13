@@ -481,7 +481,7 @@ class _MapViewState extends State<MapView>
           IconButton(
             icon: const Icon(Icons.filter_alt),
             onPressed:() {
-              showAreaFilter(context).then((bool? res){
+              showAreaFilter(context, showMapDrawOptions:true).then((bool? res){
                 if(res ?? false){
                   setState((){
                     updateTatsumaMarkers();
