@@ -232,7 +232,6 @@ void updateTatsumaToDB(int index)
   // データベースに上書き保存
   // ソートされている場合でも、元の順番で書き出す。
   final String path = "tatsumas/" + tatsuma.originalIndex.toString();
-  print(path);
   final DatabaseReference ref = database.ref(path);
   try { ref.set(data); } catch(e) {}
 }
@@ -799,9 +798,21 @@ class TatsumaDialog extends StatefulWidget
 
 class _TatsumaDialogDialogState extends State<TatsumaDialog>
 {
+  late TextEditingController _dateTextController;
+
+  @override 
+  void initState()
+  {
+    super.initState();
+
+    // NOTE: 初期値の設定を build() に書くと、他の Widget 由来の再描画があるたびに、
+    // NOTE: テキストフィールドが元に戻ってしまう。initState() に書くのが正解。
+    _dateTextController = TextEditingController(text: widget.name);
+  }
+
   @override
-  Widget build(BuildContext context) {
-    final dateTextController = TextEditingController(text: widget.name);
+  Widget build(BuildContext context)
+  {
     final Icon visibilityIcon =
       widget.visible? const Icon(Icons.visibility): const Icon(Icons.visibility_off);
 
@@ -826,7 +837,7 @@ class _TatsumaDialogDialogState extends State<TatsumaDialog>
               // 名前エディットボックス
               Expanded(
                 child: TextField(
-                  controller: dateTextController,
+                  controller: _dateTextController,
                   autofocus: true,
                 ),
               )
@@ -850,7 +861,7 @@ class _TatsumaDialogDialogState extends State<TatsumaDialog>
           child: const Text("OK"),
           onPressed: () {
             Navigator.pop<Map<String,dynamic>>(context, {
-              "name": dateTextController.text,
+              "name": _dateTextController.text,
               "visible": widget.visible,
               "areaBits": widget.areaBits });
           },
