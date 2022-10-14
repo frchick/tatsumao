@@ -465,17 +465,17 @@ void updateTatsumaMarkers()
       tatsumaMarkers.add(Marker(
         point: tatsuma.pos,
         width: 200.0,
-        height: 96.0,
+        height: 64.0,
+        anchorPos: AnchorPos.exactly(Anchor(100, 48)),
         builder: (ctx) => Column(
           children: [
             // アイコンを中央寄せにするために、上部にダミーの空テキスト(マシな方法ないか？)
-            Text(""),
             // 十字アイコン
             _tatsumaIconGray,
             // タツマ名
             Text(tatsuma.name, style: testStyleGray),
           ],
-          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisAlignment: MainAxisAlignment.start,
         )
       ));
     }else if(tatsuma.isVisible()){
@@ -483,14 +483,14 @@ void updateTatsumaMarkers()
       markers2.add(Marker(
         point: tatsuma.pos,
         width: 200.0,
-        height: 96.0,
+        height: 64.0,
+        anchorPos: AnchorPos.exactly(Anchor(100, 48)),
         builder: (ctx) => Column(
           children: [
-            Text(""),
             _tatsumaIcon,
             Text(tatsuma.name, style: testStyle),
           ],
-          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisAlignment: MainAxisAlignment.start,
         )
       ));
     }
