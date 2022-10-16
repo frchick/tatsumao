@@ -52,10 +52,13 @@ class TatsumaData {
 
   // 可視判定
   bool isVisible(){
-    // 表示/非表示フラグと、エリアの表示判定をチェック
-    return
-      visible &&
-      ((areaBits & areaFilterBits) != 0);
+    // 表示/非表示フラグ
+    if(!visible) return false;
+    // エリアフィルター
+    if((areaFilterBits & _areaFullBits) != _areaFullBits){
+      if((areaBits & areaFilterBits) == 0) return false;
+    }
+    return true;
   }
 
   // データが空か判定
@@ -452,11 +455,19 @@ List<int> makeTatsumaOrderArray(bool sort)
     buf.sort((idxa, idxb){
       final TatsumaData a = tatsumas[idxa];
       final TatsumaData b = tatsumas[idxb];
-      // まずは表示を前に、非表示を後ろに
-      final int v = (a.isVisible()? 0: 1) - (b.isVisible()? 0: 1);
-      if(v != 0) return v;
+      // まずはエリアフィルター含めて表示を前に、非表示を後ろに
+      final int v0 = (a.isVisible()? 0: 1) - (b.isVisible()? 0: 1);
+      if(v0 != 0) return v0;
+      //表示/非表示アイコンで非表示なってるやつを後ろに
+      final int v1 = (a.visible? 0: 1) - (b.visible? 0: 1);
+      if(v1 != 0) return v1;
       // エリア毎にまとめる
-      if(a.areaBits != b.areaBits) return (a.areaBits - b.areaBits);
+      // エリア指定がないタツマは後ろ
+      if(a.areaBits != b.areaBits){
+        if(a.areaBits == 0) return 1;
+        if(b.areaBits == 0) return -1;
+        return (a.areaBits - b.areaBits);
+      }
       // 最後に元の順番
       return (a.originalIndex - b.originalIndex);
     });
@@ -470,7 +481,7 @@ List<int> makeTatsumaOrderArray(bool sort)
 List<String> areaFilterToStrings()
 {
   // 特に指定がない場合には特殊キーワード "All" を返す
-  if(areaFilterBits == _areaFullBits){
+  if((areaFilterBits & _areaFullBits) == _areaFullBits){
     return ["All"];
   }
 
@@ -752,6 +763,17 @@ class TatsumasPageState extends State<TatsumasPage>
       }
     ));
     
+    // アイコンの選択
+    const Color hideColor = const Color(0xFFBDBDBD)/*Colors.grey[400]*/;
+    late Icon icon;
+    if(!tatsuma.visible){
+      icon = const Icon(Icons.visibility_off, color: hideColor);
+    }else if(!tatsuma.isVisible()){
+      icon = const Icon(Icons.visibility, color: hideColor);
+    }else{
+      icon = const Icon(Icons.visibility);
+    }
+
     return Container(
       // 境界線
       decoration: const BoxDecoration(
@@ -763,7 +785,7 @@ class TatsumasPageState extends State<TatsumasPage>
       child:MyListTile(
         // (左側)表示非表示アイコンボタン
         leading: IconButton(
-          icon: (tatsuma.visible? const Icon(Icons.visibility): const Icon(Icons.visibility_off)),
+          icon: icon,
           onPressed:() {
             // 表示非表示の切り替え
             setState((){
@@ -779,7 +801,7 @@ class TatsumasPageState extends State<TatsumasPage>
         // 非表示の場合はグレー
         title: Text(
           tatsuma.name,
-          style: (tatsuma.isVisible()? null: const TextStyle(color: Colors.grey)),
+          style: (tatsuma.isVisible()? null: const TextStyle(color: hideColor)),
         ),
 
         // (右側)エリアタグと編集ボタン
