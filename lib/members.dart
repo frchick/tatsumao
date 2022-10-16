@@ -6,6 +6,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_map/plugin_api.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/services.dart';   // for クリップボード
+
 import 'mydragmarker.dart';
 import 'text_ballon_widget.dart';
 import 'tatsumas.dart';
@@ -32,6 +33,8 @@ class Member {
   bool attended;
   // 退会者か？
   bool withdrawals;
+  // 起動直後のデータベース変更通知を受け取ったか
+  bool firstSyncEvent = true;
   // ドラッグマーカーのアイコン
   late Image icon0;
 }
@@ -167,6 +170,13 @@ void syncMemberState(final int index, { bool goEveryoneHome=false}) async
 void onChangeMemberState(final int index, DatabaseEvent event)
 {
   final DataSnapshot snapshot = event.snapshot;
+
+  // リスナー設定直後のイベントは破棄する
+  if(members[index].firstSyncEvent){
+    members[index].firstSyncEvent = false;
+    print("onChangeMemberState(index:${index}) -> first event");
+    return;
+  }
 
   // 自分が送った変更には(当然)反応しない。送信者IDと自分のIDを比較する。
   final String sender_id = snapshot.child("sender_id").value as String;
@@ -353,7 +363,6 @@ class MyDragMarker2 extends MyDragMarker
     // データベースに変更を通知
     syncMemberState(index);
 
-    print("End index $index, point $point");
     return point;
   }
 
