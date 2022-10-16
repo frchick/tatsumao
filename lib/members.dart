@@ -345,7 +345,7 @@ class MyDragMarker2 extends MyDragMarker
     }
 
     // タツママーカーにスナップ
-    point = snapToTatsuma(mainMapController, point);
+    point = snapToTatsuma(point);
 
     // メンバーデータを更新
     members[index].pos = point;

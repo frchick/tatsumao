@@ -80,6 +80,7 @@ class _HomeButtonWidgetState extends State<HomeButtonWidget>
   // メンバーメニュー領域の高さ
   static const double menuHeight = 120;
 
+  //----------------------------------------------------------------------------
   // メンバー一覧メニューからドラッグして出動！
   void onDragEndFunc(MyDraggableDetails details)
   {
@@ -97,7 +98,7 @@ class _HomeButtonWidgetState extends State<HomeButtonWidget>
     if(point == null) return;
 
     // タツママーカーにスナップ
-    point = snapToTatsuma(mainMapController, point);
+    point = snapToTatsuma(point);
 
     // メニュー領域の再描画
     final int index = details.data;
@@ -206,44 +207,50 @@ class _HomeButtonWidgetState extends State<HomeButtonWidget>
         },
 
         // 長押しでサブメニュー
-        // Note: アイコンカラーは ListTile のデフォルトカラー合わせ
         onLongPress: (){
           // 編集ロックならサブメニュー出さない
           if(lockEditing) return;
-
-          final double x = context.size!.width;
-          final double y = context.size!.height - 150;
-         
-          showMenu(
-            context: context,
-            position: RelativeRect.fromLTRB(x, y, 0, 0),
-            elevation: 8.0,
-            items: [
-              PopupMenuItem(
-                value: 0,
-                child: Row(
-                  children: [
-                    Icon(Icons.hotel, color: Colors.black45),
-                    const SizedBox(width: 5),
-                    const Text('全員家に帰る'),
-                  ]
-                ),
-                height: (kMinInteractiveDimension * 0.8),
-              ),
-            ],
-          ).then((value) {
-            switch(value ?? -1){
-            case 0:
-              // 全員を家に帰す
-              if(goEveryoneHome()){
-                updateMapView();
-              }
-              break;
-            }
-          });
+          showPopupMenu(context);
         },
       )
     );
+  }
+
+  //----------------------------------------------------------------------------
+  // 家アイコン長押しのポップアップメニュー
+  void showPopupMenu(BuildContext context)
+  {
+    final double x = context.size!.width;
+    final double y = context.size!.height - 150;
+    
+    // Note: アイコンカラーは ListTile のデフォルトカラー合わせ
+    showMenu(
+      context: context,
+      position: RelativeRect.fromLTRB(x, y, 0, 0),
+      elevation: 8.0,
+      items: [
+        PopupMenuItem(
+          value: 0,
+          child: Row(
+            children: [
+              Icon(Icons.hotel, color: Colors.black45),
+              const SizedBox(width: 5),
+              const Text('全員家に帰る'),
+            ]
+          ),
+          height: (kMinInteractiveDimension * 0.8),
+        ),
+      ],
+    ).then((value) {
+      switch(value ?? -1){
+      case 0:
+        // 全員を家に帰す
+        if(goEveryoneHome()){
+          updateMapView();
+        }
+        break;
+      }
+    });
   }
 }
 

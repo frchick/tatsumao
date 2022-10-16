@@ -12,6 +12,7 @@ import 'dart:async';    // for StreamSubscription<>
 
 import 'package:xml/xml.dart';
 import 'mydragmarker.dart';
+import 'my_list_tile.dart';
 
 import 'onoff_icon_button.dart';
 import 'file_tree.dart';
@@ -164,11 +165,11 @@ int? searchTatsumaByScreenPos(MapController mapController, num x, num y)
 
 //----------------------------------------------------------------------------
 // 地図上のマーカーにスナップ
-LatLng snapToTatsuma(MapController mapController, LatLng point)
+LatLng snapToTatsuma(LatLng point)
 {
   // 画面座標に変換してマーカーとの距離を判定
   // 指定された座標が画面外なら何もしない
-  final CustomPoint<num>? pixelPos0 = mapController.latLngToScreenPoint(point);
+  final CustomPoint<num>? pixelPos0 = mainMapController.latLngToScreenPoint(point);
   if(pixelPos0 == null) return point;
 
   // マーカーサイズが16x16である前提
@@ -177,7 +178,7 @@ LatLng snapToTatsuma(MapController mapController, LatLng point)
     // 非表示のタツマは除外
     if(!tatsuma.isVisible()) return;
  
-    final CustomPoint<num>? pixelPos1 = mapController.latLngToScreenPoint(tatsuma.pos);
+    final CustomPoint<num>? pixelPos1 = mainMapController.latLngToScreenPoint(tatsuma.pos);
     if(pixelPos1 != null){
       final num dx = (pixelPos0.x - pixelPos1.x).abs();
       final num dy = (pixelPos0.y - pixelPos1.y).abs();
@@ -759,7 +760,7 @@ class TatsumasPageState extends State<TatsumasPage>
         ),
       ),
       // 表示/非表示アイコンとタツマ名
-      child:ListTile(
+      child:MyListTile(
         // (左側)表示非表示アイコンボタン
         leading: IconButton(
           icon: (tatsuma.visible? const Icon(Icons.visibility): const Icon(Icons.visibility_off)),
@@ -789,10 +790,50 @@ class TatsumasPageState extends State<TatsumasPage>
           children: areaTagsAndButton
         ),
 
-        onTap: (){
-        },
+        // 長押しでポップアップメニュー
+        onLongPress: (TapDownDetails details){
+          showPopupMenu(context, index, details.globalPosition);
+        }
       ),
     );
+  }
+
+  //----------------------------------------------------------------------------
+  // タツマ一覧長押しのポップアップメニュー
+  void showPopupMenu(BuildContext context, int index, Offset offset)
+  {
+    // Note: アイコンカラーは ListTile のデフォルトカラー合わせ
+    showMenu(
+      context: context,
+      position: RelativeRect.fromLTRB(offset.dx, offset.dy, offset.dx, offset.dy),
+      elevation: 8.0,
+      items: [
+        PopupMenuItem(
+          value: 0,
+          child: Row(
+            children: [
+              Icon(Icons.travel_explore, color: Colors.black45),
+              const SizedBox(width: 5),
+              const Text('この場所へ移動'),
+            ]
+          ),
+          height: (kMinInteractiveDimension * 0.8),
+        ),
+      ],
+    ).then((value) {
+      switch(value ?? -1){
+      case 0:
+        // 座標を指定して地図に戻る
+        // ある程度のズーム率まで拡大表示する
+        double zoom = mainMapController.zoom;
+        const double zoomInTarget = 16.25;
+        if(zoom < zoomInTarget) zoom = zoomInTarget;
+        final TatsumaData tatsuma = tatsumas[index];
+        mainMapController.move(tatsuma.pos, zoom);
+        Navigator.pop(context);
+        break;
+      }
+    });
   }
 
   //----------------------------------------------------------------------------
