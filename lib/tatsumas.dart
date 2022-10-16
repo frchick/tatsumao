@@ -15,6 +15,7 @@ import 'mydragmarker.dart';
 
 import 'onoff_icon_button.dart';
 import 'file_tree.dart';
+import 'text_ballon_widget.dart';
 import 'globals.dart';
 
 //----------------------------------------------------------------------------
@@ -28,6 +29,14 @@ class TatsumaData {
     this.areaBits,
     this.originalIndex,
   );
+  // 空のタツマデータ
+  TatsumaData.empty() :
+    pos = LatLng(0,0),
+    name = "",
+    visible = false,
+    areaBits = 0,
+    originalIndex = -1
+  {}
 
   // 座標
   LatLng pos;
@@ -47,9 +56,12 @@ class TatsumaData {
       visible &&
       ((areaBits & areaFilterBits) != 0);
   }
+
+  // データが空か判定
+  bool isEmpty() { return originalIndex < 0; }
 }
 
-// タツマの適当な初期データ(16個)
+// タツマの適当な初期データ
 List<TatsumaData> tatsumas = [];
 
 // 猟場のエリア名
@@ -67,8 +79,8 @@ final int _areaFullBits = (1 << _areaNames.length) - 1;
 // ソートされているか
 bool _isListSorted = false;
 
-// タツマ一覧での表示順(初期データと同じ16個)
-List<int> _tatsumaOrderArray = [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15];
+// タツマ一覧での表示順
+List<int> _tatsumaOrderArray = [];
 
 // 非表示/フィルターされたアイコンをグレー表示するか
 bool showFilteredIcon = false;
@@ -81,9 +93,13 @@ FirebaseDatabase database = FirebaseDatabase.instance;
 
 // 変更通知
 StreamSubscription<DatabaseEvent>? _changesTatsumaListener;
+StreamSubscription<DatabaseEvent>? _addTatsumaListener;
 
 // 他のユーザーによるタツマデータの変更通知があった場合のコールバック
-Function(int)? onTatsumaChanged;
+Function(int)? _onTatsumaChanged;
+
+// 連続するタツマ追加イベントを一つにまとめるためのタイマー
+Timer? _tatsumaAddEventMergeTimer;
 
 // タツマアイコン画像
 // NOTE: 表示回数が多くて静的なので、事前に作成しておく
@@ -263,6 +279,7 @@ Future loadTatsumaFromDB() async
   // 直前の変更通知を終了しておく
   releaseTatsumasSync();
   _changesTatsumaListener = ref.onChildChanged.listen(_onTatsumaChangedFromDB);
+  _addTatsumaListener = ref.onChildAdded.listen(_onTatsumaAddedFromDB);
 }
 
 //----------------------------------------------------------------------------
@@ -271,6 +288,8 @@ void releaseTatsumasSync()
 {
   _changesTatsumaListener?.cancel();
   _changesTatsumaListener = null;
+  _addTatsumaListener?.cancel();
+  _addTatsumaListener = null;
 }
 
 //----------------------------------------------------------------------------
@@ -283,6 +302,7 @@ void _onTatsumaChangedFromDB(DatabaseEvent event)
   // 変更のあったタツマに対して、
   final int index = int.parse(snapshot.key!);
   TatsumaData tatsuma = tatsumas[index];
+
   // 変更通知から値を代入
   var data = snapshot.value! as Map<String, dynamic>;
   tatsuma.name = data["name"] as String;
@@ -294,11 +314,63 @@ void _onTatsumaChangedFromDB(DatabaseEvent event)
   // 再描画
   // コールバックが設定されていたらそちら、なければマップを再描画
   updateTatsumaMarkers();
-  if(onTatsumaChanged != null){
-    onTatsumaChanged!(index);
+  if(_onTatsumaChanged != null){
+    _onTatsumaChanged!(index);
   }else{
     updateMapView();
   }
+}
+
+//----------------------------------------------------------------------------
+// 他のユーザーによるタツマデータの追加通知
+void _onTatsumaAddedFromDB(DatabaseEvent event)
+{
+  DataSnapshot snapshot = event.snapshot;
+  if((snapshot.key == null) || (snapshot.value == null)) return;
+
+  // すでに作成済みのタツマなら何もしない
+  final int index = int.parse(snapshot.key!);
+  if((index < tatsumas.length) && !tatsumas[index].isEmpty()) return;
+
+  // タツマを追加
+  var t = snapshot.value! as Map<String, dynamic>;
+  TatsumaData newTatsuma = TatsumaData(
+    /*pos:*/ LatLng(t["latitude"] as double, t["longitude"] as double),
+    /*name:*/ t["name"] as String,
+    /*visible:*/ t["visible"] as bool,
+    /*areaBits:*/ t["areaBits"] as int,
+    /*originalIndex*/ index);
+  if(index < tatsumas.length){
+    // すでに確保済みの配列に代入
+    tatsumas[index] = newTatsuma;
+  }else{
+    // 配列を拡張
+    // もし非連続なインデックスがきたら、そこまでは空のデータで拡張する
+    for(int i = tatsumas.length; i < index; i++){
+      tatsumas.add(TatsumaData.empty());
+      _tatsumaOrderArray.add(i);
+    }
+    tatsumas.add(newTatsuma);
+    _tatsumaOrderArray.add(index);
+  }
+
+  // 連続するタツマ追加イベントを一つにまとめるためのタイマーを設定
+  // 1秒のタイマーを使うことで、次の通知が1秒以内であればまとめる。
+  if(_tatsumaAddEventMergeTimer != null){
+    _tatsumaAddEventMergeTimer!.cancel();
+    _tatsumaAddEventMergeTimer = null;
+  }
+  _tatsumaAddEventMergeTimer = Timer(Duration(seconds:1), (){
+    _tatsumaAddEventMergeTimer = null;
+    // コールバックが設定されていたらそちら、なければマップを再描画
+    updateTatsumaMarkers();
+    if(_onTatsumaChanged != null){
+      _onTatsumaChanged!(index);
+    }else{
+      updateMapView();
+      showTextBallonMessage("他のユーザーがタツマを追加");
+    }
+  });
 }
 
 //----------------------------------------------------------------------------
@@ -568,13 +640,13 @@ class TatsumasPageState extends State<TatsumasPage>
   Widget build(BuildContext context)
   {
     // 他のユーザーによるタツマ変更のコールバックを設定
-    onTatsumaChanged = (_){ setState((){}); };
+    _onTatsumaChanged = (_){ setState((){}); };
 
     return WillPopScope(
       // ページ閉じる際の処理
       onWillPop: (){
         // 他のユーザーによるタツマ変更のコールバックをクリア
-        onTatsumaChanged = null;
+        _onTatsumaChanged = null;
         // ページの戻り値
         Navigator.of(context).pop(changeFlag);
         return Future.value(false);
