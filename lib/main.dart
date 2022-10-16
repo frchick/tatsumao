@@ -345,6 +345,21 @@ class _MapViewState extends State<MapView>
     await loadTatsumaFromDB();
   }
 
+  @override
+  void dispose()
+  {
+    // データベースからの変更通知などをリセット
+    // NOTE: これが呼ばれるのはページ全体が終わるときなので不要な気もするが・・・
+    // NOTE: VSCode からのリスタートで、以前の通知が残っているような挙動があるので対策。
+    // NOTE: でも期待通り動いているかは怪しい・・・
+    releaseMemberSync();
+    releaseTatsumasSync();
+    _lockEditingListener?.cancel();
+    _lockEditingListener = null;
+
+    super.dispose();
+  }
+
   // AppBar-Action領域の、編集ロックボタン
   // コールバック内で自分自身のメソッドを呼び出すために、インスタンスをアクセス可能に定義する
   late OnOffIconButton _lockEditingButton;

@@ -50,24 +50,7 @@ class TatsumaData {
 }
 
 // タツマの適当な初期データ(16個)
-List<TatsumaData> tatsumas = [
-  TatsumaData(LatLng(35.306227, 139.049396), "岩清水索道", true, 1, 0),
-  TatsumaData(LatLng(35.307217, 139.051598), "岩清水中", true, 1, 1),
-  TatsumaData(LatLng(35.306809, 139.052676), "岩清水下", true, 1, 2),
-  TatsumaData(LatLng(35.306282, 139.047802), "岩清水", true, 1, 3),
-  TatsumaData(LatLng(35.305798, 139.054232), "赤エル", true, 3, 4),
-  TatsumaData(LatLng(35.30636, 139.05427), "裏赤エル", true, 3, 5),
-  TatsumaData(LatLng(35.305804, 139.055972), "ストッパー", true, 3, 6),
-  TatsumaData(LatLng(35.304213, 139.046478), "新トナカイ", true, 1, 7),
-  TatsumaData(LatLng(35.305561, 139.045259), "トナカイ", true, 1, 8),
-  TatsumaData(LatLng(35.302601, 139.04473), "ムロ岩の先", true, 1, 9),
-  TatsumaData(LatLng(35.302488, 139.044131), "ムロ岩", true, 1, 10),
-  TatsumaData(LatLng(35.301932, 139.043382), "スター", true, 1, 11),
-  TatsumaData(LatLng(35.301166, 139.043601), "アメリカ", true, 1, 12),
-  TatsumaData(LatLng(35.300012, 139.044023), "太平洋", true, 1, 13),
-  TatsumaData(LatLng(35.30026, 139.046538), "メキシコ", true, 1, 14),
-  TatsumaData(LatLng(35.29942, 139.04639), "沢の上", true, 1, 15),
-];
+List<TatsumaData> tatsumas = [];
 
 // 猟場のエリア名
 // NOTE: 設定ボタン表示の都合で、4の倍数個で定義
@@ -278,10 +261,19 @@ Future loadTatsumaFromDB() async
 
   // 他のユーザーからの変更通知
   // 直前の変更通知を終了しておく
-  _changesTatsumaListener?.cancel();
+  releaseTatsumasSync();
   _changesTatsumaListener = ref.onChildChanged.listen(_onTatsumaChangedFromDB);
 }
 
+//----------------------------------------------------------------------------
+// データベースからの変更通知を停止
+void releaseTatsumasSync()
+{
+  _changesTatsumaListener?.cancel();
+  _changesTatsumaListener = null;
+}
+
+//----------------------------------------------------------------------------
 // 他のユーザーによるタツマデータの変更通知
 void _onTatsumaChangedFromDB(DatabaseEvent event)
 {

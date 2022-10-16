@@ -121,10 +121,7 @@ Future initMemberSync(String path) async
 
   // 他のユーザーからの変更通知を受け取るリスナーを設定
   // 直前のリスナーは停止しておく
-  _membersListener.forEach((listener){
-    listener.cancel();
-  });
-  _membersListener.clear();
+  releaseMemberSync();
   for(int index = 0; index < members.length; index++){
     final String id = index.toString().padLeft(3, '0');
     final DatabaseReference ref = database.ref(_assignPath + "/" + id);
@@ -133,6 +130,16 @@ Future initMemberSync(String path) async
     });
     _membersListener.add(listener);
   }
+}
+
+//---------------------------------------------------------------------------
+// データベースからの変更通知を停止
+void releaseMemberSync()
+{
+  _membersListener.forEach((listener){
+    listener.cancel();
+  });
+  _membersListener.clear();
 }
 
 //---------------------------------------------------------------------------
