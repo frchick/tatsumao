@@ -39,7 +39,10 @@ dependencies:
   file_selector: ^0.8.2
   xml: ^6.1.0
   google_fonts: ^3.0.1
-
+  intl: ^0.17.0
+  flutter_localizations:
+    sdk: flutter
+  
 dev_dependencies:
   flutter_test:
     sdk: flutter
