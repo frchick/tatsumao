@@ -25,14 +25,23 @@ class TextEditDialog extends StatefulWidget
 
 class _TextEditDialogState extends State<TextEditDialog>
 {
+  late TextEditingController _dateTextController;
+
+  @override
+  void initState()
+  {
+    super.initState();
+
+    _dateTextController = TextEditingController(text: widget.defaultText);
+  }
+
   @override
   Widget build(BuildContext context) {
-    final dateTextController = TextEditingController(text: widget.defaultText);
 
     return AlertDialog(
       title: Text(widget.titleText),
       content: TextField(
-        controller: dateTextController,
+        controller: _dateTextController,
         decoration: (widget.hintText != null)? InputDecoration(hintText: widget.hintText): null,
         autofocus: true,
       ),
@@ -44,7 +53,7 @@ class _TextEditDialogState extends State<TextEditDialog>
         ElevatedButton(
           child: Text(widget.okText),
           onPressed: () {
-            Navigator.pop<String>(context, dateTextController.text);
+            Navigator.pop<String>(context, _dateTextController.text);
           },
         ),
       ],
