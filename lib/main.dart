@@ -4,6 +4,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_map/plugin_api.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:positioned_tap_detector_2/positioned_tap_detector_2.dart'; // マップのタップ
+import 'package:after_layout/after_layout.dart';  // 起動直後の build の後の処理
 
 import 'package:flutter_localizations/flutter_localizations.dart';  // カレンダー日本語化
 
@@ -33,6 +34,14 @@ final ButtonStyle _appIconButtonStyle = ElevatedButton.styleFrom(
   shadowColor: Colors.transparent,
   fixedSize: Size(80,80),
 );
+
+// 処理中インジケータ
+enum ProgressIndicatorState {
+  NoIndicate, // 表示されていない
+  Showing,    // 表示中
+  Stopping,   // 停止中(次のbuildで停止)
+}
+ProgressIndicatorState _progressIndicatorState = ProgressIndicatorState.NoIndicate;
 
 //---------------------------------------------------------------------------
 //---------------------------------------------------------------------------
@@ -303,13 +312,13 @@ class MyApp extends StatelessWidget {
 
 //----------------------------------------------------------------------------
 //----------------------------------------------------------------------------
-// 地図画面
+// メインの画面
 class MapView extends StatefulWidget {
   @override
   _MapViewState createState() => _MapViewState();
 }
 
-class _MapViewState extends State<MapView>
+class _MapViewState extends State<MapView> with AfterLayoutMixin<MapView>
 {
 
   @override
@@ -317,6 +326,7 @@ class _MapViewState extends State<MapView>
     super.initState();
 
     // メンバーデータからマーカー配列を作成
+    // メンバーは組み込みデータなのでデータベースからの読み込みはない
     int memberIndex = 0;
     members.forEach((member) {
       // アイコンを読み込んでおく
@@ -338,6 +348,10 @@ class _MapViewState extends State<MapView>
       // タツマデータからマーカー配列を作成
       setState((){
         updateTatsumaMarkers();
+        // 一通りの処理が終わるので、処理中インジケータを消す
+        if(_progressIndicatorState == ProgressIndicatorState.Showing){
+          _progressIndicatorState = ProgressIndicatorState.Stopping;
+        }
       });
       // マップの初期位置をメンバーたちの位置へ移動
       moveMapToLocationOfMembers();
@@ -401,9 +415,54 @@ class _MapViewState extends State<MapView>
   // ドラッグ許可/禁止を後から変更するために、インスタンスをアクセス可能に定義する
   late MyDragMarkerPluginOptions _myDragMarkerPluginOptions;
 
-  // 地図画面
+  //----------------------------------------------------------------------------
+  // 画面構築
   @override
   Widget build(BuildContext context)
+  {
+    // 処理中インジケータを消す
+    if(_progressIndicatorState == ProgressIndicatorState.Stopping){
+      print("Stop progress indicator() !!!!");
+      Navigator.of(context).pop();
+      _progressIndicatorState = ProgressIndicatorState.NoIndicate;
+    }
+
+    final AppBar appBar = makeAppBar(context);
+    final Widget appBody = makeAppBody(context);
+
+    return Scaffold(
+      key: appScaffoldKey,
+      extendBodyBehindAppBar: true,
+      // アプリケーションバー
+      appBar: appBar,
+      // メインとなる地図画面
+      body: appBody,
+    );
+  }
+
+  //----------------------------------------------------------------------------
+  // 初回の build の後の処理(処理中インジケータの表示)
+  @override
+  void afterFirstLayout(BuildContext context)
+  {
+    // 全画面プログレスダイアログ 
+    showGeneralDialog(
+      context: context,
+      barrierDismissible: false,
+      barrierColor: Colors.black.withOpacity(0.5),
+      pageBuilder: (BuildContext context, Animation animation, Animation secondaryAnimation)
+      {
+        return Center(
+          child: CircularProgressIndicator(),
+        );
+      }
+    );
+    _progressIndicatorState = ProgressIndicatorState.Showing;
+  }
+
+  //----------------------------------------------------------------------------
+  // アプリケーションバー構築
+  AppBar makeAppBar(BuildContext context)
   {
     // AppBar-Action領域の、編集ロックボタン
     _lockEditingButton = OnOffIconButton(
@@ -427,163 +486,165 @@ class _MapViewState extends State<MapView>
       },
     );
 
+    return AppBar(
+      // ファイルパスとファイルアイコン
+      title: Row(
+        children: [
+          // ファイル一覧ボタン
+          IconButton(
+            icon: Icon(Icons.folder),
+            onPressed: () {
+              // ファイル一覧画面に遷移して、ファイルの切り替え
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => FilesPage(
+                  onSelectFile: (path) async {
+                    await initMemberSync(path);
+                    await loadAreaFilterFromDB(path);
+                    await loadLockEditingFromDB(path, onLockChange:onLockChangeByOther);
+                    // メンバーの位置へ地図を移動
+                    moveMapToLocationOfMembers();
+                    // appBarの再描画もしたいので…
+                    setState((){
+                      updateTatsumaMarkers();
+                    });
+                  }
+                ))
+              );
+            }
+          ),
+          Text(getCurrentFilePath()),
+        ],
+      ),
+      // アプリケーションバーは半透明
+      backgroundColor: Theme.of(context).primaryColor.withOpacity(0.4),
+      elevation: 0,
+      
+      actions: [
+        // 編集ロックボタン
+        _lockEditingButton,
+
+        // クリップボードへコピーボタン
+        IconButton(
+          icon: Icon(Icons.content_copy),
+          onPressed: () {
+            copyAssignToClipboard();
+            showTextBallonMessage("配置をクリップボードへコピー");
+          },
+        ),
+
+        // タツマの編集と読み込み
+        IconButton(
+          icon: const Icon(Icons.map),
+          onPressed:() async {
+            bool? changeTatsuma = await Navigator.of(context).push(
+              MaterialPageRoute<bool>(
+                builder: (context) => TatsumasPage()
+              )
+            );
+            // タツマに変更があれば…
+            if(changeTatsuma ?? false){
+              // タツママーカーを再描画
+              setState((){
+                updateTatsumaMarkers();
+              });
+            }
+          },
+        ),
+
+        // エリアフィルター
+        IconButton(
+          icon: const Icon(Icons.filter_alt),
+          onPressed:() {
+            showAreaFilter(context, showMapDrawOptions:true).then((bool? res){
+              if(res ?? false){
+                setState((){
+                  updateTatsumaMarkers();
+                });
+                // エリアフィルターの設定をデータベースへ保存
+                saveAreaFilterToDB(getCurrentFilePath());
+              }
+            });
+          },
+        ),
+      ],
+    );
+  }
+
+  //----------------------------------------------------------------------------
+  // メインの地図ビュー構築
+  Widget makeAppBody(BuildContext context)
+  {
     // マップ上のメンバーマーカーの作成オプション
     _myDragMarkerPluginOptions = MyDragMarkerPluginOptions(
       markers: memberMarkers,
       draggable: !lockEditing,
     );
 
-    return Scaffold(
-      key: appScaffoldKey,
-      extendBodyBehindAppBar: true,
-     
-      // 半透明のアプリケーションバー
-      appBar: AppBar(
-        // ファイルパスとファイルアイコン
-        title: Row(
+    return Center(
+      child: Container(
+        child: Stack(
           children: [
-            // ファイル一覧ボタン
-            IconButton(
-              icon: Icon(Icons.folder),
-              onPressed: () {
-                // ファイル一覧画面に遷移して、ファイルの切り替え
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => FilesPage(
-                    onSelectFile: (path) async {
-                      await initMemberSync(path);
-                      await loadAreaFilterFromDB(path);
-                      await loadLockEditingFromDB(path, onLockChange:onLockChangeByOther);
-                      // メンバーの位置へ地図を移動
-                      moveMapToLocationOfMembers();
-                      // appBarの再描画もしたいので…
-                      setState((){
-                        updateTatsumaMarkers();
-                      });
-                    }
-                  ))
-                );
-              }
-            ),
-            Text(getCurrentFilePath()),
-          ],
-        ),
-        backgroundColor: Theme.of(context).primaryColor.withOpacity(0.4),
-        elevation: 0,
-        
-        actions: [
-          // 編集ロックボタン
-          _lockEditingButton,
-
-          // クリップボードへコピーボタン
-          IconButton(
-            icon: Icon(Icons.content_copy),
-            onPressed: () {
-              copyAssignToClipboard();
-              showTextBallonMessage("配置をクリップボードへコピー");
-            },
-          ),
-
-          // タツマの編集と読み込み
-          IconButton(
-            icon: const Icon(Icons.map),
-            onPressed:() async {
-              bool? changeTatsuma = await Navigator.of(context).push(
-                MaterialPageRoute<bool>(
-                  builder: (context) => TatsumasPage()
-                )
-              );
-              // タツマに変更があれば…
-              if(changeTatsuma ?? false){
-                // タツママーカーを再描画
-                setState((){
-                  updateTatsumaMarkers();
-                });
-              }
-            },
-          ),
-
-          // エリアフィルター
-          IconButton(
-            icon: const Icon(Icons.filter_alt),
-            onPressed:() {
-              showAreaFilter(context, showMapDrawOptions:true).then((bool? res){
-                if(res ?? false){
-                  setState((){
-                    updateTatsumaMarkers();
-                  });
-                  // エリアフィルターの設定をデータベースへ保存
-                  saveAreaFilterToDB(getCurrentFilePath());
-                }
-              });
-            },
-          ),
-        ],
-      ),
-      body: Center(
-        child: Container(
-          child: Stack(
-            children: [
-              // 地図
-              FlutterMap(
-                options: MapOptions(
-                  allowPanningOnScrollingParent: false,
-                  interactiveFlags: InteractiveFlag.all & ~InteractiveFlag.rotate,
-                  plugins: [
-                    MyDragMarkerPlugin(),
-                  ],
-                  center: LatLng(35.309934, 139.076056),  // 丸太の森P
-                  zoom: 16,
-                  maxZoom: 18,
-                  onTap: (TapPosition tapPos, LatLng point){
-                    // タツマをタップしたら、タツマ編集ダイアログ
-                    int? index = searchTatsumaByScreenPos(
-                      mainMapController, tapPos.global.dx, tapPos.global.dy);
-                    if(index != null){
-                      var tatsuma = tatsumas[index];
-                      showChangeTatsumaDialog(context, tatsuma).then((res){
-                        if(res != null){
-                          setState((){
-                            tatsuma.name     = res["name"] as String;
-                            tatsuma.visible  = res["visible"] as bool;
-                            tatsuma.areaBits = res["areaBits"] as int;
-                            updateTatsumaMarkers();
-                          });
-                          // データベースに同期
-                          updateTatsumaToDB(index);
-                        }
-                      });
-                    }        
-                  },
-                ),
-                nonRotatedLayers: [
-                  TileLayerOptions(
-                    urlTemplate: "https://cyberjapandata.gsi.go.jp/xyz/hillshademap/{z}/{x}/{y}.png",
-                  ),
-                  TileLayerOptions(
-                    urlTemplate: "https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png",
-                    opacity: 0.64
-                  ),
-                  MarkerLayerOptions(
-                    markers: tatsumaMarkers,
-                    // NOTE: usePxCache=trueだと、非表示グレーマーカーで並び順が変わったときにバグる
-                    usePxCache: false,
-                  ),
-                  _myDragMarkerPluginOptions,
+            // 地図
+            FlutterMap(
+              options: MapOptions(
+                allowPanningOnScrollingParent: false,
+                interactiveFlags: InteractiveFlag.all & ~InteractiveFlag.rotate,
+                plugins: [
+                  MyDragMarkerPlugin(),
                 ],
-                mapController: mainMapController,
+                center: LatLng(35.309934, 139.076056),  // 丸太の森P
+                zoom: 16,
+                maxZoom: 18,
+                onTap: (TapPosition tapPos, LatLng point)
+                {
+                  // タツマをタップしたら、タツマ編集ダイアログ
+                  int? index = searchTatsumaByScreenPos(
+                    mainMapController, tapPos.global.dx, tapPos.global.dy);
+                  if(index != null){
+                    var tatsuma = tatsumas[index];
+                    showChangeTatsumaDialog(context, tatsuma).then((res){
+                      if(res != null){
+                        setState((){
+                          tatsuma.name     = res["name"] as String;
+                          tatsuma.visible  = res["visible"] as bool;
+                          tatsuma.areaBits = res["areaBits"] as int;
+                          updateTatsumaMarkers();
+                        });
+                        // データベースに同期
+                        updateTatsumaToDB(index);
+                      }
+                    });
+                  }        
+                },
               ),
+              nonRotatedLayers: [
+                TileLayerOptions(
+                  urlTemplate: "https://cyberjapandata.gsi.go.jp/xyz/hillshademap/{z}/{x}/{y}.png",
+                ),
+                TileLayerOptions(
+                  urlTemplate: "https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png",
+                  opacity: 0.64
+                ),
+                MarkerLayerOptions(
+                  markers: tatsumaMarkers,
+                  // NOTE: usePxCache=trueだと、非表示グレーマーカーで並び順が変わったときにバグる
+                  usePxCache: false,
+                ),
+                _myDragMarkerPluginOptions,
+              ],
+              mapController: mainMapController,
+            ),
 
-              // 家アイコン
-              HomeButtonWidget(),
+            // 家アイコン
+            HomeButtonWidget(),
 
-              // ポップアップメッセージ
-              Align(
-                alignment: Alignment(0.0, 0.0),
-                child: TextBallonWidget(),
-              ),
-            ]
-          ),
+            // ポップアップメッセージ
+            Align(
+              alignment: Alignment(0.0, 0.0),
+              child: TextBallonWidget(),
+            ),
+          ]
         ),
       ),
     );
