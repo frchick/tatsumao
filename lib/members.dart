@@ -113,6 +113,7 @@ Future initMemberSync(String path) async
       member.pos = LatLng(
         snapshot.child(id + "/latitude").value as double,
         snapshot.child(id + "/longitude").value as double);
+      member.firstSyncEvent = true;
       // 地図上に表示されているメンバーマーカーの情報も変更
       memberMarkers[index].visible = member.attended;
       memberMarkers[index].point = member.pos;
