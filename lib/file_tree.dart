@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_database/firebase_database.dart';
+import 'package:intl/intl.dart';  // 年月日のフォーマット
 import 'ok_cancel_dialog.dart';
 import 'text_edit_dialog.dart';
+import 'text_edit_icon_dialog.dart';
 import 'text_ballon_widget.dart';
+import 'text_item_list_dialog.dart';
+import 'tatsumas.dart';
 
 //----------------------------------------------------------------------------
 //----------------------------------------------------------------------------
@@ -577,16 +581,59 @@ class FilesPageState extends State<FilesPage>
 // ファイル名入力ダイアログ
 Future<String?> showCreateFileDialog(BuildContext context)
 {
+  // アイコンボタン押して、カレンダーWidgetで日付を指定できる。
   return showDialog<String>(
     context: context,
     useRootNavigator: true,
     builder: (context) {
-      return TextEditDialog(
+      return TextEditIconDialog(
+        icon: Icons.calendar_month,
+        onIconTap: showCalendar,
         titleText:"ファイルの作成",
         hintText:"新規ファイル名",
         okText:"作成");
     },
   );
+}
+
+// カレンダーWidgetで月日を指定
+Future<String?> showCalendar(BuildContext context) async
+{
+  // まずはカレンダーで日付を選択
+  final DateTime today = DateTime.now();
+  DateTime? date = await showDatePicker(
+    context: context,
+    locale: const Locale("ja"),
+    initialDate: today,
+    firstDate: DateTime(today.year-5, today.month),
+    lastDate: DateTime(today.year+5, today.month),
+    initialEntryMode: DatePickerEntryMode.calendarOnly);
+  if(date == null) return null;
+
+  // 次にラウンドを選択
+  const List<String> rounds = [ "R1", "R2", "R3", "" ];
+  String? round = await showDialog<String>(
+    context: context,
+    builder: (context) {
+      return TextItemListDialog(title: "ラウンド", items: rounds);
+    }
+  );
+  if(round == null) return null;
+
+  // 最後にエリア名を選択
+  final areaNames = getAreaNames();
+  String? areaName = await showDialog<String>(
+    context: context,
+    builder: (context) {
+      return TextItemListDialog(title: "エリア", items: areaNames);
+    }
+  );
+  if(areaName == null) return null;
+
+  // 最終的なファイル名を作成
+  final String fileName =
+    DateFormat("MM月dd日 ").format(date) + round + " " + areaName;
+  return fileName;
 }
 
 //----------------------------------------------------------------------------

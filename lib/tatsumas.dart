@@ -76,6 +76,11 @@ const List<String> _areaNames = [
   "解体場上", "解体場東", "解体場下", "",
 ];
 
+List<String> getAreaNames()
+{
+  return _areaNames;
+}
+
 // エリア表示フィルターのビット和
 int areaFilterBits = _areaFullBits;
 final int _areaFullBits = (1 << _areaNames.length) - 1;
