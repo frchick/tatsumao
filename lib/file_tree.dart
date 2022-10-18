@@ -6,6 +6,8 @@ import 'ok_cancel_dialog.dart';
 import 'text_edit_dialog.dart';
 import 'text_edit_icon_dialog.dart';
 import 'text_ballon_widget.dart';
+import 'text_item_list_dialog.dart';
+import 'tatsumas.dart';
 
 //----------------------------------------------------------------------------
 //----------------------------------------------------------------------------
@@ -597,6 +599,7 @@ Future<String?> showCreateFileDialog(BuildContext context)
 // カレンダーWidgetで月日を指定
 Future<String?> showCalendar(BuildContext context) async
 {
+  // まずはカレンダーで日付を選択
   final DateTime today = DateTime.now();
   DateTime? date = await showDatePicker(
     context: context,
@@ -606,7 +609,31 @@ Future<String?> showCalendar(BuildContext context) async
     lastDate: DateTime(today.year+5, today.month),
     initialEntryMode: DatePickerEntryMode.calendarOnly);
   if(date == null) return null;
-  return DateFormat("M月d日").format(date);
+
+  // 次にラウンドを選択
+  const List<String> rounds = [ "R1", "R2", "R3", "" ];
+  String? round = await showDialog<String>(
+    context: context,
+    builder: (context) {
+      return TextItemListDialog(title: "ラウンド", items: rounds);
+    }
+  );
+  if(round == null) return null;
+
+  // 最後にエリア名を選択
+  final areaNames = getAreaNames();
+  String? areaName = await showDialog<String>(
+    context: context,
+    builder: (context) {
+      return TextItemListDialog(title: "エリア", items: areaNames);
+    }
+  );
+  if(areaName == null) return null;
+
+  // 最終的なファイル名を作成
+  final String fileName =
+    DateFormat("MM月dd日 ").format(date) + round + " " + areaName;
+  return fileName;
 }
 
 //----------------------------------------------------------------------------
