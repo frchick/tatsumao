@@ -13,31 +13,27 @@ import 'globals.dart';
 //----------------------------------------------------------------------------
 //----------------------------------------------------------------------------
 // 家ボタン＆メンバー一覧メニュー
-class HomeIconWidget extends StatefulWidget
+class HomeIconWidget extends StatelessWidget
 {
   HomeIconWidget({
     super.key,
   });
 
+  // メンバーメニュー領域の高さ
+  static const double menuHeight = 120;
+
   // 外部からの再描画
   static var _stream = StreamController();
 
+  // BottomSheet の再描画
+  late StateSetter _setModalState;
+
+  //----------------------------------------------------------------------------
   // 再描画
   static void update()
   {
     _stream.sink.add(null);
   }
-
-  @override
-  State<HomeIconWidget> createState() => _HomeIconWidgetState();
-}
-
-class _HomeIconWidgetState extends State<HomeIconWidget>
-{
-  late StateSetter _setModalState;
-
-  // メンバーメニュー領域の高さ
-  static const double menuHeight = 120;
 
   //----------------------------------------------------------------------------
   // メンバー一覧メニューからドラッグして出動！
@@ -75,12 +71,6 @@ class _HomeIconWidgetState extends State<HomeIconWidget>
 
     // データベースに変更を通知
     syncMemberState(index);
-  }
-
-  //----------------------------------------------------------------------------
-  @override
-  void initState() {
-    super.initState();
   }
 
   //----------------------------------------------------------------------------
