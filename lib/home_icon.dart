@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import 'dart:async';   // Stream使った再描画
 
 import 'mydrag_target.dart';  // メンバー一覧のマーカー
 
@@ -17,6 +18,15 @@ class HomeIconWidget extends StatefulWidget
   HomeIconWidget({
     super.key,
   });
+
+  // 外部からの再描画
+  static var _stream = StreamController();
+
+  // 再描画
+  static void update()
+  {
+    _stream.sink.add(null);
+  }
 
   @override
   State<HomeIconWidget> createState() => _HomeIconWidgetState();
@@ -61,45 +71,76 @@ class _HomeIconWidgetState extends State<HomeIconWidget>
 
     // 地図上のマーカーの再描画
     updateMapView();
+    HomeIconWidget.update();
 
     // データベースに変更を通知
     syncMemberState(index);
   }
 
+  //----------------------------------------------------------------------------
   @override
   void initState() {
     super.initState();
   }
 
+  //----------------------------------------------------------------------------
   @override
   Widget build(BuildContext context)
   {
     return Align(
       // 画面右下に配置
       alignment: const Alignment(1.0, 1.0),
-      // 家アイコンとそのスタイル
-      child: ElevatedButton(
-        child: const Icon(Icons.home, size: 50),
-        style: ElevatedButton.styleFrom(
-          foregroundColor: Colors.orange.shade900,
-          backgroundColor: Colors.transparent,
-          shadowColor: Colors.transparent,
-          fixedSize: Size(80,80),
+      child: Stack(children:[
+        // 家アイコン
+        ElevatedButton(
+          child: const Icon(Icons.home, size: 50),
+          style: ElevatedButton.styleFrom(
+            foregroundColor: Colors.orange.shade900,
+            backgroundColor: Colors.transparent,
+            shadowColor: Colors.transparent,
+            fixedSize: Size(80,80),
+          ),
+
+          // 家ボタンタップでメンバー一覧メニューを開く
+          onPressed: ()
+          {
+            showMembersBottomSheet(context);
+          },
+
+          // 長押しでサブメニュー
+          onLongPress: (){
+            // 編集ロックならサブメニュー出さない
+            if(lockEditing) return;
+            showPopupMenu(context);
+          },
         ),
 
-        // 家ボタンタップでメンバー一覧メニューを開く
-        onPressed: ()
-        {
-          showMembersBottomSheet(context);
-        },
-
-        // 長押しでサブメニュー
-        onLongPress: (){
-          // 編集ロックならサブメニュー出さない
-          if(lockEditing) return;
-          showPopupMenu(context);
-        },
-      )
+        // 参加してないメンバーの人数
+        Container(
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: Colors.black,
+          ),
+          height: 20,
+          width: 20,
+          margin: EdgeInsets.only(left:50, top:10),
+          alignment: Alignment(0.0, 0.0),
+          // 人数の表示は Stream 用いた再描画に対応
+          child: StreamBuilder(
+            stream: HomeIconWidget._stream.stream,
+            builder: (BuildContext context, AsyncSnapshot snapShot)
+            {
+              // 参加していないメンバーの人数を数える
+              int numAbsenter = 0;
+              members.forEach((member){
+                if(!member.attended && !member.withdrawals) numAbsenter++;
+              });
+              return Text("${numAbsenter}",
+                style: const TextStyle(fontSize:12, color:Colors.white));
+            }
+          ),
+        ),
+      ]),
     );
   }
 
@@ -204,6 +245,7 @@ class _HomeIconWidgetState extends State<HomeIconWidget>
         // 全員を家に帰す
         if(goEveryoneHome()){
           updateMapView();
+          HomeIconWidget.update();
         }
         break;
       }

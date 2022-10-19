@@ -115,6 +115,8 @@ class MapView extends StatefulWidget {
 
 class _MapViewState extends State<MapView> with AfterLayoutMixin<MapView>
 {
+  // 家アイコン
+  late HomeIconWidget homeIconWidget;
 
   @override
   void initState() {
@@ -137,6 +139,9 @@ class _MapViewState extends State<MapView> with AfterLayoutMixin<MapView>
       );
       memberIndex++;
     });
+
+    // 家アイコン作成
+    homeIconWidget = HomeIconWidget();
 
     // データベースからもろもろ読み込み
     initStateSub().then((_){
@@ -376,6 +381,9 @@ class _MapViewState extends State<MapView> with AfterLayoutMixin<MapView>
       draggable: !lockEditing,
     );
 
+    // 家アイコン更新
+    HomeIconWidget.update();
+
     return Center(
       child: Container(
         child: Stack(
@@ -431,7 +439,7 @@ class _MapViewState extends State<MapView> with AfterLayoutMixin<MapView>
             ),
 
             // 家アイコン
-            HomeIconWidget(),
+            homeIconWidget,
 
             // ポップアップメッセージ
             Align(

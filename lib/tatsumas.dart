@@ -532,8 +532,8 @@ int stringsToAreaFilter(List<String>? areas)
 void updateTatsumaMarkers()
 {
   // テキストスタイル
-  final TextStyle testStyle = const TextStyle(fontWeight: FontWeight.bold);
-  final TextStyle testStyleGray = const TextStyle(color: Color(0xFF616161)/*grey[700]*/);
+  final TextStyle textStyle = const TextStyle(fontWeight: FontWeight.bold);
+  final TextStyle textStyleGray = const TextStyle(color: Color(0xFF616161)/*grey[700]*/);
 
   // タツマデータからマーカー配列を作成
   // 非表示グレーマーカーが、可視のマーカーの下になるように描画順を制御
@@ -553,7 +553,7 @@ void updateTatsumaMarkers()
             // 十字アイコン
             _tatsumaIconGray,
             // タツマ名
-            Text(tatsuma.name, style: testStyleGray),
+            Text(tatsuma.name, style: textStyleGray),
           ],
           mainAxisAlignment: MainAxisAlignment.start,
         )
@@ -568,7 +568,7 @@ void updateTatsumaMarkers()
         builder: (ctx) => Column(
           children: [
             _tatsumaIcon,
-            Text(tatsuma.name, style: testStyle),
+            Text(tatsuma.name, style: textStyle),
           ],
           mainAxisAlignment: MainAxisAlignment.start,
         )

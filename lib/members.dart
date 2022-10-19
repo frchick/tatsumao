@@ -10,6 +10,7 @@ import 'package:flutter/services.dart';   // for クリップボード
 import 'mydragmarker.dart';
 import 'text_ballon_widget.dart';
 import 'tatsumas.dart';
+import 'home_icon.dart';
 import 'globals.dart';
 
 //----------------------------------------------------------------------------
@@ -201,6 +202,7 @@ void onChangeMemberState(final int index, DatabaseEvent event)
 
     // マーカーの再描画
     updateMapView();
+    HomeIconWidget.update();
 
     // 家に帰った/参加したポップアップメッセージ
     if(returnToHome){
@@ -344,6 +346,7 @@ class MyDragMarker2 extends MyDragMarker
         memberMarkers[index].visible = false;
         members[index].attended = false;
         updateMapView();
+        HomeIconWidget.update();
 
         // データベースに変更を通知
         syncMemberState(index);
