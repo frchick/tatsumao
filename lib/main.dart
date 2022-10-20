@@ -361,10 +361,8 @@ class _MapViewState extends State<MapView> with AfterLayoutMixin<MapView>
             // タツマに変更があれば…
             if(changeTatsuma ?? false){
               // タツママーカーを再描画
-              resetTextBallonMessage();
-              setState((){
-                updateTatsumaMarkers();
-              });
+              updateTatsumaMarkers();
+              updateMapView();
             }
           },
         ),
@@ -375,9 +373,9 @@ class _MapViewState extends State<MapView> with AfterLayoutMixin<MapView>
           onPressed:() {
             showAreaFilter(context, showMapDrawOptions:true).then((bool? res){
               if(res ?? false){
-                setState((){
-                  updateTatsumaMarkers();
-                });
+                // タツママーカーを再描画
+                updateTatsumaMarkers();
+                updateMapView();
                 // エリアフィルターの設定をデータベースへ保存
                 saveAreaFilterToDB(getCurrentFilePath());
               }
