@@ -164,9 +164,12 @@ class _MapViewState extends State<MapView> with AfterLayoutMixin<MapView>
   Future initStateSub() async
   {
     // 初期状態で開くファイルパスを取得
-    String openPath = Uri.base.queryParameters["file"] ?? "/default_data";
-//    String openPath = "/2021-22シーズン/2月/02月28日 R1 暗闇沢";
-    print("openPath=${openPath} !!!!");
+    final String fullURL = Uri.decodeFull(Uri.base.toString());
+    final int pi = fullURL.indexOf("?open=");
+    late String openPath;
+    if(0 < pi) openPath = fullURL.substring(pi + 6);
+    else openPath = "/default_data";
+    openPath = openPath.replaceAll("~", "/");
   
     // ファイルツリーのデータベースを初期化
     await initFileTree();

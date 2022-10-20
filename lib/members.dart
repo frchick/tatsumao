@@ -11,6 +11,7 @@ import 'mydragmarker.dart';
 import 'text_ballon_widget.dart';
 import 'tatsumas.dart';
 import 'home_icon.dart';
+import 'file_tree.dart';
 import 'globals.dart';
 
 //----------------------------------------------------------------------------
@@ -263,6 +264,14 @@ void copyAssignToClipboard() async
       text += line + "\n";
     }
   });
+
+  // 起動リンク
+  String fullPath = getCurrentFilePath();
+  fullPath = fullPath.replaceAll("/", "~");
+  String fullURL = "https://tatsumao-976e2.web.app/#/?open=" + fullPath;
+  fullURL = Uri.encodeFull(fullURL);
+  text += fullURL;
+
   // 確認用
   print(text);
 
