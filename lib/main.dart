@@ -237,7 +237,6 @@ class _MapViewState extends State<MapView> with AfterLayoutMixin<MapView>
   {
     // 処理中インジケータを消す
     if(_progressIndicatorState == ProgressIndicatorState.Stopping){
-      print("Stop progress indicator() !!!!");
       Navigator.of(context).pop();
       _progressIndicatorState = ProgressIndicatorState.NoIndicate;
     }
@@ -362,6 +361,7 @@ class _MapViewState extends State<MapView> with AfterLayoutMixin<MapView>
             // タツマに変更があれば…
             if(changeTatsuma ?? false){
               // タツママーカーを再描画
+              resetTextBallonMessage();
               setState((){
                 updateTatsumaMarkers();
               });
