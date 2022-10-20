@@ -87,7 +87,8 @@ void main() async
   runApp(MyApp());
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends StatelessWidget
+{
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -108,7 +109,8 @@ class MyApp extends StatelessWidget {
 //----------------------------------------------------------------------------
 //----------------------------------------------------------------------------
 // メインの画面
-class MapView extends StatefulWidget {
+class MapView extends StatefulWidget
+{
   @override
   _MapViewState createState() => _MapViewState();
 }
@@ -161,13 +163,29 @@ class _MapViewState extends State<MapView> with AfterLayoutMixin<MapView>
 
   Future initStateSub() async
   {
+    // 初期状態で開くファイルパスを取得
+    final String fullURL = Uri.decodeFull(Uri.base.toString());
+    final int pi = fullURL.indexOf("?open=");
+    late String openPath;
+    if(0 < pi) openPath = fullURL.substring(pi + 6);
+    else openPath = "/default_data";
+    openPath = openPath.replaceAll("~", "/");
+  
     // ファイルツリーのデータベースを初期化
     await initFileTree();
+    // 初期状態で開くファイルの位置までカレントディレクトリを移動
+    // 失敗していたら標準ファイル("/default_data")を開く
+    bool res = await moveFullPathDir(openPath);
+    if(!res){
+      openPath = "/default_data";
+      await moveFullPathDir(openPath);
+    }
     // メンバーデータの初期値をデータベースから取得
-    await initMemberSync("/default_data");
+    await initMemberSync(openPath);
     // ファイルに紐づくパラメータをデータベースから取得
-    await loadAreaFilterFromDB("/default_data");
-    await loadLockEditingFromDB("/default_data", onLockChange:onLockChangeByOther);
+    await loadAreaFilterFromDB(openPath);
+    await loadLockEditingFromDB(openPath, onLockChange:onLockChangeByOther);
+    setCurrentFilePath(openPath);
     // タツマデータをデータベースから取得
     await loadTatsumaFromDB();
   }
@@ -222,7 +240,6 @@ class _MapViewState extends State<MapView> with AfterLayoutMixin<MapView>
   {
     // 処理中インジケータを消す
     if(_progressIndicatorState == ProgressIndicatorState.Stopping){
-      print("Stop progress indicator() !!!!");
       Navigator.of(context).pop();
       _progressIndicatorState = ProgressIndicatorState.NoIndicate;
     }
@@ -302,12 +319,14 @@ class _MapViewState extends State<MapView> with AfterLayoutMixin<MapView>
                     await initMemberSync(path);
                     await loadAreaFilterFromDB(path);
                     await loadLockEditingFromDB(path, onLockChange:onLockChangeByOther);
+                    setCurrentFilePath(path);
                     // メンバーの位置へ地図を移動
                     moveMapToLocationOfMembers();
                     // appBarの再描画もしたいので…
                     setState((){
                       updateTatsumaMarkers();
                     });
+                    showTextBallonMessage(path);
                   }
                 ))
               );
@@ -345,9 +364,8 @@ class _MapViewState extends State<MapView> with AfterLayoutMixin<MapView>
             // タツマに変更があれば…
             if(changeTatsuma ?? false){
               // タツママーカーを再描画
-              setState((){
-                updateTatsumaMarkers();
-              });
+              updateTatsumaMarkers();
+              updateMapView();
             }
           },
         ),
@@ -358,9 +376,9 @@ class _MapViewState extends State<MapView> with AfterLayoutMixin<MapView>
           onPressed:() {
             showAreaFilter(context, showMapDrawOptions:true).then((bool? res){
               if(res ?? false){
-                setState((){
-                  updateTatsumaMarkers();
-                });
+                // タツママーカーを再描画
+                updateTatsumaMarkers();
+                updateMapView();
                 // エリアフィルターの設定をデータベースへ保存
                 saveAreaFilterToDB(getCurrentFilePath());
               }

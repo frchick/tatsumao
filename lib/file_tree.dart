@@ -36,7 +36,7 @@ FileItem _fileRoot = FileItem(name:"");
 List<FileItem> _directoryStack = [ _fileRoot ];
 
 // 現在のファイルへのフルパス
-String _currentFilePath = "/default_data";
+String _currentFilePath = "/";
 
 //ファイルツリーの共有(Firebase RealtimeDataBase)
 FirebaseDatabase database = FirebaseDatabase.instance;
@@ -68,7 +68,7 @@ Future initFileTree() async
     ref.set(files);
   }
   // ルートディレクトリをデータベースから読み込み
-  moveDir(FileItem(name:"."));
+  await moveDir(FileItem(name:"."));
 }
 
 //----------------------------------------------------------------------------
@@ -264,6 +264,12 @@ String getCurrentFilePath()
   return _currentFilePath;
 }
 
+// フルパスを設定
+void setCurrentFilePath(String path)
+{
+  _currentFilePath = path;
+}
+
 // ディレクトリを移動
 // カレントディレクトリから1階層の移動のみ。
 Future<bool> moveDir(FileItem folder) async
@@ -297,6 +303,48 @@ Future<bool> moveDir(FileItem folder) async
   _directoryStack[_directoryStack.length-1].child = currentDir;
 
   return true;
+}
+
+// 絶対パスで指定されたディレクトリへ移動
+Future<bool> moveFullPathDir(String fullPath) async
+{
+  // カレントディレクトリをルートに戻す
+  while(1 < _directoryStack.length){
+    bool res = await moveDir(FileItem(name:".."));
+    if(!res) return false;
+  }
+
+  // 指定されたパスから1階層ずつ入っていく
+  while(true){
+    // 先頭にパス文字がないのは文字列がおかしい
+    if(!fullPath.startsWith("/")) return false;
+    // ファイル名が指定さてなかったらこれで終わり(成功)
+    if(fullPath.length == 1) return true;
+    // パス文字で区切られたディレクトリ名を取り出す
+    // ex) /ABC/DEF/GHI → ABC
+    // 後ろにパス文字がなければ、残りはフィル名。
+    int t = fullPath.indexOf("/", 1);
+    final bool isFile = (t < 0);
+    if(isFile) t = fullPath.length;
+    final String itemName = fullPath.substring(1, t);
+    // ファイルが存在するか確認(名前一致の検索)
+    final List<FileItem> currentDir = getCurrentDir();
+    int i = 0;
+    for(; i < currentDir.length; i++){
+      if(currentDir[i].name == itemName) break;
+    }
+    if(i == currentDir.length) return false;
+    if(isFile && currentDir[i].isFile()) return true;
+    // ディレクトリに入る
+    final bool res = await moveDir(currentDir[i]);
+    if(!res) return false;
+    // フルパスから先頭を除く
+    // ex) /ABC/DEF/GHI → /DEF/GHI
+    fullPath = fullPath.substring(t);
+  }
+
+  // ここには来ないはず
+  return false;
 }
 
 // ディレクトリツリーのデータベースを更新
@@ -486,12 +534,10 @@ class FilesPageState extends State<FilesPage>
         onTap: () {
           if(currentDir[index].isFile()){
             // ファイルを切り替える
-            _currentFilePath = fullPath;
             if(widget.onSelectFile != null){
-              widget.onSelectFile!(_currentFilePath);
+              widget.onSelectFile!(fullPath);
             }
             Navigator.pop(context);
-            showTextBallonMessage(_currentFilePath);
           }else{
             // ディレクトリ移動
             moveDir(currentDir[index]).then((_){
@@ -514,12 +560,10 @@ class FilesPageState extends State<FilesPage>
     var res = createNewFile(name);
     if(res.res){
       // 作成が成功したら、切り替えてマップに戻る
-      _currentFilePath = res.path;
       if(widget.onSelectFile != null){
-        widget.onSelectFile!(_currentFilePath);
+        widget.onSelectFile!(res.path);
       }
       Navigator.pop(context);
-      showTextBallonMessage(_currentFilePath);
     }else{
       // エラーメッセージ
       showDialog(
