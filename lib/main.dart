@@ -22,6 +22,7 @@ import 'tatsumas.dart';
 import 'ok_cancel_dialog.dart';
 import 'onoff_icon_button.dart';
 import 'home_icon.dart';
+import 'gps_log.dart';
 import 'globals.dart';
 
 //----------------------------------------------------------------------------
@@ -352,6 +353,16 @@ class _MapViewState extends State<MapView> with AfterLayoutMixin<MapView>
           },
         ),
 
+        // GPSログの読み込み
+        IconButton(
+          icon: const Icon(Icons.timeline),
+          onPressed:() {
+            showGPSLogPopupMenu(context,
+              (){ setState((){}); }
+            );
+          },
+        ),
+
         // タツマの編集と読み込み
         IconButton(
           icon: const Icon(Icons.map),
@@ -445,6 +456,10 @@ class _MapViewState extends State<MapView> with AfterLayoutMixin<MapView>
                 TileLayerOptions(
                   urlTemplate: "https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png",
                   opacity: 0.64
+                ),
+                PolylineLayerOptions(
+                  polylines: gpsLog.makePolyLines(),
+                  polylineCulling: false,
                 ),
                 MarkerLayerOptions(
                   markers: tatsumaMarkers,
