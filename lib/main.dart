@@ -357,9 +357,7 @@ class _MapViewState extends State<MapView> with AfterLayoutMixin<MapView>
         IconButton(
           icon: const Icon(Icons.timeline),
           onPressed:() {
-            showGPSLogPopupMenu(context,
-              (){ setState((){}); }
-            );
+            showGPSLogPopupMenu(context);
           },
         ),
 
@@ -459,6 +457,7 @@ class _MapViewState extends State<MapView> with AfterLayoutMixin<MapView>
                 ),
                 PolylineLayerOptions(
                   polylines: gpsLog.makePolyLines(),
+                  rebuild: gpsLog.reDrawStream,
                   polylineCulling: false,
                 ),
                 MarkerLayerOptions(

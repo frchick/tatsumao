@@ -4,6 +4,7 @@ import 'package:xml/xml.dart';  // GPXの読み込み
 import 'package:file_selector/file_selector.dart';  // ファイル選択
 import 'package:flutter_map/flutter_map.dart';  // 地図
 import 'package:intl/intl.dart';  // 日時の文字列化
+import 'dart:async';   // Stream使った再描画
 import 'globals.dart';  // 画面解像度
 
 // ログデータがないときに使う、ダミーの開始終了時間
@@ -16,6 +17,7 @@ final DateTime _dummyEndTime = DateTime(2022, 1, 1, 11);  // 2022/1/1 AM11:00
 class GPSLog
 {
   List<_Route> routes = [];
+  List<Polyline> _mapLines = [];
 
   // 開始時間
   DateTime _startTime = _dummyStartTime;
@@ -61,6 +63,16 @@ class GPSLog
   set trimEndTime(DateTime t) =>
     _trimEndTime = (t.isBefore(_endTime)? t: _endTime);
 
+  // 再描画用の Stream
+  var _stream = StreamController<void>.broadcast();
+  // 再描画用のストリームを取得
+  Stream<void> get reDrawStream => _stream.stream;
+  // 再描画
+  void redraw()
+  {
+    _stream.sink.add(null);
+  }
+
   // リセット
   void clear()
   {
@@ -99,12 +111,13 @@ class GPSLog
     //!!!!
     print("GPSLog.makePolyLines() !!!!");
   
-    List<Polyline> lines = [];
+    _mapLines.clear();
     routes.forEach((route){
-      lines.add(route.makePolyLine());
+      _mapLines.add(route.makePolyLine());
     });
-    return lines;
+    return _mapLines;
   }
+
 }
 
 GPSLog gpsLog = GPSLog();
@@ -229,7 +242,7 @@ Future<bool> readGPSLog(BuildContext context) async
 //----------------------------------------------------------------------------
 //----------------------------------------------------------------------------
 // GPSメニュー用のポップアップメニューを開く
-void showGPSLogPopupMenu(BuildContext context, Function rebuildMapView)
+void showGPSLogPopupMenu(BuildContext context)
 {
   // メニューの座標
   final double x = getScreenWidth() - 200;
@@ -270,7 +283,8 @@ void showGPSLogPopupMenu(BuildContext context, Function rebuildMapView)
       bool res = await readGPSLog(context);
       // 読み込み成功したらマップを再描画
       if(res){
-        rebuildMapView();
+        gpsLog.makePolyLines();
+        gpsLog.redraw();
       }
       break;
 
