@@ -32,7 +32,7 @@ bool lockEditing = false;
 // 画面サイズ関連
 
 // ウィンドウサイズを参照するためのキー
-GlobalKey appScaffoldKey = GlobalKey();
+final appScaffoldKey = GlobalKey<ScaffoldState>();
 
 // 画面サイズの取得(幅)
 double getScreenWidth()

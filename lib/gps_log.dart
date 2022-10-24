@@ -113,7 +113,7 @@ class GPSLog
   
     _mapLines.clear();
     routes.forEach((route){
-      _mapLines.add(route.makePolyLine());
+      _mapLines.add(route.makePolyLine(_trimStartTime, _trimEndTime));
     });
     return _mapLines;
   }
@@ -137,6 +137,13 @@ class _Route
   // 終了時間
   DateTime get endTime =>
     (0 < points.length)? points.last.time: _dummyEndTime;
+
+  // トリミングに対応した開始インデックス
+  int _trimStartIndex = -1;
+  DateTime _trimStartCache = DateTime(2022);
+  // トリミングに対応した終了インデックス
+  int _trimEndIndex = -1;
+  DateTime _trimEndCache = DateTime(2022);
 
   // GPXファイルからログを作成
   bool readFromGPX(String fileContent)
@@ -185,12 +192,36 @@ class _Route
   }
 
   // FlutterMap用のポリラインを作成
-  Polyline makePolyLine()
+  Polyline makePolyLine(DateTime trimStart, DateTime trimEnd)
   {
+    // トリミングのキャッシュが有効か判定して、必要なら範囲を探す
+    final bool cacheOk =
+      (_trimStartCache == trimStart) && (_trimEndCache == trimEnd);
+    if(!cacheOk){
+      _trimStartCache = trimStart;
+      _trimEndCache = trimEnd;
+      for(int i = 0; i < points.length-1; i++){
+        final DateTime t0 = points[i].time;
+        final DateTime t1 = points[i+1].time;
+        if(((t0 == trimStart) || t0.isBefore(trimStart)) && trimStart.isBefore(t1)){
+          _trimStartIndex = i;
+          break;
+        }
+      }
+      for(int i = points.length-1; 0 < i; i--){
+        final DateTime t0 = points[i-1].time;
+        final DateTime t1 = points[i].time;
+        if(t0.isBefore(trimEnd) && ((t1 == trimEnd) || trimEnd.isBefore(t1))){
+          _trimEndIndex = i + 1;
+          break;
+        }
+      }
+    }
+    // キャッシュされた範囲でポリラインを作成
     List<LatLng> line = [];
-    points.forEach((pt){
-      line.add(pt.pos);
-    });
+    for(int i = _trimStartIndex; i < _trimEndIndex; i++){
+      line.add(points[i].pos);
+    }
     return Polyline(points:line);
   }
 }
@@ -303,6 +334,10 @@ void _updateTrimRange(RangeValues values, int baseMS)
 
   final int trimEndMS = baseMS + (values.end.toInt() * 1000);
   gpsLog.trimEndTime = DateTime.fromMillisecondsSinceEpoch(trimEndMS);
+
+  // 描画
+  gpsLog.makePolyLines();
+  gpsLog.redraw();
 }
 
 //----------------------------------------------------------------------------
@@ -312,62 +347,58 @@ void showTrimmingBottomSheet(BuildContext context)
   // ログ全体の時間範囲
   final int baseMS = gpsLog.startTime.millisecondsSinceEpoch;
   final double durationSec = (gpsLog.endTime.millisecondsSinceEpoch - baseMS) / 1000;
+  
+  appScaffoldKey.currentState!.showBottomSheet((context)
+  {
+    return StatefulBuilder(
+      builder: (context, StateSetter setModalState)
+      {
+        // 現在のトリミング時間範囲
+        final DateTime trimStartTime = gpsLog.trimStartTime;
+        final DateTime trimEndTime = gpsLog.trimEndTime;
+        var rangeValues = RangeValues(
+          (trimStartTime.millisecondsSinceEpoch - baseMS) / 1000,
+          (trimEndTime.millisecondsSinceEpoch - baseMS) / 1000);
+        String trimStartTimeText = DateFormat('hh:mm').format(trimStartTime);
+        String trimEndTimeText = DateFormat('hh:mm').format(trimEndTime);
 
-  // メンバー一覧メニューを開く
-  showModalBottomSheet<void>(
-    context: context,
-    builder: (BuildContext context)
-    {
-      return StatefulBuilder(
-        builder: (context, StateSetter setModalState)
-        {
-          // 現在のトリミング時間範囲
-          final DateTime trimStartTime = gpsLog.trimStartTime;
-          final DateTime trimEndTime = gpsLog.trimEndTime;
-          var rangeValues = RangeValues(
-            (trimStartTime.millisecondsSinceEpoch - baseMS) / 1000,
-            (trimEndTime.millisecondsSinceEpoch - baseMS) / 1000);
-          String trimStartTimeText = DateFormat('hh:mm').format(trimStartTime);
-          String trimEndTimeText = DateFormat('hh:mm').format(trimEndTime);
-
-          return Container(
-            height: 80,
-            color: Colors.brown.shade100,
-            child: Column(
-              children: [
-                SliderTheme(
-                  data: SliderThemeData(
-                  ),
-                  child: RangeSlider(
-                    values: rangeValues,
-                    min: 0,
-                    max: durationSec,
-                    onChanged: (values) {
-                      setModalState(() => _updateTrimRange(values, baseMS));
-                    },
-                  ),
+        return Container(
+          height: 80,
+          color: Colors.brown.shade100,
+          child: Column(
+            children: [
+              SliderTheme(
+                data: SliderThemeData(
                 ),
-                Container(
-                  padding: EdgeInsets.symmetric(horizontal:20),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: <Widget>[
-                      Text(
-                        trimStartTimeText,
-                        style: const TextStyle(fontSize: 16),
-                      ),
-                      Text(
-                        trimEndTimeText,
-                        style: const TextStyle(fontSize: 16),
-                      ),
-                    ],
-                  ),
-                )
-              ]
-            ),
-          );
-        }
-      );
-    }
-  );
+                child: RangeSlider(
+                  values: rangeValues,
+                  min: 0,
+                  max: durationSec,
+                  onChanged: (values) {
+                    setModalState(() => _updateTrimRange(values, baseMS));
+                  },
+                ),
+              ),
+              Container(
+                padding: EdgeInsets.symmetric(horizontal:20),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: <Widget>[
+                    Text(
+                      trimStartTimeText,
+                      style: const TextStyle(fontSize: 16),
+                    ),
+                    Text(
+                      trimEndTimeText,
+                      style: const TextStyle(fontSize: 16),
+                    ),
+                  ],
+                ),
+              )
+            ]
+          ),
+        );
+      }
+    );
+  });
 }
