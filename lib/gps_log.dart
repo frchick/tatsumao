@@ -63,6 +63,14 @@ class GPSLog
   set trimEndTime(DateTime t) =>
     _trimEndTime = (t.isBefore(_endTime)? t: _endTime);
 
+  // GPS端末のパラメータ
+  final Map<int, GPSDeviceParam> deviceParams = {
+    1568: GPSDeviceParam(name:"ムロ", color:Color.fromARGB(255,255,0,110)),
+    1674: GPSDeviceParam(name:"ロト", color:Color.fromARGB(255,128,0,255)),
+    4539: GPSDeviceParam(name:"ガロ", color:Color.fromARGB(255,255,106,0)),
+    4739: GPSDeviceParam(name:"マナミ", color:Color.fromARGB(255,255,216,0)),
+  };
+
   // 再描画用の Stream
   var _stream = StreamController<void>.broadcast();
   // 再描画用のストリームを取得
@@ -108,19 +116,29 @@ class GPSLog
   // FlutterMap用のポリラインを作成
   List<Polyline> makePolyLines()
   {
-    //!!!!
-    print("GPSLog.makePolyLines() !!!!");
-  
     _mapLines.clear();
     routes.forEach((route){
       _mapLines.add(route.makePolyLine(_trimStartTime, _trimEndTime));
     });
     return _mapLines;
   }
-
 }
 
 GPSLog gpsLog = GPSLog();
+
+//----------------------------------------------------------------------------
+// 犬毎のパラメータ
+class GPSDeviceParam
+{
+  GPSDeviceParam({
+    this.name = "",
+    this.color = Colors.green,
+  });
+  // 犬の名前
+  String name;
+  // ラインカラー
+  Color color;
+}
 
 //----------------------------------------------------------------------------
 // 一頭のルート
@@ -130,6 +148,8 @@ class _Route
   List<_Point> points = [];
   // 端末名
   String name = "";
+  // ID(nameに書かれている端末ID)
+  int deviceId = 0;
 
   // 開始時間
   DateTime get startTime =>
@@ -159,7 +179,13 @@ class _Route
     final XmlElement? name_ = rte_.getElement("name");
     if(name_ == null) return false;
     name = name_.text;
-
+    // 名前からデバイスIDを取得
+    int i = name.indexOf("犬ID_");
+    if(0 <= i){
+      deviceId = int.tryParse(name.substring(i + 4)) ?? -1;
+    }
+    print("name=${name}, deviceId=${deviceId}");
+  
     // ルートの通過ポイントを読み取り
     bool ok = true;
     final Iterable<XmlElement> rtepts_ = rte_.findElements("rtept");
@@ -191,6 +217,15 @@ class _Route
     return ok;
   }
 
+  bool isBefore(DateTime t0, DateTime t1)
+  {
+    return t0.isBefore(t1);
+  }
+  bool isEqualBefore(DateTime t0, DateTime t1)
+  {
+    return (t0 == t1) || t0.isBefore(t1);
+  }
+
   // FlutterMap用のポリラインを作成
   Polyline makePolyLine(DateTime trimStart, DateTime trimEnd)
   {
@@ -200,20 +235,28 @@ class _Route
     if(!cacheOk){
       _trimStartCache = trimStart;
       _trimEndCache = trimEnd;
-      for(int i = 0; i < points.length-1; i++){
-        final DateTime t0 = points[i].time;
-        final DateTime t1 = points[i+1].time;
-        if(((t0 == trimStart) || t0.isBefore(trimStart)) && trimStart.isBefore(t1)){
-          _trimStartIndex = i;
-          break;
+      if(isEqualBefore(trimStart, points.first.time)){
+        _trimStartIndex = 0;
+      }else{
+        for(int i = 0; i < points.length-1; i++){
+          final DateTime t0 = points[i].time;
+          final DateTime t1 = points[i+1].time;
+          if(isEqualBefore(t0, trimStart) && isBefore(trimStart, t1)){
+            _trimStartIndex = i;
+            break;
+          }
         }
       }
-      for(int i = points.length-1; 0 < i; i--){
-        final DateTime t0 = points[i-1].time;
-        final DateTime t1 = points[i].time;
-        if(t0.isBefore(trimEnd) && ((t1 == trimEnd) || trimEnd.isBefore(t1))){
-          _trimEndIndex = i + 1;
-          break;
+      if(isEqualBefore(points.last.time, trimEnd)){
+        _trimEndIndex = points.length;
+      }else{
+        for(int i = points.length-1; 0 < i; i--){
+          final DateTime t0 = points[i-1].time;
+          final DateTime t1 = points[i].time;
+          if(isBefore(t0, trimEnd) && isEqualBefore(trimEnd, t1)){
+            _trimEndIndex = i + 1;
+            break;
+          }
         }
       }
     }
@@ -222,7 +265,15 @@ class _Route
     for(int i = _trimStartIndex; i < _trimEndIndex; i++){
       line.add(points[i].pos);
     }
-    return Polyline(points:line);
+    // 端末IDからカラー
+    final Color color =
+      gpsLog.deviceParams[deviceId]?.color ??
+      const Color.fromARGB(255,128,128,128);
+
+    return Polyline(
+      points:line,
+      color:color,
+      strokeWidth:2.0);
   }
 }
 
