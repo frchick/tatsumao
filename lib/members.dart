@@ -9,6 +9,7 @@ import 'package:flutter/services.dart';   // for クリップボード
 
 import 'mydragmarker.dart';
 import 'text_ballon_widget.dart';
+import 'text_multiline_dialog.dart';
 import 'tatsumas.dart';
 import 'home_icon.dart';
 import 'file_tree.dart';
@@ -243,10 +244,14 @@ bool goEveryoneHome()
 
 //---------------------------------------------------------------------------
 // タツマ配置をクリップボートへコピー
-void copyAssignToClipboard() async
+void copyAssignToClipboard(BuildContext context)
 {
   // クリップボードにコピーする文字列を作成
   String text = "";
+
+  // メンバーの配置
+  int count = 0;
+  String assignText = "";
   members.forEach((member){
     if(member.attended){
       TatsumaData? tatsuma = searchTatsumaByPoint(member.pos);
@@ -261,22 +266,31 @@ void copyAssignToClipboard() async
           + member.pos.latitude.toStringAsFixed(4) + ","
           + member.pos.longitude.toStringAsFixed(4) + "]";
       }
-      text += line + "\n";
+      assignText += line + "\n";
+      count++;
     }
   });
+
+  // 先頭はファイル名と人数
+  text  = getCurrentFileName() + "\n";
+  text += "参加: ${count}人\n";
+  text += assignText;
 
   // 起動リンク
   String fullPath = getCurrentFilePath();
   fullPath = fullPath.replaceAll("/", "~");
   String fullURL = "https://tatsumao-976e2.web.app/#/?open=" + fullPath;
   fullURL = Uri.encodeFull(fullURL);
-  text += fullURL;
+  final String textWithLink = text + fullURL;
 
-  // 確認用
-  print(text);
-
-  final data = ClipboardData(text: text);
-  await Clipboard.setData(data);    
+  // ダイアログ表示
+  showMultilineTextDialog(context, "タツマ配置", text).then((res) async {
+    if(res ?? false){
+      final data = ClipboardData(text: textWithLink);
+      await Clipboard.setData(data);    
+      showTextBallonMessage("配置をクリップボードへコピー");
+    }
+  });
 }
 
 //----------------------------------------------------------------------------

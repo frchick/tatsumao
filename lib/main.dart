@@ -347,8 +347,7 @@ class _MapViewState extends State<MapView> with AfterLayoutMixin<MapView>
         IconButton(
           icon: Icon(Icons.content_copy),
           onPressed: () {
-            copyAssignToClipboard();
-            showTextBallonMessage("配置をクリップボードへコピー");
+            copyAssignToClipboard(context);
           },
         ),
 

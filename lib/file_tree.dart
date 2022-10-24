@@ -270,6 +270,15 @@ void setCurrentFilePath(String path)
   _currentFilePath = path;
 }
 
+// 現在開かれているファイル名を取得
+String getCurrentFileName()
+{
+  // 最後のパススプリッターより後ろがファイル名
+  // 万が一スプリッターが無い場合は-1なので、+1してパス全体を返す。
+  int p = _currentFilePath.lastIndexOf("/") + 1;
+  return _currentFilePath.substring(p);
+}
+
 // ディレクトリを移動
 // カレントディレクトリから1階層の移動のみ。
 Future<bool> moveDir(FileItem folder) async
