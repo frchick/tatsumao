@@ -16,7 +16,7 @@ final DateTime _dummyEndTime = DateTime(2022, 1, 1, 11);  // 2022/1/1 AM11:00
 // 犬達のログ
 class GPSLog
 {
-  List<_Route> routes = [];
+  Map<int, _Route> routes = {};
   List<Polyline> _mapLines = [];
 
   // 開始時間
@@ -26,8 +26,8 @@ class GPSLog
   {
     if(routes.isEmpty) return _dummyStartTime;
 
-    DateTime t = routes[0].startTime;
-    routes.forEach((route){
+    var t = DateTime(2100); // 適当な遠い未来の時間
+    routes.forEach((id, route){
       if(route.startTime.isBefore(t)){
         t = route.startTime;
       }
@@ -42,9 +42,9 @@ class GPSLog
   {
     if(routes.isEmpty) return _dummyEndTime;
 
-    DateTime t = routes[0].endTime;
-    routes.forEach((route){
-      if(route.endTime.isAfter(t)){
+    var t = DateTime(2000); // 適当な過去の時間
+    routes.forEach((id, route){
+      if(t.isBefore(route.endTime)){
         t = route.endTime;
       }
     });
@@ -92,24 +92,52 @@ class GPSLog
   // GPXファイルからログを読み込む
   bool addLogFromGPX(String fileContent)
   {
-    _Route newRoute = _Route();
-    bool res = newRoute.readFromGPX(fileContent);
-    if(res){
-      // トリムが設定されているかをチェック
-      final bool changeTrimSrart = (_startTime != _trimStartTime);
-      final bool changeTrimEnd = (_endTime != _trimEndTime);
-      //!!!!
-      print("changeTrimSrart=${changeTrimSrart}, changeTrimEnd=${changeTrimEnd}");
+    // XMLパース
+    final XmlDocument gpxDoc = XmlDocument.parse(fileContent);
 
-      // 新しいログを追加
-      routes.add(newRoute);
+    final XmlElement? gpx_ = gpxDoc.getElement("gpx");
+    if(gpx_ == null) return false;
+
+    // トリムが設定されているかをチェック
+    final bool changeTrimSrart = (_startTime != _trimStartTime);
+    final bool changeTrimEnd = (_endTime != _trimEndTime);
+
+    // 複数のログがマージされたファイルに対応
+    final Iterable<XmlElement> rtes_ = gpx_.findElements("rte");
+    int addCount = 0;
+    rtes_.forEach((rte_) {
+      final XmlElement? name_ = rte_.getElement("name");
+      if(name_ == null) return;
+      final String name = name_.text;
+      // 名前からデバイスIDを取得
+      int i = name.indexOf("ID_");
+      int deviceId = 0;
+      if(0 <= i){
+        deviceId = int.tryParse(name.substring(i + 3)) ?? 0;
+      }
+      print("name=${name}, deviceId=${deviceId}");
+
+      _Route newRoute = _Route();
+      bool res = newRoute.readFromGPX(rte_, name, deviceId);
+      if(res){
+        //!!!!
+        print("OK!");
+
+        // 新しいログを追加
+        routes[deviceId] = newRoute;
+        addCount++;
+      }
+    });
+    bool res = (0 < addCount);
+
+    // トリム時間を新しい範囲に合わせる(トリムの設定がない場合のみ)
+    if(res){
       _startTime = _getStartTime();
       _endTime = _getEndTime();
-
-      // トリム時間を新しい範囲に合わせる(トリムの設定がない場合のみ)
       if(!changeTrimSrart) _trimStartTime = _startTime;
       if(!changeTrimEnd)  _trimEndTime = _endTime;
     }
+    
     return res;
   }
 
@@ -117,7 +145,7 @@ class GPSLog
   List<Polyline> makePolyLines()
   {
     _mapLines.clear();
-    routes.forEach((route){
+    routes.forEach((id, route){
       _mapLines.add(route.makePolyLine(_trimStartTime, _trimEndTime));
     });
     return _mapLines;
@@ -147,9 +175,9 @@ class _Route
   // 通過点リスト
   List<_Point> points = [];
   // 端末名
-  String name = "";
+  String _name = "";
   // ID(nameに書かれている端末ID)
-  int deviceId = 0;
+  int _deviceId = 0;
 
   // 開始時間
   DateTime get startTime =>
@@ -166,26 +194,11 @@ class _Route
   DateTime _trimEndCache = DateTime(2022);
 
   // GPXファイルからログを作成
-  bool readFromGPX(String fileContent)
+  bool readFromGPX(XmlElement rte_, String name, int deviceId)
   {
-    // XMLパース
-    final XmlDocument gpxDoc = XmlDocument.parse(fileContent);
-
-    final XmlElement? gpx_ = gpxDoc.getElement("gpx");
-    if(gpx_ == null) return false;
-    final XmlElement? rte_ = gpx_.getElement("rte");
-    if(rte_ == null) return false;
-
-    final XmlElement? name_ = rte_.getElement("name");
-    if(name_ == null) return false;
-    name = name_.text;
-    // 名前からデバイスIDを取得
-    int i = name.indexOf("犬ID_");
-    if(0 <= i){
-      deviceId = int.tryParse(name.substring(i + 4)) ?? -1;
-    }
-    print("name=${name}, deviceId=${deviceId}");
-  
+    _name = name;
+    _deviceId = deviceId;
+    
     // ルートの通過ポイントを読み取り
     bool ok = true;
     final Iterable<XmlElement> rtepts_ = rte_.findElements("rtept");
@@ -267,7 +280,7 @@ class _Route
     }
     // 端末IDからカラー
     final Color color =
-      gpsLog.deviceParams[deviceId]?.color ??
+      gpsLog.deviceParams[_deviceId]?.color ??
       const Color.fromARGB(255,128,128,128);
 
     return Polyline(
