@@ -87,6 +87,7 @@ class GPSLog
     _startTime = _trimStartTime = _dummyStartTime;
     _endTime = _trimEndTime = _dummyEndTime;
     routes.clear();
+    _mapLines.clear();
   }
 
   // GPXファイルからログを読み込む
@@ -120,9 +121,6 @@ class GPSLog
       _Route newRoute = _Route();
       bool res = newRoute.readFromGPX(rte_, name, deviceId);
       if(res){
-        //!!!!
-        print("OK!");
-
         // 新しいログを追加
         routes[deviceId] = newRoute;
         addCount++;
@@ -139,6 +137,23 @@ class GPSLog
     }
     
     return res;
+  }
+
+  // GPXへ変換
+  String exportGPX()
+  {
+    // ヘッダ
+    String gpx = '<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1">\n';
+
+    // デバイス毎
+    routes.forEach((id, route){
+      gpx += route.exportGPX();
+    });
+
+    // フッダー
+    gpx += '</gpx>\n';
+
+    return gpx;
   }
 
   // FlutterMap用のポリラインを作成
@@ -228,6 +243,25 @@ class _Route
     }
   
     return ok;
+  }
+
+  // GPXへ変換
+  String exportGPX()
+  {
+    // <rte>タグ開始
+    String gpx = '<rte>\n<name>ID_${_deviceId}</name>\n';
+
+    // 通過ポイント
+    points.forEach((pt){
+      gpx += '<rtept lat="${pt.pos.latitude}" lon="${pt.pos.longitude}">\n';
+      gpx += '<time>' + pt.time.toIso8601String() + '</time>\n';
+      gpx += '</rtept>\n';
+    });
+
+    // 終了
+    gpx += '</rte>\n';
+  
+    return gpx;
   }
 
   bool isBefore(DateTime t0, DateTime t1)
@@ -324,6 +358,13 @@ Future<bool> readGPSLog(BuildContext context) async
   // XMLパース
   final bool res = gpsLog.addLogFromGPX(fileContent);
   if(!res) return false;
+
+  //!!!! テスト
+  String gpx = gpsLog.exportGPX();
+  gpsLog.clear();
+  print("GPXテスト出力→読み込み");
+  final bool res2 = gpsLog.addLogFromGPX(gpx);
+  if(!res2) return false;
 
   // メッセージを表示
   final String message = "GPSログの読み込み成功";
