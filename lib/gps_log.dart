@@ -1,15 +1,25 @@
+import 'dart:async';   // Stream使った再描画
+import 'dart:typed_data'; // Uint8List
+import 'dart:convert';  // Base64
+
 import 'package:flutter/material.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:xml/xml.dart';  // GPXの読み込み
 import 'package:file_selector/file_selector.dart';  // ファイル選択
 import 'package:flutter_map/flutter_map.dart';  // 地図
 import 'package:intl/intl.dart';  // 日時の文字列化
-import 'dart:async';   // Stream使った再描画
+import 'package:firebase_storage/firebase_storage.dart';  // Cloud Storage
+
+import 'file_tree.dart';
+import 'text_ballon_widget.dart';
 import 'globals.dart';  // 画面解像度
 
 // ログデータがないときに使う、ダミーの開始終了時間
-final DateTime _dummyStartTime = DateTime(2022, 1, 1, 7);  // 2022/1/1 AM7:00
-final DateTime _dummyEndTime = DateTime(2022, 1, 1, 11);  // 2022/1/1 AM11:00
+final _dummyStartTime = DateTime(2022, 1, 1, 7);  // 2022/1/1 AM7:00
+final _dummyEndTime = DateTime(2022, 1, 1, 11);  // 2022/1/1 AM11:00
+
+// Firebase クラウドストレージ
+final _fbStorage = FirebaseStorage.instance;
 
 //----------------------------------------------------------------------------
 //----------------------------------------------------------------------------
@@ -19,6 +29,7 @@ class GPSLog
   Map<int, _Route> routes = {};
   List<Polyline> _mapLines = [];
 
+  //----------------------------------------------------------------------------
   // 開始時間
   DateTime _startTime = _dummyStartTime;
   DateTime get startTime => _startTime;
@@ -51,6 +62,7 @@ class GPSLog
     return t;
   }
 
+  //----------------------------------------------------------------------------
   // トリミング開始時間
   DateTime _trimStartTime = _dummyStartTime;
   DateTime get trimStartTime => _trimStartTime;
@@ -71,6 +83,7 @@ class GPSLog
     4739: GPSDeviceParam(name:"マナミ", color:Color.fromARGB(255,255,216,0)),
   };
 
+  //----------------------------------------------------------------------------
   // 再描画用の Stream
   var _stream = StreamController<void>.broadcast();
   // 再描画用のストリームを取得
@@ -81,6 +94,7 @@ class GPSLog
     _stream.sink.add(null);
   }
 
+  //----------------------------------------------------------------------------
   // リセット
   void clear()
   {
@@ -90,6 +104,7 @@ class GPSLog
     _mapLines.clear();
   }
 
+  //----------------------------------------------------------------------------
   // GPXファイルからログを読み込む
   bool addLogFromGPX(String fileContent)
   {
@@ -156,6 +171,58 @@ class GPSLog
     return gpx;
   }
 
+  //----------------------------------------------------------------------------
+  // クラウドストレージにアップロード
+  Future<bool> uploadToCloudStorage(String path) async
+  {
+    // ストレージ上のファイルパスを参照
+    if(path[0] == "/") path = path.substring(1);
+    final String storagePath = path + ".gpx";
+    final gpxRef = _fbStorage.ref().child(storagePath);
+
+    // GPXに変換してアップロード
+    String gpx = exportGPX();
+    bool res = true;
+    try {
+      await gpxRef.putString(gpx, format: PutStringFormat.raw);
+      final gpxMetadata = SettableMetadata(contentType: "application/xml");
+      await gpxRef.updateMetadata(gpxMetadata);
+    } on FirebaseException catch (e) {
+      res = false;
+    }
+    //!!!!
+    print("uploadToCloudStorage() res=${res}");
+
+    return res;
+  }
+
+  // クラウドストレージからダウンロード
+  Future<bool> downloadFromCloudStorage(String path) async
+  {
+    // ストレージ上のファイルパスを参照
+    if(path[0] == "/") path = path.substring(1);
+    final String storagePath = path + ".gpx";
+    final gpxRef = _fbStorage.ref().child(storagePath);
+
+    // GPXから読み込み
+    bool res = true;
+    try {
+      final Uint8List? data = await gpxRef.getData();
+      res = (data != null);
+      if(res){
+        var gpxText = utf8.decode(data);
+        res = addLogFromGPX(gpxText);
+      }
+    } on FirebaseException catch (e) {
+      res = false;
+    }
+    //!!!!
+    print("downloadFromCloudStorage() res=${res}");
+
+    return res;
+  }
+
+  //----------------------------------------------------------------------------
   // FlutterMap用のポリラインを作成
   List<Polyline> makePolyLines()
   {
@@ -359,19 +426,6 @@ Future<bool> readGPSLog(BuildContext context) async
   final bool res = gpsLog.addLogFromGPX(fileContent);
   if(!res) return false;
 
-  //!!!! テスト
-  String gpx = gpsLog.exportGPX();
-  gpsLog.clear();
-  print("GPXテスト出力→読み込み");
-  final bool res2 = gpsLog.addLogFromGPX(gpx);
-  if(!res2) return false;
-
-  // メッセージを表示
-  final String message = "GPSログの読み込み成功";
-  await showDialog(
-    context: context,
-    builder: (_){ return AlertDialog(content: Text(message)); });
-
   return true;
 }
 
@@ -421,6 +475,9 @@ void showGPSLogPopupMenu(BuildContext context)
       if(res){
         gpsLog.makePolyLines();
         gpsLog.redraw();
+        showTextBallonMessage("GPSログの読み込み成功");
+      }else{
+        showTextBallonMessage("GPSログの読み込み失敗");
       }
       break;
 
