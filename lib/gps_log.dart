@@ -476,6 +476,9 @@ void showGPSLogPopupMenu(BuildContext context)
         gpsLog.makePolyLines();
         gpsLog.redraw();
         showTextBallonMessage("GPSログの読み込み成功");
+        // 裏でクラウドストレージへのアップロードを実行
+        final String filePath = getCurrentFilePath();
+        gpsLog.uploadToCloudStorage(filePath);
       }else{
         showTextBallonMessage("GPSログの読み込み失敗");
       }

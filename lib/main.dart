@@ -121,6 +121,8 @@ class _MapViewState extends State<MapView> with AfterLayoutMixin<MapView>
   // 家アイコン
   late HomeIconWidget homeIconWidget;
 
+  //----------------------------------------------------------------------------
+  // 初期化
   @override
   void initState() {
     super.initState();
@@ -146,22 +148,11 @@ class _MapViewState extends State<MapView> with AfterLayoutMixin<MapView>
     // 家アイコン作成
     homeIconWidget = HomeIconWidget();
 
-    // データベースからもろもろ読み込み
-    initStateSub().then((_){
-      // タツマデータからマーカー配列を作成
-      setState((){
-        updateTatsumaMarkers();
-        // 一通りの処理が終わるので、処理中インジケータを消す
-        if(_progressIndicatorState == ProgressIndicatorState.Showing){
-          _progressIndicatorState = ProgressIndicatorState.Stopping;
-        }
-      });
-      // マップの初期位置をメンバーたちの位置へ移動
-      moveMapToLocationOfMembers();
-    });
-
+    // データベースからもろもろ読み込んで初期状態をセットアップ
+    initStateSub();
   }
 
+  // 初期化(読み込み関連)
   Future initStateSub() async
   {
     // 初期状態で開くファイルパスを取得
@@ -181,16 +172,42 @@ class _MapViewState extends State<MapView> with AfterLayoutMixin<MapView>
       openPath = "/default_data";
       await moveFullPathDir(openPath);
     }
-    // メンバーデータの初期値をデータベースから取得
-    await initMemberSync(openPath);
-    // ファイルに紐づくパラメータをデータベースから取得
-    await loadAreaFilterFromDB(openPath);
-    await loadLockEditingFromDB(openPath, onLockChange:onLockChangeByOther);
-    setCurrentFilePath(openPath);
     // タツマデータをデータベースから取得
     await loadTatsumaFromDB();
+
+    // 初期状態のファイルを読み込み
+    await openFile(openPath);
   }
 
+  //----------------------------------------------------------------------------
+  // ファイルを読み込み、切り替え
+  Future<void> openFile(String filePath) async
+  {
+    // メンバーデータをデータベースから取得
+    await initMemberSync(filePath);
+    setCurrentFilePath(filePath);
+    // メンバーの位置へ地図を移動
+    // 直前の地図が表示され続ける時間を短くするために、なるべく早めに
+    moveMapToLocationOfMembers();
+
+    // タツマのエリアフィルターを取得(表示/非表示)
+    // それに応じてマーカー配列を作成
+    await loadAreaFilterFromDB(filePath);
+    updateTatsumaMarkers();
+
+    // 編集ロックフラグを取得
+    await loadLockEditingFromDB(filePath, onLockChange:onLockChangeByOther);
+  
+    // 一通りの処理が終わるので、処理中インジケータを消す
+    if(_progressIndicatorState == ProgressIndicatorState.Showing){
+      _progressIndicatorState = ProgressIndicatorState.Stopping;
+    }
+    // 再描画
+    setState((){});
+}
+
+  //----------------------------------------------------------------------------
+  // 終了処理
   @override
   void dispose()
   {
@@ -205,6 +222,9 @@ class _MapViewState extends State<MapView> with AfterLayoutMixin<MapView>
 
     super.dispose();
   }
+
+  //----------------------------------------------------------------------------
+  // 編集ロック
 
   // AppBar-Action領域の、編集ロックボタン
   // コールバック内で自分自身のメソッドを呼び出すために、インスタンスをアクセス可能に定義する
@@ -317,16 +337,9 @@ class _MapViewState extends State<MapView> with AfterLayoutMixin<MapView>
                 context,
                 MaterialPageRoute(builder: (context) => FilesPage(
                   onSelectFile: (path) async {
-                    await initMemberSync(path);
-                    await loadAreaFilterFromDB(path);
-                    await loadLockEditingFromDB(path, onLockChange:onLockChangeByOther);
-                    setCurrentFilePath(path);
-                    // メンバーの位置へ地図を移動
-                    moveMapToLocationOfMembers();
-                    // appBarの再描画もしたいので…
-                    setState((){
-                      updateTatsumaMarkers();
-                    });
+                    // ファイルを読み込み
+                    await openFile(path);
+                    // ファイル名をバルーン表示
                     showTextBallonMessage(path);
                   }
                 ))
