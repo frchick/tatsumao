@@ -18,9 +18,6 @@ import 'globals.dart';  // 画面解像度
 final _dummyStartTime = DateTime(2022, 1, 1, 7);  // 2022/1/1 AM7:00
 final _dummyEndTime = DateTime(2022, 1, 1, 11);  // 2022/1/1 AM11:00
 
-// Firebase クラウドストレージ
-final _fbStorage = FirebaseStorage.instance;
-
 //----------------------------------------------------------------------------
 //----------------------------------------------------------------------------
 // 犬達のログ
@@ -175,10 +172,13 @@ class GPSLog
   // クラウドストレージにアップロード
   Future<bool> uploadToCloudStorage(String path) async
   {
+    //!!!!
+    print("uploadToCloudStorage(${path})");
+
     // ストレージ上のファイルパスを参照
     if(path[0] == "/") path = path.substring(1);
     final String storagePath = path + ".gpx";
-    final gpxRef = _fbStorage.ref().child(storagePath);
+    final gpxRef = FirebaseStorage.instance.ref().child(storagePath);
 
     // GPXに変換してアップロード
     String gpx = exportGPX();
@@ -189,7 +189,10 @@ class GPSLog
       await gpxRef.updateMetadata(gpxMetadata);
     } on FirebaseException catch (e) {
       res = false;
+    } on Exception catch (e) {
+      res = false;
     }
+
     //!!!!
     print("uploadToCloudStorage() res=${res}");
 
@@ -199,10 +202,13 @@ class GPSLog
   // クラウドストレージからダウンロード
   Future<bool> downloadFromCloudStorage(String path) async
   {
+    //!!!!
+    print("downloadFromCloudStorage(${path})");
+
     // ストレージ上のファイルパスを参照
     if(path[0] == "/") path = path.substring(1);
     final String storagePath = path + ".gpx";
-    final gpxRef = _fbStorage.ref().child(storagePath);
+    final gpxRef = FirebaseStorage.instance.ref().child(storagePath);
 
     // GPXから読み込み
     bool res = true;
@@ -215,7 +221,10 @@ class GPSLog
       }
     } on FirebaseException catch (e) {
       res = false;
+    } on Exception catch (e) {
+      res = false;
     }
+
     //!!!!
     print("downloadFromCloudStorage() res=${res}");
 

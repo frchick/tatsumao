@@ -177,6 +177,11 @@ class _MapViewState extends State<MapView> with AfterLayoutMixin<MapView>
 
     // 初期状態のファイルを読み込み
     await openFile(openPath);
+    // GPSログを読み込み(遅延処理)
+    gpsLog.downloadFromCloudStorage(openPath).then((res){
+      gpsLog.makePolyLines();
+      gpsLog.redraw();
+    });
   }
 
   //----------------------------------------------------------------------------
@@ -341,6 +346,12 @@ class _MapViewState extends State<MapView> with AfterLayoutMixin<MapView>
                     await openFile(path);
                     // ファイル名をバルーン表示
                     showTextBallonMessage(path);
+                    // GPSログを読み込み(遅延処理)
+                    gpsLog.clear();
+                    gpsLog.downloadFromCloudStorage(path).then((res){
+                      gpsLog.makePolyLines();
+                      gpsLog.redraw();
+                    });
                   }
                 ))
               );
