@@ -12,6 +12,7 @@ import 'package:firebase_storage/firebase_storage.dart';  // Cloud Storage
 
 import 'file_tree.dart';
 import 'text_ballon_widget.dart';
+import 'ok_cancel_dialog.dart';
 import 'globals.dart';  // 画面解像度
 
 // ログデータがないときに使う、ダミーの開始終了時間
@@ -101,6 +102,8 @@ class GPSLog
     _endTime = _trimEndTime = _dummyEndTime;
     routes.clear();
     _mapLines.clear();
+
+    _thisUpdateTime = null;
   }
 
   //----------------------------------------------------------------------------
@@ -184,6 +187,9 @@ class GPSLog
     return FirebaseStorage.instance.ref().child(storagePath);
   }
 
+  // 取得しているデータの更新日時
+  DateTime? _thisUpdateTime;
+
   // クラウドストレージにアップロード
   Future<bool> uploadToCloudStorage(String path) async
   {
@@ -192,7 +198,7 @@ class GPSLog
 
     // ストレージ上のファイルパスを参照
     final gpxRef = _getRef(path);
-
+  
     // GPXに変換してアップロード
     String gpx = exportGPX();
     bool res = true;
@@ -200,6 +206,8 @@ class GPSLog
       await gpxRef.putString(gpx,
         format: PutStringFormat.raw,
         metadata: SettableMetadata(contentType: "application/xml"));
+      FullMetadata meta = await gpxRef.getMetadata();
+      _thisUpdateTime = meta.updated;
     } on FirebaseException catch (e) {
       res = false;
     } on Exception catch (e) {
@@ -230,6 +238,10 @@ class GPSLog
         var gpxText = utf8.decode(data);
         res = addLogFromGPX(gpxText);
       }
+      if(res){
+        FullMetadata meta = await gpxRef.getMetadata();
+        _thisUpdateTime = meta.updated;
+      }
     } on FirebaseException catch (e) {
       res = false;
     } on Exception catch (e) {
@@ -248,6 +260,30 @@ class GPSLog
     // ストレージ上のファイルパスを参照
     final gpxRef = _getRef(path);
     gpxRef.delete();
+  }
+
+  // クラウドストレージのデータが更新されているか？
+  Future<bool> isUpdateCloudStorage(String path) async
+  {
+    // クラウドストレージ上のファイルのメタデータを取得して比較
+    // クラウド上にデータが無ければ、必ず false にする。
+    final gpxRef = _getRef(path);
+    DateTime? cloudUpdateTime;
+    try {
+      FullMetadata meta = await gpxRef.getMetadata();
+      cloudUpdateTime = meta.updated;
+    } catch(e) {
+    }
+    if(cloudUpdateTime == null) return false;
+
+    // クラウド上にデータがあって、ローカルが空なら、必ず true になる。
+    if(_thisUpdateTime == null){
+      return true;
+    }
+
+    // クラウドとローカルの両方にデータがあれば、比較
+    // クラウドのほうが新しければ true を返す
+    return (_thisUpdateTime!.compareTo(cloudUpdateTime!) < 0);
   }
 
   //----------------------------------------------------------------------------
@@ -536,6 +572,20 @@ void showGPSLogPopupMenu(BuildContext context)
   ).then((value) async {
     switch(value ?? -1){
     case 0: // GPSログの読み込み
+      // クラウドの方に新しいデータがあれば、まずはそちらを読み込む
+      final filePath = getCurrentFilePath();
+      if(await gpsLog.isUpdateCloudStorage(filePath))
+      {
+        await showOkDialog(context, title:"GPSログ",
+          text:"オンラインに、他のユーザーによる新しいログデータがあります。まずそのデータを読み込みます。");
+        gpsLog.clear();
+        gpsLog.downloadFromCloudStorage(filePath).then((res){
+          gpsLog.makePolyLines();
+          gpsLog.redraw();
+        });
+        break;
+      }
+
       bool res = await readGPSLog(context);
       // 読み込み成功したらマップを再描画
       if(res){
