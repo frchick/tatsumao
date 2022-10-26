@@ -133,8 +133,13 @@ class GPSLog
       _Route newRoute = _Route();
       bool res = newRoute.readFromGPX(rte_, name, deviceId);
       if(res){
-        // 新しいログを追加
-        routes[deviceId] = newRoute;
+        if(!routes.containsKey(deviceId)){
+          // 新しいログを追加
+          routes[deviceId] = newRoute;
+        }else{
+          // 既にあるログと結合
+          routes[deviceId]!.merge(newRoute);
+        }
         addCount++;
       }
     });
@@ -190,9 +195,9 @@ class GPSLog
     String gpx = exportGPX();
     bool res = true;
     try {
-      await gpxRef.putString(gpx, format: PutStringFormat.raw);
-      final gpxMetadata = SettableMetadata(contentType: "application/xml");
-      await gpxRef.updateMetadata(gpxMetadata);
+      await gpxRef.putString(gpx,
+        format: PutStringFormat.raw,
+        metadata: SettableMetadata(contentType: "application/xml"));
     } on FirebaseException catch (e) {
       res = false;
     } on Exception catch (e) {
@@ -276,7 +281,7 @@ class GPSDeviceParam
 class _Route
 {
   // 通過点リスト
-  List<_Point> points = [];
+  List<_Point> _points = [];
   // 端末名
   String _name = "";
   // ID(nameに書かれている端末ID)
@@ -284,10 +289,10 @@ class _Route
 
   // 開始時間
   DateTime get startTime =>
-    (0 < points.length)? points.first.time: _dummyStartTime;
+    (0 < _points.length)? _points.first.time: _dummyStartTime;
   // 終了時間
   DateTime get endTime =>
-    (0 < points.length)? points.last.time: _dummyEndTime;
+    (0 < _points.length)? _points.last.time: _dummyEndTime;
 
   // トリミングに対応した開始インデックス
   int _trimStartIndex = -1;
@@ -316,7 +321,7 @@ class _Route
         catch(e){ ok = false; }
         if(!ok) return;
         
-        points.add(_Point(
+        _points.add(_Point(
           LatLng(double.parse(lat), double.parse(lon)),
           dateTime));
       }else{
@@ -327,7 +332,7 @@ class _Route
 
     // なんらか失敗していたらデータを破棄
     if(!ok){
-      points.clear();
+      _points.clear();
     }
   
     return ok;
@@ -340,7 +345,7 @@ class _Route
     String gpx = '<rte>\n<name>ID_${_deviceId}</name>\n';
 
     // 通過ポイント
-    points.forEach((pt){
+    _points.forEach((pt){
       gpx += '<rtept lat="${pt.pos.latitude}" lon="${pt.pos.longitude}">\n';
       gpx += '<time>' + pt.time.toIso8601String() + '</time>\n';
       gpx += '</rtept>\n';
@@ -361,6 +366,39 @@ class _Route
     return (t0 == t1) || t0.isBefore(t1);
   }
 
+  // 同じデバイスの2つのルートデータをマージ
+  void merge(_Route route)
+  {
+    // リストを結合して、距離および時間の条件で通過ポイントを間引く
+    _points.addAll(route._points);
+    _points.sort((a,b) { return a.time.compareTo(b.time); });
+    int prev = 0;
+    int seek = 1;
+    final distance = Distance();
+    while(seek < _points.length)
+    {
+      // 直前の通過ポイントから、5[m]以上離れているか、60[秒]以上経過していれば採用
+      final pt0 = _points[prev]; 
+      final pt1 = _points[seek]; 
+      double D = distance(pt0.pos, pt1.pos);
+      int S = pt1.time.difference(pt0.time).inSeconds;
+      if((5.0 <= D) || (60 <= S)){
+        prev++;
+        _points[prev] = pt1;
+      }
+      seek++;
+    }
+    // 最後の通過ポイントも
+    if(_points[prev].time.compareTo(_points.last.time) < 0){
+      prev++;
+      _points[prev] = _points.last;
+    }
+    int count = prev + 1;
+    if(count < _points.length){
+      _points = _points.sublist(0, count);
+    }
+  }
+
   // FlutterMap用のポリラインを作成
   Polyline makePolyLine(DateTime trimStart, DateTime trimEnd)
   {
@@ -370,24 +408,24 @@ class _Route
     if(!cacheOk){
       _trimStartCache = trimStart;
       _trimEndCache = trimEnd;
-      if(isEqualBefore(trimStart, points.first.time)){
+      if(isEqualBefore(trimStart, _points.first.time)){
         _trimStartIndex = 0;
       }else{
-        for(int i = 0; i < points.length-1; i++){
-          final DateTime t0 = points[i].time;
-          final DateTime t1 = points[i+1].time;
+        for(int i = 0; i < _points.length-1; i++){
+          final DateTime t0 = _points[i].time;
+          final DateTime t1 = _points[i+1].time;
           if(isEqualBefore(t0, trimStart) && isBefore(trimStart, t1)){
             _trimStartIndex = i;
             break;
           }
         }
       }
-      if(isEqualBefore(points.last.time, trimEnd)){
-        _trimEndIndex = points.length;
+      if(isEqualBefore(_points.last.time, trimEnd)){
+        _trimEndIndex = _points.length;
       }else{
-        for(int i = points.length-1; 0 < i; i--){
-          final DateTime t0 = points[i-1].time;
-          final DateTime t1 = points[i].time;
+        for(int i = _points.length-1; 0 < i; i--){
+          final DateTime t0 = _points[i-1].time;
+          final DateTime t1 = _points[i].time;
           if(isBefore(t0, trimEnd) && isEqualBefore(trimEnd, t1)){
             _trimEndIndex = i + 1;
             break;
@@ -398,7 +436,7 @@ class _Route
     // キャッシュされた範囲でポリラインを作成
     List<LatLng> line = [];
     for(int i = _trimStartIndex; i < _trimEndIndex; i++){
-      line.add(points[i].pos);
+      line.add(_points[i].pos);
     }
     // 端末IDからカラー
     final Color color =
