@@ -169,6 +169,14 @@ class GPSLog
   }
 
   //----------------------------------------------------------------------------
+  // クラウドストレージ
+  static Reference _getRef(String path)
+  {
+    if(path[0] == "/") path = path.substring(1);
+    final String storagePath = path + ".gpx";
+    return FirebaseStorage.instance.ref().child(storagePath);
+  }
+
   // クラウドストレージにアップロード
   Future<bool> uploadToCloudStorage(String path) async
   {
@@ -176,9 +184,7 @@ class GPSLog
     print("uploadToCloudStorage(${path})");
 
     // ストレージ上のファイルパスを参照
-    if(path[0] == "/") path = path.substring(1);
-    final String storagePath = path + ".gpx";
-    final gpxRef = FirebaseStorage.instance.ref().child(storagePath);
+    final gpxRef = _getRef(path);
 
     // GPXに変換してアップロード
     String gpx = exportGPX();
@@ -206,9 +212,7 @@ class GPSLog
     print("downloadFromCloudStorage(${path})");
 
     // ストレージ上のファイルパスを参照
-    if(path[0] == "/") path = path.substring(1);
-    final String storagePath = path + ".gpx";
-    final gpxRef = FirebaseStorage.instance.ref().child(storagePath);
+    final gpxRef = _getRef(path);
 
     // GPXから読み込み
     bool res = true;
@@ -229,6 +233,14 @@ class GPSLog
     print("downloadFromCloudStorage() res=${res}");
 
     return res;
+  }
+
+  // クラウドストレージから削除
+  static void deleteFromCloudStorage(String path)
+  {
+    // ストレージ上のファイルパスを参照
+    final gpxRef = _getRef(path);
+    gpxRef.delete();
   }
 
   //----------------------------------------------------------------------------
