@@ -9,6 +9,8 @@ import 'package:file_selector/file_selector.dart';  // ファイル選択
 import 'package:flutter_map/flutter_map.dart';  // 地図
 import 'package:intl/intl.dart';  // 日時の文字列化
 import 'package:firebase_storage/firebase_storage.dart';  // Cloud Storage
+import 'package:firebase_core/firebase_core.dart';  // Firebase RealtimeDatabase
+import 'package:firebase_database/firebase_database.dart';
 
 import 'file_tree.dart';
 import 'text_ballon_widget.dart';
@@ -284,6 +286,35 @@ class GPSLog
     // クラウドとローカルの両方にデータがあれば、比較
     // クラウドのほうが新しければ true を返す
     return (_thisUpdateTime!.compareTo(cloudUpdateTime!) < 0);
+  }
+
+  //----------------------------------------------------------------------------
+  // トリミング範囲の同期
+  void saveGPSLogTrimRangeToDB(String path)
+  {
+    final String dbPath = "assign" + path + "/gps_log";
+    final DatabaseReference ref = FirebaseDatabase.instance.ref(dbPath);
+    final trimData = {
+      "trimStartTime" : _trimStartTime.toIso8601String(),
+      "trimEndTime" : _trimEndTime.toIso8601String(),
+    };
+    ref.set(trimData);
+  }
+
+  Future<void> loadGPSLogTrimRangeFromDB(String path) async
+  {
+    final String dbPath = "assign" + path + "/gps_log";
+    final DatabaseReference ref = FirebaseDatabase.instance.ref(dbPath);
+    final DataSnapshot snapshot = await ref.get();
+    if(snapshot.exists){
+      try {
+        final trimData = snapshot.value as Map<String, dynamic>;
+        final start = DateTime.parse(trimData["trimStartTime"]!);
+        final end = DateTime.parse(trimData["trimEndTime"]!);
+        trimStartTime = start;
+        trimEndTime = end;
+      } catch(e) {}
+    }
   }
 
   //----------------------------------------------------------------------------
@@ -608,6 +639,7 @@ void showGPSLogPopupMenu(BuildContext context)
 }
 
 //----------------------------------------------------------------------------
+// トリム範囲の更新と再描画
 void _updateTrimRange(RangeValues values, int baseMS)
 {
   final int trimStartMS = baseMS + (values.start.toInt() * 1000);
@@ -658,7 +690,13 @@ void showTrimmingBottomSheet(BuildContext context)
                   min: 0,
                   max: durationSec,
                   onChanged: (values) {
+                    // トリム範囲の更新と再描画
                     setModalState(() => _updateTrimRange(values, baseMS));
+                  },
+                  onChangeEnd: (value) {
+                    // トリム範囲の変更をデータベースへ保存
+                    final filePath = getCurrentFilePath();
+                    gpsLog.saveGPSLogTrimRangeToDB(filePath);
                   },
                 ),
               ),

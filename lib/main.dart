@@ -178,7 +178,8 @@ class _MapViewState extends State<MapView> with AfterLayoutMixin<MapView>
     // 初期状態のファイルを読み込み
     await openFile(openPath);
     // GPSログを読み込み(遅延処理)
-    gpsLog.downloadFromCloudStorage(openPath).then((res){
+    gpsLog.downloadFromCloudStorage(openPath).then((res) async {
+      await gpsLog.loadGPSLogTrimRangeFromDB(openPath);
       gpsLog.makePolyLines();
       gpsLog.redraw();
     });
@@ -202,6 +203,9 @@ class _MapViewState extends State<MapView> with AfterLayoutMixin<MapView>
 
     // 編集ロックフラグを取得
     await loadLockEditingFromDB(filePath, onLockChange:onLockChangeByOther);
+  
+    // GPSログをクリア
+    gpsLog.clear();
   
     // 一通りの処理が終わるので、処理中インジケータを消す
     if(_progressIndicatorState == ProgressIndicatorState.Showing){
@@ -347,8 +351,8 @@ class _MapViewState extends State<MapView> with AfterLayoutMixin<MapView>
                     // ファイル名をバルーン表示
                     showTextBallonMessage(path);
                     // GPSログを読み込み(遅延処理)
-                    gpsLog.clear();
-                    gpsLog.downloadFromCloudStorage(path).then((res){
+                    gpsLog.downloadFromCloudStorage(path).then((res) async {
+                      await gpsLog.loadGPSLogTrimRangeFromDB(path);
                       gpsLog.makePolyLines();
                       gpsLog.redraw();
                     });
