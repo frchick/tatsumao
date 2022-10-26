@@ -21,6 +21,8 @@ final _dummyEndTime = DateTime(2022, 1, 1, 11);  // 2022/1/1 AM11:00
 //----------------------------------------------------------------------------
 //----------------------------------------------------------------------------
 // 犬達のログ
+GPSLog gpsLog = GPSLog();
+
 class GPSLog
 {
   Map<int, _Route> routes = {};
@@ -260,8 +262,7 @@ class GPSLog
   }
 }
 
-GPSLog gpsLog = GPSLog();
-
+//----------------------------------------------------------------------------
 //----------------------------------------------------------------------------
 // 犬毎のパラメータ
 class GPSDeviceParam
@@ -277,6 +278,7 @@ class GPSDeviceParam
 }
 
 //----------------------------------------------------------------------------
+//----------------------------------------------------------------------------
 // 一頭のルート
 class _Route
 {
@@ -287,6 +289,7 @@ class _Route
   // ID(nameに書かれている端末ID)
   int _deviceId = 0;
 
+  //----------------------------------------------------------------------------
   // 開始時間
   DateTime get startTime =>
     (0 < _points.length)? _points.first.time: _dummyStartTime;
@@ -301,6 +304,7 @@ class _Route
   int _trimEndIndex = -1;
   DateTime _trimEndCache = DateTime(2022);
 
+  //----------------------------------------------------------------------------
   // GPXファイルからログを作成
   bool readFromGPX(XmlElement rte_, String name, int deviceId)
   {
@@ -357,15 +361,7 @@ class _Route
     return gpx;
   }
 
-  bool isBefore(DateTime t0, DateTime t1)
-  {
-    return t0.isBefore(t1);
-  }
-  bool isEqualBefore(DateTime t0, DateTime t1)
-  {
-    return (t0 == t1) || t0.isBefore(t1);
-  }
-
+  //----------------------------------------------------------------------------
   // 同じデバイスの2つのルートデータをマージ
   void merge(_Route route)
   {
@@ -399,6 +395,7 @@ class _Route
     }
   }
 
+  //----------------------------------------------------------------------------
   // FlutterMap用のポリラインを作成
   Polyline makePolyLine(DateTime trimStart, DateTime trimEnd)
   {
@@ -448,6 +445,16 @@ class _Route
       color:color,
       strokeWidth:2.0);
   }
+}
+
+// DateTime の比較
+bool isBefore(DateTime t0, DateTime t1)
+{
+  return t0.compareTo(t1) < 0;
+}
+bool isEqualBefore(DateTime t0, DateTime t1)
+{
+  return t0.compareTo(t1) <= 0;
 }
 
 //----------------------------------------------------------------------------
@@ -583,8 +590,10 @@ void showTrimmingBottomSheet(BuildContext context)
         var rangeValues = RangeValues(
           (trimStartTime.millisecondsSinceEpoch - baseMS) / 1000,
           (trimEndTime.millisecondsSinceEpoch - baseMS) / 1000);
-        String trimStartTimeText = DateFormat('hh:mm').format(trimStartTime);
-        String trimEndTimeText = DateFormat('hh:mm').format(trimEndTime);
+        String trimStartText =
+          "${trimStartTime.hour}:" + _twoDigits(trimStartTime.minute);
+        String trimEndText =
+          "${trimEndTime.hour}:" + _twoDigits(trimEndTime.minute);
 
         return Container(
           height: 80,
@@ -609,11 +618,11 @@ void showTrimmingBottomSheet(BuildContext context)
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: <Widget>[
                     Text(
-                      trimStartTimeText,
+                      trimStartText,
                       style: const TextStyle(fontSize: 16),
                     ),
                     Text(
-                      trimEndTimeText,
+                      trimEndText,
                       style: const TextStyle(fontSize: 16),
                     ),
                   ],
@@ -625,4 +634,9 @@ void showTrimmingBottomSheet(BuildContext context)
       }
     );
   });
+}
+
+String _twoDigits(int n) {
+  if (n >= 10) return "${n}";
+  return "0${n}";
 }
