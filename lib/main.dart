@@ -344,6 +344,8 @@ class _MapViewState extends State<MapView> with AfterLayoutMixin<MapView>
           IconButton(
             icon: Icon(Icons.folder),
             onPressed: () {
+              // BottomSheet を閉じる
+              closeBottomSheet();
               // ファイル一覧画面に遷移して、ファイルの切り替え
               Navigator.push(
                 context,

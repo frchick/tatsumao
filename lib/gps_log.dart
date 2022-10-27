@@ -635,6 +635,8 @@ void showGPSLogPopupMenu(BuildContext context)
   ).then((value) async {
     switch(value ?? -1){
     case 0: // GPSログの読み込み
+      // BottomSheet を閉じる
+      closeBottomSheet();
       // クラウドの方に新しいデータがあれば、まずはそちらを読み込む
       final filePath = getCurrentFilePath();
       if(await gpsLog.isUpdateCloudStorage(filePath))
@@ -693,7 +695,7 @@ void showTrimmingBottomSheet(BuildContext context)
   final int baseMS = gpsLog.startTime.millisecondsSinceEpoch;
   final double durationSec = (gpsLog.endTime.millisecondsSinceEpoch - baseMS) / 1000;
   
-  appScaffoldKey.currentState!.showBottomSheet((context)
+  bottomSheetController = appScaffoldKey.currentState!.showBottomSheet((context)
   {
     return StatefulBuilder(
       builder: (context, StateSetter setModalState)
@@ -756,9 +758,11 @@ void showTrimmingBottomSheet(BuildContext context)
         );
       }
     );
-  }).closed.whenComplete((){
-    // 他のユーザーからのトリミング範囲の変更通知のコールバックをリセット
+  });
+  // 他のユーザーからのトリミング範囲の変更通知のコールバックをリセット
+  bottomSheetController!.closed.whenComplete((){
     gpsLog.onUpdateTrimSync = null;
+    bottomSheetController = null;
   });
 }
 
