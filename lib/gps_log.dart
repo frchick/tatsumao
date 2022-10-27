@@ -106,6 +106,10 @@ class GPSLog
     _mapLines.clear();
 
     _thisUpdateTime = null;
+
+    // 直前の同期イベントを削除
+    _updateTrimSyncEvent?.cancel();
+    _updateTrimSyncEvent = null;
   }
 
   //----------------------------------------------------------------------------
@@ -290,6 +294,9 @@ class GPSLog
 
   //----------------------------------------------------------------------------
   // トリミング範囲の同期
+  StreamSubscription<DatabaseEvent>? _updateTrimSyncEvent;
+  void Function(void Function())? onUpdateTrimSync;
+
   void saveGPSLogTrimRangeToDB(String path)
   {
     final String dbPath = "assign" + path + "/gps_log";
@@ -303,16 +310,41 @@ class GPSLog
 
   Future<void> loadGPSLogTrimRangeFromDB(String path) async
   {
+    // 直前の同期イベントを削除
+    _updateTrimSyncEvent?.cancel();
+    _updateTrimSyncEvent = null;
+  
+    // 読み込み
     final String dbPath = "assign" + path + "/gps_log";
     final DatabaseReference ref = FirebaseDatabase.instance.ref(dbPath);
     final DataSnapshot snapshot = await ref.get();
     if(snapshot.exists){
       try {
-        final trimData = snapshot.value as Map<String, dynamic>;
+        // 同期イベントを設定
+        // 接続直後の初回読み込みで、読み込みと再描画が行われる。
+        _updateTrimSyncEvent = ref.onValue.listen((DatabaseEvent event){
+          _onUpdateTrimSync(event);
+        });
+      } catch(e) {}
+    }
+  }
+
+  void _onUpdateTrimSync(DatabaseEvent event)
+  {
+    if(event.snapshot.exists){
+      try {
+        final trimData = event.snapshot.value as Map<String, dynamic>;
         final start = DateTime.parse(trimData["trimStartTime"]!);
         final end = DateTime.parse(trimData["trimEndTime"]!);
-        trimStartTime = start;
-        trimEndTime = end;
+        bool change = (trimStartTime != start) || (trimEndTime != end);
+        if(change){
+          trimStartTime = start;
+          trimEndTime = end;
+          // 描画
+          gpsLog.makePolyLines();
+          gpsLog.redraw();
+          onUpdateTrimSync?.call((){});
+        }
       } catch(e) {}
     }
   }
@@ -640,7 +672,7 @@ void showGPSLogPopupMenu(BuildContext context)
 
 //----------------------------------------------------------------------------
 // トリム範囲の更新と再描画
-void _updateTrimRange(RangeValues values, int baseMS)
+void _updateTrimRangeByUI(RangeValues values, int baseMS)
 {
   final int trimStartMS = baseMS + (values.start.toInt() * 1000);
   gpsLog.trimStartTime = DateTime.fromMillisecondsSinceEpoch(trimStartMS);
@@ -666,6 +698,9 @@ void showTrimmingBottomSheet(BuildContext context)
     return StatefulBuilder(
       builder: (context, StateSetter setModalState)
       {
+        // 他のユーザーからのトリミング範囲の変更通知で再描画
+        gpsLog.onUpdateTrimSync = setModalState;
+
         // 現在のトリミング時間範囲
         final DateTime trimStartTime = gpsLog.trimStartTime;
         final DateTime trimEndTime = gpsLog.trimEndTime;
@@ -691,7 +726,7 @@ void showTrimmingBottomSheet(BuildContext context)
                   max: durationSec,
                   onChanged: (values) {
                     // トリム範囲の更新と再描画
-                    setModalState(() => _updateTrimRange(values, baseMS));
+                    setModalState(() => _updateTrimRangeByUI(values, baseMS));
                   },
                   onChangeEnd: (value) {
                     // トリム範囲の変更をデータベースへ保存
@@ -721,6 +756,9 @@ void showTrimmingBottomSheet(BuildContext context)
         );
       }
     );
+  }).closed.whenComplete((){
+    // 他のユーザーからのトリミング範囲の変更通知のコールバックをリセット
+    gpsLog.onUpdateTrimSync = null;
   });
 }
 

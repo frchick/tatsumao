@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_map/plugin_api.dart';
+import 'mypolyline_layer.dart'; // マップ上のカスタムポリライン
 import 'package:latlong2/latlong.dart';
 import 'package:positioned_tap_detector_2/positioned_tap_detector_2.dart'; // マップのタップ
 import 'package:after_layout/after_layout.dart';  // 起動直後の build の後の処理
@@ -179,7 +180,9 @@ class _MapViewState extends State<MapView> with AfterLayoutMixin<MapView>
     await openFile(openPath);
     // GPSログを読み込み(遅延処理)
     gpsLog.downloadFromCloudStorage(openPath).then((res) async {
-      await gpsLog.loadGPSLogTrimRangeFromDB(openPath);
+      if(res){
+        await gpsLog.loadGPSLogTrimRangeFromDB(openPath);
+      }
       gpsLog.makePolyLines();
       gpsLog.redraw();
     });
@@ -352,7 +355,9 @@ class _MapViewState extends State<MapView> with AfterLayoutMixin<MapView>
                     showTextBallonMessage(path);
                     // GPSログを読み込み(遅延処理)
                     gpsLog.downloadFromCloudStorage(path).then((res) async {
-                      await gpsLog.loadGPSLogTrimRangeFromDB(path);
+                      if(res){
+                        await gpsLog.loadGPSLogTrimRangeFromDB(path);
+                      }
                       gpsLog.makePolyLines();
                       gpsLog.redraw();
                     });
@@ -450,6 +455,7 @@ class _MapViewState extends State<MapView> with AfterLayoutMixin<MapView>
                 interactiveFlags: InteractiveFlag.all & ~InteractiveFlag.rotate,
                 plugins: [
                   MyDragMarkerPlugin(),
+                  MyPolylineLayerPlugin(),
                 ],
                 center: LatLng(35.309934, 139.076056),  // 丸太の森P
                 zoom: 16,
@@ -483,7 +489,7 @@ class _MapViewState extends State<MapView> with AfterLayoutMixin<MapView>
                   urlTemplate: "https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png",
                   opacity: 0.64
                 ),
-                PolylineLayerOptions(
+                MyPolylineLayerOptions(
                   polylines: gpsLog.makePolyLines(),
                   rebuild: gpsLog.reDrawStream,
                   polylineCulling: false,
