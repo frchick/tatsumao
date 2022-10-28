@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_map/plugin_api.dart';
+import 'mypolyline_layer.dart'; // マップ上のカスタムポリライン
 import 'package:latlong2/latlong.dart';
 import 'package:positioned_tap_detector_2/positioned_tap_detector_2.dart'; // マップのタップ
 import 'package:after_layout/after_layout.dart';  // 起動直後の build の後の処理
@@ -22,6 +23,7 @@ import 'tatsumas.dart';
 import 'ok_cancel_dialog.dart';
 import 'onoff_icon_button.dart';
 import 'home_icon.dart';
+import 'gps_log.dart';
 import 'globals.dart';
 
 //----------------------------------------------------------------------------
@@ -120,6 +122,8 @@ class _MapViewState extends State<MapView> with AfterLayoutMixin<MapView>
   // 家アイコン
   late HomeIconWidget homeIconWidget;
 
+  //----------------------------------------------------------------------------
+  // 初期化
   @override
   void initState() {
     super.initState();
@@ -145,22 +149,11 @@ class _MapViewState extends State<MapView> with AfterLayoutMixin<MapView>
     // 家アイコン作成
     homeIconWidget = HomeIconWidget();
 
-    // データベースからもろもろ読み込み
-    initStateSub().then((_){
-      // タツマデータからマーカー配列を作成
-      setState((){
-        updateTatsumaMarkers();
-        // 一通りの処理が終わるので、処理中インジケータを消す
-        if(_progressIndicatorState == ProgressIndicatorState.Showing){
-          _progressIndicatorState = ProgressIndicatorState.Stopping;
-        }
-      });
-      // マップの初期位置をメンバーたちの位置へ移動
-      moveMapToLocationOfMembers();
-    });
-
+    // データベースからもろもろ読み込んで初期状態をセットアップ
+    initStateSub();
   }
 
+  // 初期化(読み込み関連)
   Future initStateSub() async
   {
     // 初期状態で開くファイルパスを取得
@@ -180,16 +173,53 @@ class _MapViewState extends State<MapView> with AfterLayoutMixin<MapView>
       openPath = "/default_data";
       await moveFullPathDir(openPath);
     }
-    // メンバーデータの初期値をデータベースから取得
-    await initMemberSync(openPath);
-    // ファイルに紐づくパラメータをデータベースから取得
-    await loadAreaFilterFromDB(openPath);
-    await loadLockEditingFromDB(openPath, onLockChange:onLockChangeByOther);
-    setCurrentFilePath(openPath);
     // タツマデータをデータベースから取得
     await loadTatsumaFromDB();
+
+    // 初期状態のファイルを読み込み
+    await openFile(openPath);
+    // GPSログを読み込み(遅延処理)
+    gpsLog.downloadFromCloudStorage(openPath).then((res) async {
+      if(res){
+        await gpsLog.loadGPSLogTrimRangeFromDB(openPath);
+      }
+      gpsLog.makePolyLines();
+      gpsLog.redraw();
+    });
   }
 
+  //----------------------------------------------------------------------------
+  // ファイルを読み込み、切り替え
+  Future<void> openFile(String filePath) async
+  {
+    // メンバーデータをデータベースから取得
+    await initMemberSync(filePath);
+    setCurrentFilePath(filePath);
+    // メンバーの位置へ地図を移動
+    // 直前の地図が表示され続ける時間を短くするために、なるべく早めに
+    moveMapToLocationOfMembers();
+
+    // タツマのエリアフィルターを取得(表示/非表示)
+    // それに応じてマーカー配列を作成
+    await loadAreaFilterFromDB(filePath);
+    updateTatsumaMarkers();
+
+    // 編集ロックフラグを取得
+    await loadLockEditingFromDB(filePath, onLockChange:onLockChangeByOther);
+  
+    // GPSログをクリア
+    gpsLog.clear();
+  
+    // 一通りの処理が終わるので、処理中インジケータを消す
+    if(_progressIndicatorState == ProgressIndicatorState.Showing){
+      _progressIndicatorState = ProgressIndicatorState.Stopping;
+    }
+    // 再描画
+    setState((){});
+}
+
+  //----------------------------------------------------------------------------
+  // 終了処理
   @override
   void dispose()
   {
@@ -204,6 +234,9 @@ class _MapViewState extends State<MapView> with AfterLayoutMixin<MapView>
 
     super.dispose();
   }
+
+  //----------------------------------------------------------------------------
+  // 編集ロック
 
   // AppBar-Action領域の、編集ロックボタン
   // コールバック内で自分自身のメソッドを呼び出すために、インスタンスをアクセス可能に定義する
@@ -311,22 +344,25 @@ class _MapViewState extends State<MapView> with AfterLayoutMixin<MapView>
           IconButton(
             icon: Icon(Icons.folder),
             onPressed: () {
+              // BottomSheet を閉じる
+              closeBottomSheet();
               // ファイル一覧画面に遷移して、ファイルの切り替え
               Navigator.push(
                 context,
                 MaterialPageRoute(builder: (context) => FilesPage(
                   onSelectFile: (path) async {
-                    await initMemberSync(path);
-                    await loadAreaFilterFromDB(path);
-                    await loadLockEditingFromDB(path, onLockChange:onLockChangeByOther);
-                    setCurrentFilePath(path);
-                    // メンバーの位置へ地図を移動
-                    moveMapToLocationOfMembers();
-                    // appBarの再描画もしたいので…
-                    setState((){
-                      updateTatsumaMarkers();
-                    });
+                    // ファイルを読み込み
+                    await openFile(path);
+                    // ファイル名をバルーン表示
                     showTextBallonMessage(path);
+                    // GPSログを読み込み(遅延処理)
+                    gpsLog.downloadFromCloudStorage(path).then((res) async {
+                      if(res){
+                        await gpsLog.loadGPSLogTrimRangeFromDB(path);
+                      }
+                      gpsLog.makePolyLines();
+                      gpsLog.redraw();
+                    });
                   }
                 ))
               );
@@ -348,6 +384,14 @@ class _MapViewState extends State<MapView> with AfterLayoutMixin<MapView>
           icon: Icon(Icons.content_copy),
           onPressed: () {
             copyAssignToClipboard(context);
+          },
+        ),
+
+        // GPSログの読み込み
+        IconButton(
+          icon: const Icon(Icons.timeline),
+          onPressed:() {
+            showGPSLogPopupMenu(context);
           },
         ),
 
@@ -412,6 +456,7 @@ class _MapViewState extends State<MapView> with AfterLayoutMixin<MapView>
                 interactiveFlags: InteractiveFlag.all & ~InteractiveFlag.rotate,
                 plugins: [
                   MyDragMarkerPlugin(),
+                  MyPolylineLayerPlugin(),
                 ],
                 center: LatLng(35.309934, 139.076056),  // 丸太の森P
                 zoom: 16,
@@ -444,6 +489,11 @@ class _MapViewState extends State<MapView> with AfterLayoutMixin<MapView>
                 TileLayerOptions(
                   urlTemplate: "https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png",
                   opacity: 0.64
+                ),
+                MyPolylineLayerOptions(
+                  polylines: gpsLog.makePolyLines(),
+                  rebuild: gpsLog.reDrawStream,
+                  polylineCulling: false,
                 ),
                 MarkerLayerOptions(
                   markers: tatsumaMarkers,

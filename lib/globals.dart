@@ -32,7 +32,7 @@ bool lockEditing = false;
 // 画面サイズ関連
 
 // ウィンドウサイズを参照するためのキー
-GlobalKey appScaffoldKey = GlobalKey();
+final appScaffoldKey = GlobalKey<ScaffoldState>();
 
 // 画面サイズの取得(幅)
 double getScreenWidth()
@@ -43,4 +43,15 @@ double getScreenWidth()
 double getScreenHeight()
 {
   return (appScaffoldKey.currentContext?.size?.height ?? 0.0);
+}
+
+//----------------------------------------------------------------------------
+// BottomSheet
+
+PersistentBottomSheetController<void>? bottomSheetController;
+
+// BottomSheet を閉じる
+void closeBottomSheet()
+{
+  bottomSheetController?.close();
 }

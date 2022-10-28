@@ -8,6 +8,7 @@ import 'text_edit_icon_dialog.dart';
 import 'text_ballon_widget.dart';
 import 'text_item_list_dialog.dart';
 import 'tatsumas.dart';
+import 'gps_log.dart';
 
 //----------------------------------------------------------------------------
 //----------------------------------------------------------------------------
@@ -156,6 +157,8 @@ FileResult deleteFile(FileItem item)
   final String path = "assign" + filePath;
   final DatabaseReference ref = database.ref(path);
   try{ ref.remove(); } catch(e) {}
+  // GPSログも削除する
+  GPSLog.deleteFromCloudStorage(filePath);
 
   return FileResult();
 }

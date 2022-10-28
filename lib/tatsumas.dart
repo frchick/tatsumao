@@ -3,14 +3,14 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_map/plugin_api.dart';
 import 'package:latlong2/latlong.dart';
 
-import 'package:file_selector/file_selector.dart';
+import 'package:file_selector/file_selector.dart';  // ファイル選択
 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'firebase_options.dart';
 import 'dart:async';    // for StreamSubscription<>
 
-import 'package:xml/xml.dart';
+import 'package:xml/xml.dart';  // GPXの読み込み
 import 'mydragmarker.dart';
 import 'my_list_tile.dart';
 
