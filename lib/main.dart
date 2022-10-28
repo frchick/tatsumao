@@ -14,7 +14,7 @@ import 'package:firebase_database/firebase_database.dart';
 import 'firebase_options.dart';
 import 'dart:async';
 import 'package:google_fonts/google_fonts.dart';  // フォント
-import 'mydragmarker.dart';   // マップ上のマーカー
+import 'mydragmarker.dart';   // マップ上のメンバーマーカー
 
 import 'file_tree.dart';
 import 'text_ballon_widget.dart';
@@ -130,21 +130,7 @@ class _MapViewState extends State<MapView> with AfterLayoutMixin<MapView>
 
     // メンバーデータからマーカー配列を作成
     // メンバーは組み込みデータなのでデータベースからの読み込みはない
-    int memberIndex = 0;
-    members.forEach((member) {
-      // アイコンを読み込んでおく
-      member.icon0 = Image.asset(member.iconPath, width:64, height:72);
-      // マーカーを作成
-      memberMarkers.add(
-        MyDragMarker2(
-          point: member.pos,
-          builder: (ctx) => Image.asset(member.iconPath),
-          index: memberIndex,
-          visible: member.attended,
-        )
-      );
-      memberIndex++;
-    });
+    createMemberMarkers();
 
     // 家アイコン作成
     homeIconWidget = HomeIconWidget();
@@ -192,6 +178,12 @@ class _MapViewState extends State<MapView> with AfterLayoutMixin<MapView>
   // ファイルを読み込み、切り替え
   Future<void> openFile(String filePath) async
   {
+    // メンバーマーカーが非表示なら、表示に戻す。
+    if(!isShowMemberMarker()){
+      memberMarkerSizeSelector = 1;
+      createMemberMarkers();
+    }
+
     // メンバーデータをデータベースから取得
     await initMemberSync(filePath);
     setCurrentFilePath(filePath);
@@ -258,13 +250,9 @@ class _MapViewState extends State<MapView> with AfterLayoutMixin<MapView>
     // ON/OFFボタンを再描画
     _lockEditingButton?.changeState(lock);
     // マップ上のマーカーのドラッグ許可/禁止を更新
-    _myDragMarkerPluginOptions.draggable = !lockEditing;
+    mainMapDragMarkerPluginOptions.draggable = !lockEditing;
     updateMapView();
   }
-
-  // マップ上のメンバーマーカーの作成オプション
-  // ドラッグ許可/禁止を後から変更するために、インスタンスをアクセス可能に定義する
-  late MyDragMarkerPluginOptions _myDragMarkerPluginOptions;
 
   //----------------------------------------------------------------------------
   // 画面構築
@@ -437,11 +425,12 @@ class _MapViewState extends State<MapView> with AfterLayoutMixin<MapView>
   Widget makeAppBody(BuildContext context)
   {
     // マップ上のメンバーマーカーの作成オプション
-    _myDragMarkerPluginOptions = MyDragMarkerPluginOptions(
+    mainMapDragMarkerPluginOptions = MyDragMarkerPluginOptions(
       markers: memberMarkers,
       draggable: !lockEditing,
+      visible: isShowMemberMarker(),
     );
-
+  
     // 家アイコン更新
     HomeIconWidget.update();
 
@@ -500,7 +489,7 @@ class _MapViewState extends State<MapView> with AfterLayoutMixin<MapView>
                   // NOTE: usePxCache=trueだと、非表示グレーマーカーで並び順が変わったときにバグる
                   usePxCache: false,
                 ),
-                _myDragMarkerPluginOptions,
+                mainMapDragMarkerPluginOptions,
               ],
               mapController: mainMapController,
             ),

@@ -8,10 +8,13 @@ class MyDragMarkerPluginOptions extends LayerOptions {
   List<MyDragMarker> markers;
   // ドラッグを許可するか
   bool draggable;
+  // マーカー全体の表示/非表示
+  bool visible;
 
   MyDragMarkerPluginOptions({
     this.markers = const [],
     this.draggable = true,
+    this.visible = true,
   });
 }
 
@@ -25,20 +28,22 @@ class MyDragMarkerPlugin implements MapPlugin {
         builder: (BuildContext context, AsyncSnapshot<void> snapshot)
         {
           var dragMarkers = <Widget>[];
-          for (var marker in options.markers) {
-            // 非表示のマーカーは除外
-            if(!marker.visible) continue;
+          if(options.visible){
+            for (var marker in options.markers) {
+              // 非表示のマーカーは除外
+              if(!marker.visible) continue;
 
-            // 画面外のマーカーは除外
-            if (!_boundsContainsMarker(mapState, marker)) continue;
+              // 画面外のマーカーは除外
+              if (!_boundsContainsMarker(mapState, marker)) continue;
 
-            // 画面に見えるマーカーを作成
-            // NOTE: 毎フレーム作成するのは無駄に感じるが、この中で表示座標の計算もしているのでキャッシュできない。
-            dragMarkers.add(MyDragMarkerWidget(
-              mapState: mapState,
-              marker: marker,
-              stream: stream,
-              options: options));
+              // 画面に見えるマーカーを作成
+              // NOTE: 毎フレーム作成するのは無駄に感じるが、この中で表示座標の計算もしているのでキャッシュできない。
+              dragMarkers.add(MyDragMarkerWidget(
+                mapState: mapState,
+                marker: marker,
+                stream: stream,
+                options: options));
+            }
           }
           return Stack(children: dragMarkers);
         }

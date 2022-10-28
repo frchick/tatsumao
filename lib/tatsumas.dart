@@ -14,6 +14,7 @@ import 'package:xml/xml.dart';  // GPXの読み込み
 import 'mydragmarker.dart';
 import 'my_list_tile.dart';
 
+import 'members.dart';  // メンバーマーカーのサイズ
 import 'onoff_icon_button.dart';
 import 'file_tree.dart';
 import 'text_ballon_widget.dart';
@@ -1079,6 +1080,9 @@ class AreaFilterDialog extends StatefulWidget
   int _areaFilterBits0 = 0;
 }
 
+//!!!!
+bool showGPSLogFlag = true;
+
 class AreaFilterDialogState  extends State<AreaFilterDialog>
 {
   @override
@@ -1137,6 +1141,11 @@ class AreaFilterDialogState  extends State<AreaFilterDialog>
       ));
     };
 
+    // メンバーマーカーとGPSログの表示スイッチ
+    List<bool> _memberMarkerSizeFlag = [ false, false, false ];
+    _memberMarkerSizeFlag[memberMarkerSizeSelector] = true;
+    List<bool> _showGPSLogFlag = [ showGPSLogFlag ];
+
     // ダイアログ表示
     return WillPopScope(
       // ページの戻り値
@@ -1176,21 +1185,59 @@ class AreaFilterDialogState  extends State<AreaFilterDialog>
               ),
             ]),
             // マップ表示オプションスイッチ
-            if(widget.showMapDrawOptions) Row(
-              mainAxisAlignment: MainAxisAlignment.end,
+            if(widget.showMapDrawOptions) Column(
               children: [
-                Text("グレー表示", style: Theme.of(context).textTheme.subtitle1),
-                Switch(
-                  value:showFilteredIcon,
-                  onChanged:(r){
-                    setState((){
-                      showFilteredIcon = r;
-                    });
-                    updateTatsumaMarkers();
-                    updateMapView();
-                  },
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    Text("グレー表示", style: Theme.of(context).textTheme.subtitle1),
+                    Switch(
+                      value:showFilteredIcon,
+                      onChanged:(r){
+                        setState((){
+                          showFilteredIcon = r;
+                        });
+                        updateTatsumaMarkers();
+                        updateMapView();
+                      },
+                    ),
+                  ],
                 ),
-              ],
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    ToggleButtons(
+                      children: [
+                        Icon(Icons.location_pin, size:30),
+                        Icon(Icons.location_pin, size:22),
+                        Icon(Icons.location_off, size:22),
+                      ],
+                      isSelected: _memberMarkerSizeFlag,
+                      onPressed: (index) {
+                        setState(() {
+                          memberMarkerSizeSelector = index;
+                          mainMapDragMarkerPluginOptions.visible
+                            = isShowMemberMarker();
+                        });
+                        createMemberMarkers();
+                        updateMapView();
+                      },
+                    ),
+                    SizedBox(width:5, height:30),
+                    ToggleButtons(
+                      children: [
+                        Icon(Icons.timeline, size:30),
+                      ],
+                      isSelected: _showGPSLogFlag,
+                      onPressed: (index) {
+                        setState(() {
+                          showGPSLogFlag = !showGPSLogFlag;
+                        });
+                      },
+                    )
+                  ],
+                )
+              ]
             )
           ],
         ),

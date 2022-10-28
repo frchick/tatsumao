@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math'; // min,max
 
 import 'package:flutter/material.dart';
 import 'package:latlong2/latlong.dart';
@@ -7,7 +8,7 @@ import 'package:flutter_map/plugin_api.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/services.dart';   // for クリップボード
 
-import 'mydragmarker.dart';
+import 'mydragmarker.dart';   // マップ上のメンバーマーカー
 import 'text_ballon_widget.dart';
 import 'text_multiline_dialog.dart';
 import 'tatsumas.dart';
@@ -15,32 +16,10 @@ import 'home_icon.dart';
 import 'file_tree.dart';
 import 'globals.dart';
 
+
 //----------------------------------------------------------------------------
 //----------------------------------------------------------------------------
-// メンバーデータ
-class Member {
-  Member({
-    required this.name,
-    required this.iconPath,
-    required this.pos,
-    this.attended = false,
-    this.withdrawals = false,
-  });
-  // 名前
-  String name;
-  // ドラッグマーカーのアイコンの画像ファイル
-  String iconPath;
-  // 配置座標
-  LatLng pos;
-  // 参加しているか？(マップ上に配置されているか？)
-  bool attended;
-  // 退会者か？
-  bool withdrawals;
-  // 起動直後のデータベース変更通知を受け取ったか
-  bool firstSyncEvent = true;
-  // ドラッグマーカーのアイコン
-  late Image icon0;
-}
+// 外部参照されるグローバル変数
 
 List<Member> members = [
   Member(name:"ママっち", iconPath:"assets/member_icon/000.png", pos:LatLng(35.302880, 139.05100), attended: true),
@@ -78,6 +57,43 @@ List<Member> members = [
 // メンバーのマーカー配列
 // 出動していないメンバー分もすべて作成。表示/非表示を設定しておく。
 List<MyDragMarker> memberMarkers = [];
+
+// メンバーマーカーのサイズ指定
+// [0:大 / 1:小 / それ以外:非表示]
+int memberMarkerSizeSelector = 0;
+
+// メンバーマーカーの表示/非表示フラグ
+bool isShowMemberMarker()
+{
+  return (memberMarkerSizeSelector < 2);
+}
+
+//----------------------------------------------------------------------------
+//----------------------------------------------------------------------------
+// メンバーデータ
+class Member {
+  Member({
+    required this.name,
+    required this.iconPath,
+    required this.pos,
+    this.attended = false,
+    this.withdrawals = false,
+  });
+  // 名前
+  String name;
+  // ドラッグマーカーのアイコンの画像ファイル
+  String iconPath;
+  // 配置座標
+  LatLng pos;
+  // 参加しているか？(マップ上に配置されているか？)
+  bool attended;
+  // 退会者か？
+  bool withdrawals;
+  // 起動直後のデータベース変更通知を受け取ったか
+  bool firstSyncEvent = true;
+  // ドラッグマーカーのアイコン
+  late Image icon0;
+}
 
 //---------------------------------------------------------------------------
 //---------------------------------------------------------------------------
@@ -307,10 +323,10 @@ class MyDragMarker2 extends MyDragMarker
     required super.point,
     super.builder,
     super.feedbackBuilder,
-    super.width = 64.0,
-    super.height = 72.0,
-    super.offset = const Offset(0.0, -36.0),
-    super.feedbackOffset = const Offset(0.0, -36.0),
+    super.width,
+    super.height,
+    super.offset,
+    super.feedbackOffset,
     super.onLongPress,
     super.updateMapNearEdge = false, // experimental
     super.nearEdgeRatio = 2.0,
@@ -402,3 +418,36 @@ class MyDragMarker2 extends MyDragMarker
   }
 }
 
+//-----------------------------------------------------------------------------
+//-----------------------------------------------------------------------------
+// メンバーマーカーを作成
+void createMemberMarkers()
+{
+  // サイズを決定
+  final widthTable = const [ 64.0, 42.0 ];
+  final heightTable = const [ 72.0, 48.0 ];
+  final width  = widthTable[min(memberMarkerSizeSelector, 1)];
+  final height = heightTable[min(memberMarkerSizeSelector, 1)];
+
+  // メンバーデータからマーカー配列を作成
+  memberMarkers.clear();
+  int memberIndex = 0;
+  members.forEach((member) {
+    // アイコンを読み込んでおく
+    member.icon0 = Image.asset(member.iconPath, width:64, height:72);
+    // マーカーを作成
+    memberMarkers.add(
+      MyDragMarker2(
+        point: member.pos,
+        builder: (ctx) => Image.asset(member.iconPath),
+        width: width,
+        height: height,
+        offset: Offset(0.0, -height/2),
+        feedbackOffset: Offset(0.0, -height/2),
+        index: memberIndex,
+        visible: member.attended,
+      )
+    );
+    memberIndex++;
+  });
+}

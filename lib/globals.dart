@@ -1,11 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'mydragmarker.dart';   // マップ上のメンバーマーカー
 
 //----------------------------------------------------------------------------
 // 地図関連
 
 // 地図のコントローラ
 late MapController mainMapController;
+
+// マップ上のメンバーマーカーの作成オプション
+// ドラッグ許可/禁止を後から変更するために、インスタンスをアクセス可能に定義する
+late MyDragMarkerPluginOptions mainMapDragMarkerPluginOptions;
 
 // 地図上のマーカーの再描画
 void updateMapView()
