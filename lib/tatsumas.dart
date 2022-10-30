@@ -15,6 +15,7 @@ import 'mydragmarker.dart';
 import 'my_list_tile.dart';
 
 import 'members.dart';  // メンバーマーカーのサイズ
+import 'gps_log.dart';  // GPSログの表示/非表示
 import 'onoff_icon_button.dart';
 import 'file_tree.dart';
 import 'text_ballon_widget.dart';
@@ -1080,9 +1081,6 @@ class AreaFilterDialog extends StatefulWidget
   int _areaFilterBits0 = 0;
 }
 
-//!!!!
-bool showGPSLogFlag = true;
-
 class AreaFilterDialogState  extends State<AreaFilterDialog>
 {
   @override
@@ -1144,7 +1142,7 @@ class AreaFilterDialogState  extends State<AreaFilterDialog>
     // メンバーマーカーとGPSログの表示スイッチ
     List<bool> _memberMarkerSizeFlag = [ false, false, false ];
     _memberMarkerSizeFlag[memberMarkerSizeSelector] = true;
-    List<bool> _showGPSLogFlag = [ showGPSLogFlag ];
+    List<bool> _showGPSLogFlag = [ gpsLog.showLogLine ];
 
     // ダイアログ表示
     return WillPopScope(
@@ -1231,7 +1229,9 @@ class AreaFilterDialogState  extends State<AreaFilterDialog>
                       isSelected: _showGPSLogFlag,
                       onPressed: (index) {
                         setState(() {
-                          showGPSLogFlag = !showGPSLogFlag;
+                          gpsLog.showLogLine = !gpsLog.showLogLine;
+                          gpsLog.makePolyLines();
+                          gpsLog.redraw();
                         });
                       },
                     )

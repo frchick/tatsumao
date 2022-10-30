@@ -183,7 +183,9 @@ class _MapViewState extends State<MapView> with AfterLayoutMixin<MapView>
       memberMarkerSizeSelector = 1;
       createMemberMarkers();
     }
-
+    // GPSログが非表示なら、表示に戻す。(強制的に表示にする)
+    gpsLog.showLogLine = true;
+    
     // メンバーデータをデータベースから取得
     await initMemberSync(filePath);
     setCurrentFilePath(filePath);

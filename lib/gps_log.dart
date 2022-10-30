@@ -351,12 +351,18 @@ class GPSLog
 
   //----------------------------------------------------------------------------
   // FlutterMap用のポリラインを作成
+
+  // 表示/非表示フラグ
+  bool showLogLine = true;
+
   List<Polyline> makePolyLines()
   {
     _mapLines.clear();
-    routes.forEach((id, route){
-      _mapLines.add(route.makePolyLine(_trimStartTime, _trimEndTime));
-    });
+    if(showLogLine){
+      routes.forEach((id, route){
+        _mapLines.add(route.makePolyLine(_trimStartTime, _trimEndTime));
+      });
+    }
     return _mapLines;
   }
 }
