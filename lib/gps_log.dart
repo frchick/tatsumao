@@ -15,6 +15,7 @@ import 'package:firebase_database/firebase_database.dart';
 import 'file_tree.dart';
 import 'text_ballon_widget.dart';
 import 'ok_cancel_dialog.dart';
+import 'mypolyline_layer.dart'; // マップ上のカスタムポリライン
 import 'globals.dart';  // 画面解像度
 
 // ログデータがないときに使う、ダミーの開始終了時間
@@ -29,7 +30,7 @@ GPSLog gpsLog = GPSLog();
 class GPSLog
 {
   Map<int, _Route> routes = {};
-  List<Polyline> _mapLines = [];
+  List<MyPolyline> _mapLines = [];
 
   //----------------------------------------------------------------------------
   // 開始時間
@@ -355,7 +356,7 @@ class GPSLog
   // 表示/非表示フラグ
   bool showLogLine = true;
 
-  List<Polyline> makePolyLines()
+  List<MyPolyline> makePolyLines()
   {
     _mapLines.clear();
     if(showLogLine){
@@ -502,7 +503,7 @@ class _Route
 
   //----------------------------------------------------------------------------
   // FlutterMap用のポリラインを作成
-  Polyline makePolyLine(DateTime trimStart, DateTime trimEnd)
+  MyPolyline makePolyLine(DateTime trimStart, DateTime trimEnd)
   {
     // トリミングのキャッシュが有効か判定して、必要なら範囲を探す
     final bool cacheOk =
@@ -545,7 +546,7 @@ class _Route
       gpsLog.deviceParams[_deviceId]?.color ??
       const Color.fromARGB(255,128,128,128);
 
-    return Polyline(
+    return MyPolyline(
       points:line,
       color:color,
       strokeWidth:2.0);

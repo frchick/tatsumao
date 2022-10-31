@@ -1,6 +1,8 @@
 import 'dart:math';
 import 'dart:ui' as ui;
 
+import 'package:flutter/material.dart'; // Colors
+
 import 'package:flutter/widgets.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_map/src/map/map.dart';
@@ -8,7 +10,7 @@ import 'package:latlong2/latlong.dart';
 
 class MyPolylineLayerOptions extends LayerOptions {
   /// List of polylines to draw.
-  final List<Polyline> polylines;
+  final List<MyPolyline> polylines;
 
   final bool polylineCulling;
 
@@ -37,8 +39,7 @@ class MyPolylineLayerOptions extends LayerOptions {
   }
 }
 
-/* これはオリジナルをそのまま使う
-class Polyline {
+class MyPolyline {
   final List<LatLng> points;
   final List<Offset> offsets = [];
   final double strokeWidth;
@@ -50,9 +51,11 @@ class Polyline {
   final bool isDotted;
   final StrokeCap strokeCap;
   final StrokeJoin strokeJoin;
+  final bool startCapMarker;
+  final bool endCapMarker;
   late LatLngBounds boundingBox;
 
-  Polyline({
+  MyPolyline({
     required this.points,
     this.strokeWidth = 1.0,
     this.color = const Color(0xFF00FF00),
@@ -63,9 +66,10 @@ class Polyline {
     this.isDotted = false,
     this.strokeCap = StrokeCap.round,
     this.strokeJoin = StrokeJoin.round,
+    this.startCapMarker = true,
+    this.endCapMarker = true,
   });
 }
-*/
 
 // flutter_map のプラグインとしてレイヤーを実装
 class MyPolylineLayerPlugin implements MapPlugin
@@ -130,7 +134,7 @@ class MyPolylineLayerPlugin implements MapPlugin
 }
 
 class MyPolylinePainter extends CustomPainter {
-  final Polyline polylineOpt;
+  final MyPolyline polylineOpt;
 
   /// {@template newMyPolylinePainter.saveLayers}
   /// If `true`, the canvas will be updated on every frame by calling the
@@ -203,6 +207,13 @@ class MyPolylinePainter extends CustomPainter {
         _paintLine(canvas, polylineOpt.offsets, filterPaint);
       }
       _paintLine(canvas, polylineOpt.offsets, paint);
+      // スタート、ゴールの両端にマルマーカーを描画
+      if(polylineOpt.startCapMarker){
+        _paintCapCircle(canvas, paint, polylineOpt.offsets.first, "S");
+      }
+      if(polylineOpt.endCapMarker){
+        _paintCapCircle(canvas, paint, polylineOpt.offsets.last, "E");
+      }
       if (saveLayers) canvas.restore();
     }
   }
@@ -238,6 +249,31 @@ class MyPolylinePainter extends CustomPainter {
     }
     final path = ui.Path()..addPolygon(offsets, false);
     canvas.drawPath(path, paint);
+  }
+
+  // マル背景に文字を描画
+  void _paintCapCircle(Canvas canvas, Paint paint, Offset c, String text)
+  {
+    paint.style = PaintingStyle.fill;
+    canvas.drawCircle(c, 10, paint);
+    paint.style = PaintingStyle.stroke;
+
+    final textSpan = TextSpan(
+      text: text,
+      style: const TextStyle(
+        color: Colors.black,
+        fontSize: 14,
+        fontWeight: FontWeight.bold,
+      ),
+    );
+    final textPainter = TextPainter(
+      text: textSpan,
+      textDirection: TextDirection.ltr,
+    );
+    textPainter.layout();
+    textPainter.paint(canvas, Offset(
+      c.dx - textPainter.width / 2,
+      c.dy - textPainter.height / 2));
   }
 
   ui.Gradient _paintGradient() => ui.Gradient.linear(polylineOpt.offsets.first,
