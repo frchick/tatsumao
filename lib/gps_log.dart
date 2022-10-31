@@ -702,70 +702,107 @@ void showTrimmingBottomSheet(BuildContext context)
   final int baseMS = gpsLog.startTime.millisecondsSinceEpoch;
   final double durationSec = (gpsLog.endTime.millisecondsSinceEpoch - baseMS) / 1000;
   
-  bottomSheetController = appScaffoldKey.currentState!.showBottomSheet((context)
-  {
-    return StatefulBuilder(
-      builder: (context, StateSetter setModalState)
-      {
-        // 他のユーザーからのトリミング範囲の変更通知で再描画
-        gpsLog.onUpdateTrimSync = setModalState;
+  bottomSheetController = 
+    appScaffoldKey.currentState!.showBottomSheet((context)
+    {
+      return StatefulBuilder(
+        builder: (context, StateSetter setModalState)
+        {
+          // 他のユーザーからのトリミング範囲の変更通知で再描画
+          gpsLog.onUpdateTrimSync = setModalState;
 
-        // 現在のトリミング時間範囲
-        final DateTime trimStartTime = gpsLog.trimStartTime;
-        final DateTime trimEndTime = gpsLog.trimEndTime;
-        var rangeValues = RangeValues(
-          (trimStartTime.millisecondsSinceEpoch - baseMS) / 1000,
-          (trimEndTime.millisecondsSinceEpoch - baseMS) / 1000);
-        String trimStartText =
-          "${trimStartTime.hour}:" + _twoDigits(trimStartTime.minute);
-        String trimEndText =
-          "${trimEndTime.hour}:" + _twoDigits(trimEndTime.minute);
+          // 現在のトリミング時間範囲
+          final DateTime trimStartTime = gpsLog.trimStartTime;
+          final DateTime trimEndTime = gpsLog.trimEndTime;
+          var rangeValues = RangeValues(
+            (trimStartTime.millisecondsSinceEpoch - baseMS) / 1000,
+            (trimEndTime.millisecondsSinceEpoch - baseMS) / 1000);
+          String trimStartText =
+            "${trimStartTime.hour}:" + _twoDigits(trimStartTime.minute);
+          String trimEndText =
+            "${trimEndTime.hour}:" + _twoDigits(trimEndTime.minute);
 
-        return Container(
-          height: 80,
-          color: Colors.brown.shade100,
-          child: Column(
-            children: [
-              SliderTheme(
-                data: SliderThemeData(
-                ),
-                child: RangeSlider(
-                  values: rangeValues,
-                  min: 0,
-                  max: durationSec,
-                  onChanged: (values) {
-                    // トリム範囲の更新と再描画
-                    setModalState(() => _updateTrimRangeByUI(values, baseMS));
-                  },
-                  onChangeEnd: (value) {
-                    // トリム範囲の変更をデータベースへ保存
-                    final filePath = getCurrentFilePath();
-                    gpsLog.saveGPSLogTrimRangeToDB(filePath);
-                  },
-                ),
+          return Scaffold(
+            body: Container(
+              padding: EdgeInsets.only(top:15), // スライダーの上のパディング
+              color: Colors.brown.shade100,
+              child: Column(
+                children: [
+                  // トリミング範囲スライダー
+                  SliderTheme(
+                    data: SliderThemeData(),
+                    child: RangeSlider(
+                      values: rangeValues,
+                      min: 0,
+                      max: durationSec,
+                      onChanged: (values) {
+                        // トリム範囲の更新と再描画
+                        setModalState(() => _updateTrimRangeByUI(values, baseMS));
+                      },
+                      onChangeEnd: (value) {
+                        // トリム範囲の変更をデータベースへ保存
+                        final filePath = getCurrentFilePath();
+                        gpsLog.saveGPSLogTrimRangeToDB(filePath);
+                      },
+                    ),
+                  ),
+                  Container(
+                    padding: EdgeInsets.symmetric(horizontal:20),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: <Widget>[
+                        // トリミング開始時間
+                        Text(
+                          trimStartText,
+                          style: const TextStyle(fontSize: 16),
+                        ),
+                        // トリミング終了時間
+                        Text(
+                          trimEndText,
+                          style: const TextStyle(fontSize: 16),
+                        ),
+                      ],
+                    ),
+                  )
+                ]
               ),
-              Container(
-                padding: EdgeInsets.symmetric(horizontal:20),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: <Widget>[
-                    Text(
-                      trimStartText,
-                      style: const TextStyle(fontSize: 16),
-                    ),
-                    Text(
-                      trimEndText,
-                      style: const TextStyle(fontSize: 16),
-                    ),
-                  ],
+            ),
+            // 閉じるボタン
+            floatingActionButton: Container(
+              color: Colors.brown.shade100,
+              // 若干 BottomSheet より上にはみ出させる(デザイン)
+              transform: Matrix4.translationValues(0, -6, 0),
+              child: ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.brown.shade100,
+                  // 角丸なし(何故か上部の角が丸くならないので…)
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.zero,
+                  ),
+                  // 細めの高さに(デフォルト36px)
+                  minimumSize: Size(64, 30),
+                  maximumSize: Size(double.infinity, 30),
                 ),
-              )
-            ]
-          ),
-        );
-      }
-    );
-  });
+                // タップで BottomSheet 閉じる
+                onPressed: () {
+                  bottomSheetController!.close();
+                },
+                // アイコンとテキスト
+                icon: Icon(
+                  Icons.keyboard_double_arrow_down,
+                  size: 18,
+                ),
+                label: Text('close'),
+              ),
+            ),
+            floatingActionButtonLocation: FloatingActionButtonLocation.miniEndTop,
+          );
+        }
+      );
+    },
+    // BottomSheet の高さ
+    constraints: BoxConstraints(minHeight:85, maxHeight:85),
+  );
   // 他のユーザーからのトリミング範囲の変更通知のコールバックをリセット
   bottomSheetController!.closed.whenComplete((){
     gpsLog.onUpdateTrimSync = null;

@@ -95,6 +95,7 @@ class MyApp extends StatelessWidget
   Widget build(BuildContext context) {
     return MaterialApp(
       scrollBehavior: MyCustomScrollBehavior(),
+      debugShowCheckedModeBanner: false,  // appBar の"DEBUG"帯を非表示
       title: 'TatsumaO',
       home: MapView(),
       theme: ThemeData(
