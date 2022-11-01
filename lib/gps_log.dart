@@ -1,6 +1,7 @@
 import 'dart:async';   // Stream使った再描画
 import 'dart:typed_data'; // Uint8List
 import 'dart:convert';  // Base64
+import 'dart:ui';  // lerp
 
 import 'package:flutter/material.dart';
 import 'package:latlong2/latlong.dart';
@@ -93,14 +94,31 @@ class GPSLog
   // トリミング開始時間
   DateTime _trimStartTime = _dummyStartTime;
   DateTime get trimStartTime => _trimStartTime;
-  set trimStartTime(DateTime t) =>
+  void setTrimStartTime(DateTime t)
+  {
     _trimStartTime = (t.isAfter(_startTime)? t: _startTime);
+    if(_currentTime.isBefore(_trimStartTime)) _currentTime = _trimStartTime;
+  }
 
   // トリミング終了時間
   DateTime _trimEndTime = _dummyEndTime;
   DateTime get trimEndTime => _trimEndTime;
-  set trimEndTime(DateTime t) =>
+  void setTrimEndTime(DateTime t)
+  {
     _trimEndTime = (t.isBefore(_endTime)? t: _endTime);
+    if(_trimEndTime.isBefore(_currentTime)) _currentTime = _trimEndTime;
+  }
+
+  //----------------------------------------------------------------------------
+  // 再生時間
+  DateTime _currentTime = _dummyStartTime;
+  DateTime get currentTime => _currentTime;
+  void setCurrentTime(DateTime time)
+  {
+    if(time.isBefore(_trimStartTime)) time = _trimStartTime;
+    if(_trimEndTime.isBefore(time)) time = _trimEndTime;
+    _currentTime = time;
+  }
 
   //----------------------------------------------------------------------------
   // 再描画用の Stream
@@ -119,6 +137,8 @@ class GPSLog
   {
     _startTime = _trimStartTime = _dummyStartTime;
     _endTime = _trimEndTime = _dummyEndTime;
+    _currentTime = _trimStartTime;
+
     routes.clear();
     _mapLines.clear();
     _dogMarkers.clear();
@@ -356,8 +376,8 @@ class GPSLog
         final end = DateTime.parse(trimData["trimEndTime"]!);
         bool change = (trimStartTime != start) || (trimEndTime != end);
         if(change){
-          trimStartTime = start;
-          trimEndTime = end;
+          setTrimStartTime(start);
+          setTrimEndTime(end);
           // 描画
           gpsLog.makePolyLines();
           gpsLog.makeDogMarkers();
@@ -392,7 +412,7 @@ class GPSLog
     _dogMarkers.clear();
     if(showLogLine){
       routes.forEach((id, route){
-        var marker = route.makeDogMarker(_trimStartTime);
+        var marker = route.makeDogMarker(_currentTime);
         if(marker != null){
           _dogMarkers.add(marker);
         }
@@ -541,6 +561,70 @@ class _Route
   }
 
   //----------------------------------------------------------------------------
+  // 指定された時間の座標を計算
+  LatLng calcPositionAtTime(DateTime time)
+  {
+    final int t = time.millisecondsSinceEpoch;
+
+    // データの範囲外なら、先頭か終端の座標を返す
+    var firstPointMs = _points[_trimStartIndex].time.millisecondsSinceEpoch;
+    var lastPointMs = _points[_trimEndIndex-1].time.millisecondsSinceEpoch;
+    if(t <= firstPointMs) return _points[_trimStartIndex].pos;
+    if(lastPointMs <= t) return _points[_trimEndIndex-1].pos;
+  
+    // 直前と同じ区間か、その直後の可能性が高いので、そこを優先的にチェック
+    int index = -1;
+    late int t0;
+    late int t1;
+    if(0 <= _cacheIndexAtTime){
+      t0 = _points[_cacheIndexAtTime].time.millisecondsSinceEpoch;
+      t1 = _points[_cacheIndexAtTime+1].time.millisecondsSinceEpoch;
+      final bool into = (t0 <= t) && (t <= t1);
+      if(into){
+        index = _cacheIndexAtTime;
+      }else if(_cacheIndexAtTime < (_trimEndIndex-2)){
+        t0 = t1;
+        t1 = _points[_cacheIndexAtTime+2].time.millisecondsSinceEpoch;
+        final bool into = (t0 <= t) && (t <= t1);
+        if(into){
+          index = _cacheIndexAtTime + 1;
+        }
+      }
+    }
+
+    // キャッシュヒットしなければ、この時間を含む通過点の区間を探す
+    if(index < 0){
+      for(int i = _trimStartIndex; i < _trimEndIndex-1; i++){
+        t0 = _points[i].time.millisecondsSinceEpoch;
+        t1 = _points[i+1].time.millisecondsSinceEpoch;
+        bool into = (t0 <= t) && (t <= t1);
+        if(into){
+          index = i;
+          break;
+        }
+      }
+    }
+  
+    // 今回の通過点の区間をキャッシュしておく
+    _cacheIndexAtTime = index;
+
+    // 時間に対応する、通過点の区間の中の座標を計算
+    var res = LatLng(0,0);
+    if(0 <= index){
+      double tt = (t - t0) / (t1 - t0);
+      var pos0 = _points[index].pos;
+      var pos1 = _points[index+1].pos;
+      res = LatLng(
+        lerpDouble(pos0.latitude, pos1.latitude, tt)!,
+        lerpDouble(pos0.longitude, pos1.longitude, tt)!);
+    }
+    return res;
+  }
+
+  // 直前の calcPositionAtTime() で参照した通過点区間のインデックス(キャッシュ利用)
+  int _cacheIndexAtTime = -1;
+
+  //----------------------------------------------------------------------------
   // FlutterMap用のポリラインを作成
   MyPolyline makePolyLine(DateTime trimStart, DateTime trimEnd)
   {
@@ -592,7 +676,7 @@ class _Route
   }
 
   // FlutterMap用の犬マーカーを作成
-  Marker? makeDogMarker(DateTime trim)
+  Marker? makeDogMarker(DateTime time)
   {
     // アイコン画像を読み込んでおく
     if(_iconImage == null){
@@ -604,7 +688,7 @@ class _Route
     if(_iconImage == null) return null;
   
     return Marker(
-      point: _points[_trimStartIndex].pos,
+      point: calcPositionAtTime(time),
       width: 42.0,  // メンバーマーカー小と同じサイズ。([64x72]の2/3)
       height: 48.0,
       anchorPos: AnchorPos.exactly(Anchor(21, 0)),
@@ -698,6 +782,17 @@ void showGPSLogPopupMenu(BuildContext context)
         ),
         height: (kMinInteractiveDimension * 0.8),
       ),
+      PopupMenuItem(
+        value: 2,
+        child: Row(
+          children: [
+            Icon(Icons.play_circle, color: Colors.black45),
+            const SizedBox(width: 5),
+            const Text('アニメーション'),
+          ]
+        ),
+        height: (kMinInteractiveDimension * 0.8),
+      ),
     ],
   ).then((value) async {
     switch(value ?? -1){
@@ -737,6 +832,10 @@ void showGPSLogPopupMenu(BuildContext context)
     case 1: // トリミング
       showTrimmingBottomSheet(context);
       break;
+    
+    case 2: // アニメーション
+      showAnimationBottomSheet(context);
+      break;
     }
   });
 }
@@ -746,13 +845,26 @@ void showGPSLogPopupMenu(BuildContext context)
 void _updateTrimRangeByUI(RangeValues values, int baseMS)
 {
   final int trimStartMS = baseMS + (values.start.toInt() * 1000);
-  gpsLog.trimStartTime = DateTime.fromMillisecondsSinceEpoch(trimStartMS);
+  gpsLog.setTrimStartTime(DateTime.fromMillisecondsSinceEpoch(trimStartMS));
 
   final int trimEndMS = baseMS + (values.end.toInt() * 1000);
-  gpsLog.trimEndTime = DateTime.fromMillisecondsSinceEpoch(trimEndMS);
+  gpsLog.setTrimEndTime(DateTime.fromMillisecondsSinceEpoch(trimEndMS));
 
   // 描画
   gpsLog.makePolyLines();
+  gpsLog.makeDogMarkers();
+  gpsLog.redraw();
+}
+
+//----------------------------------------------------------------------------
+// アニメーション時間の更新と再描画
+void _updateCurrentTimeByUI(double values, int baseMS)
+{
+  final int currentMS = baseMS + (values.toInt() * 1000);
+  var currentTime = DateTime.fromMillisecondsSinceEpoch(currentMS);
+  gpsLog.setCurrentTime(currentTime);
+
+  // 描画
   gpsLog.makeDogMarkers();
   gpsLog.redraw();
 }
@@ -800,7 +912,9 @@ void showTrimmingBottomSheet(BuildContext context)
                       max: durationSec,
                       onChanged: (values) {
                         // トリム範囲の更新と再描画
-                        setModalState(() => _updateTrimRangeByUI(values, baseMS));
+                        setModalState((){
+                          _updateTrimRangeByUI(values, baseMS);
+                        });
                       },
                       onChangeEnd: (value) {
                         // トリム範囲の変更をデータベースへ保存
@@ -831,40 +945,14 @@ void showTrimmingBottomSheet(BuildContext context)
               ),
             ),
             // 閉じるボタン
-            floatingActionButton: Container(
-              color: Colors.brown.shade100,
-              // 若干 BottomSheet より上にはみ出させる(デザイン)
-              transform: Matrix4.translationValues(0, -6, 0),
-              child: ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.brown.shade100,
-                  // 角丸なし(何故か上部の角が丸くならないので…)
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.zero,
-                  ),
-                  // 細めの高さに(デフォルト36px)
-                  minimumSize: Size(64, 30),
-                  maximumSize: Size(double.infinity, 30),
-                ),
-                // タップで BottomSheet 閉じる
-                onPressed: () {
-                  bottomSheetController!.close();
-                },
-                // アイコンとテキスト
-                icon: Icon(
-                  Icons.keyboard_double_arrow_down,
-                  size: 18,
-                ),
-                label: Text('close'),
-              ),
-            ),
+            floatingActionButton: makeCloseButton(),
             floatingActionButtonLocation: FloatingActionButtonLocation.miniEndTop,
           );
         }
       );
     },
     // BottomSheet の高さ
-    constraints: BoxConstraints(minHeight:85, maxHeight:85),
+    constraints: const BoxConstraints(minHeight:85, maxHeight:85),
   );
   // 他のユーザーからのトリミング範囲の変更通知のコールバックをリセット
   bottomSheetController!.closed.whenComplete((){
@@ -876,4 +964,134 @@ void showTrimmingBottomSheet(BuildContext context)
 String _twoDigits(int n) {
   if (n >= 10) return "${n}";
   return "0${n}";
+}
+
+// ボトムシートの閉じるボタン
+Widget? _bottomSheetCloseButton;
+
+// ボトムシートの閉じるボタンを返す
+Widget makeCloseButton()
+{
+  if(_bottomSheetCloseButton == null){
+    _bottomSheetCloseButton = Container(
+      color: Colors.brown.shade100,
+      // 若干 BottomSheet より上にはみ出させる(デザイン)
+      transform: Matrix4.translationValues(0, -6, 0),
+      child: ElevatedButton.icon(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.brown.shade100,
+          // 角丸なし(何故か上部の角が丸くならないので…)
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.zero,
+          ),
+          // 細めの高さに(デフォルト36px)
+          minimumSize: Size(64, 30),
+          maximumSize: Size(double.infinity, 30),
+        ),
+        // タップで BottomSheet 閉じる
+        onPressed: () {
+          bottomSheetController!.close();
+        },
+        // アイコンとテキスト
+        icon: Icon(
+          Icons.keyboard_double_arrow_down,
+          size: 18,
+        ),
+        label: Text('close'),
+      ),
+    );
+  }
+  return _bottomSheetCloseButton!;
+}
+
+//----------------------------------------------------------------------------
+// アニメーション用ボトムシートを開く
+void showAnimationBottomSheet(BuildContext context)
+{
+  // トリミングされた時間範囲
+  final DateTime trimStartTime = gpsLog.trimStartTime;
+  final DateTime trimEndTime = gpsLog.trimEndTime;
+  final int baseMS = trimStartTime.millisecondsSinceEpoch;
+  final double durationSec = (trimEndTime.millisecondsSinceEpoch - baseMS) / 1000;
+  
+  bottomSheetController = 
+    appScaffoldKey.currentState!.showBottomSheet((context)
+    {
+      return StatefulBuilder(
+        builder: (context, StateSetter setModalState)
+        {
+          gpsLog.onUpdateTrimSync = setModalState;
+
+          // 現在の時間とトリミング範囲
+          final DateTime currentTime = gpsLog.currentTime;
+          var currentValue = 
+            (currentTime.millisecondsSinceEpoch - baseMS) / 1000;
+          String trimStartText =
+            "${trimStartTime.hour}:" + _twoDigits(trimStartTime.minute);
+          String trimEndText =
+            "${trimEndTime.hour}:" + _twoDigits(trimEndTime.minute);
+          String currentText =
+            "${currentTime.hour}:" + _twoDigits(currentTime.minute);
+
+          return Scaffold(
+            body: Container(
+              padding: EdgeInsets.only(top:15), // スライダーの上のパディング
+              color: Colors.brown.shade100,
+              child: Column(
+                children: [
+                  // トリミング範囲スライダー
+                  SliderTheme(
+                    data: SliderThemeData(),
+                    child: Slider(
+                      value: currentValue,
+                      min: 0,
+                      max: durationSec,
+                      onChanged: (values) {
+                        // 再生位置の変更
+                        setModalState(() {
+                          _updateCurrentTimeByUI(values, baseMS);
+                      });
+                      },
+                    ),
+                  ),
+                  Container(
+                    padding: EdgeInsets.symmetric(horizontal:20),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: <Widget>[
+                        // トリミング開始時間
+                        Text(
+                          trimStartText,
+                          style: const TextStyle(fontSize: 16),
+                        ),
+                        // 再生時間
+                        Text(
+                          currentText,
+                          style: const TextStyle(fontSize: 16),
+                        ),
+                        // トリミング終了時間
+                        Text(
+                          trimEndText,
+                          style: const TextStyle(fontSize: 16),
+                        ),
+                      ],
+                    ),
+                  )
+                ]
+              ),
+            ),
+            // 閉じるボタン
+            floatingActionButton: makeCloseButton(),
+            floatingActionButtonLocation: FloatingActionButtonLocation.miniEndTop,
+          );
+        }
+      );
+    },
+    // BottomSheet の高さ
+    constraints: BoxConstraints(minHeight:85, maxHeight:85),
+  );
+  bottomSheetController!.closed.whenComplete((){
+    gpsLog.onUpdateTrimSync = null;
+    bottomSheetController = null;
+  });
 }
