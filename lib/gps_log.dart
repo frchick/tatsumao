@@ -22,6 +22,27 @@ import 'globals.dart';  // 画面解像度
 final _dummyStartTime = DateTime(2022, 1, 1, 7);  // 2022/1/1 AM7:00
 final _dummyEndTime = DateTime(2022, 1, 1, 11);  // 2022/1/1 AM11:00
 
+// GPS端末のパラメータ
+final Map<int, GPSDeviceParam> _deviceParams = {
+  1568: GPSDeviceParam(
+    name: "ムロ",
+    color:Color.fromARGB(255,255,0,110),
+    iconImagePath: "assets/dog_icon/001.png"),
+  1674: GPSDeviceParam(
+    name: "ロト",
+    color:Color.fromARGB(255,128,0,255),
+    iconImagePath: "assets/dog_icon/002.png"),
+  4539: GPSDeviceParam(
+    name: "ガロ",
+    color:Color.fromARGB(255,255,106,0),
+    iconImagePath: "assets/dog_icon/000.png"),
+  4739: GPSDeviceParam(
+    name:"アオ",
+    color:Color.fromARGB(255,255,216,0),
+    iconImagePath: "assets/dog_icon/003.png"),
+};
+
+
 //----------------------------------------------------------------------------
 //----------------------------------------------------------------------------
 // 犬達のログ
@@ -31,6 +52,9 @@ class GPSLog
 {
   Map<int, _Route> routes = {};
   List<MyPolyline> _mapLines = [];
+
+  // マップ上の犬マーカー配列
+  List<Marker> _dogMarkers = [];
 
   //----------------------------------------------------------------------------
   // 開始時間
@@ -78,14 +102,6 @@ class GPSLog
   set trimEndTime(DateTime t) =>
     _trimEndTime = (t.isBefore(_endTime)? t: _endTime);
 
-  // GPS端末のパラメータ
-  final Map<int, GPSDeviceParam> deviceParams = {
-    1568: GPSDeviceParam(name:"ムロ", color:Color.fromARGB(255,255,0,110)),
-    1674: GPSDeviceParam(name:"ロト", color:Color.fromARGB(255,128,0,255)),
-    4539: GPSDeviceParam(name:"ガロ", color:Color.fromARGB(255,255,106,0)),
-    4739: GPSDeviceParam(name:"マナミ", color:Color.fromARGB(255,255,216,0)),
-  };
-
   //----------------------------------------------------------------------------
   // 再描画用の Stream
   var _stream = StreamController<void>.broadcast();
@@ -105,7 +121,8 @@ class GPSLog
     _endTime = _trimEndTime = _dummyEndTime;
     routes.clear();
     _mapLines.clear();
-
+    _dogMarkers.clear();
+  
     _thisUpdateTime = null;
 
     // 直前の同期イベントを削除
@@ -343,6 +360,7 @@ class GPSLog
           trimEndTime = end;
           // 描画
           gpsLog.makePolyLines();
+          gpsLog.makeDogMarkers();
           gpsLog.redraw();
           onUpdateTrimSync?.call((){});
         }
@@ -366,6 +384,22 @@ class GPSLog
     }
     return _mapLines;
   }
+
+  //----------------------------------------------------------------------------
+  // FlutterMap用の犬マーカーを作成
+  List<Marker> makeDogMarkers()
+  {
+    _dogMarkers.clear();
+    if(showLogLine){
+      routes.forEach((id, route){
+        var marker = route.makeDogMarker(_trimStartTime);
+        if(marker != null){
+          _dogMarkers.add(marker);
+        }
+      });
+    }
+    return _dogMarkers;
+  }
 }
 
 //----------------------------------------------------------------------------
@@ -376,11 +410,14 @@ class GPSDeviceParam
   GPSDeviceParam({
     this.name = "",
     this.color = Colors.green,
+    this.iconImagePath = "",
   });
   // 犬の名前
   String name;
   // ラインカラー
   Color color;
+  // アイコン用画像
+  String iconImagePath;
 }
 
 //----------------------------------------------------------------------------
@@ -394,6 +431,8 @@ class _Route
   String _name = "";
   // ID(nameに書かれている端末ID)
   int _deviceId = 0;
+  // アイコンイメージ
+  Image? _iconImage = null;
 
   //----------------------------------------------------------------------------
   // 開始時間
@@ -543,13 +582,34 @@ class _Route
     }
     // 端末IDからカラー
     final Color color =
-      gpsLog.deviceParams[_deviceId]?.color ??
+      _deviceParams[_deviceId]?.color ??
       const Color.fromARGB(255,128,128,128);
 
     return MyPolyline(
       points:line,
       color:color,
       strokeWidth:2.0);
+  }
+
+  // FlutterMap用の犬マーカーを作成
+  Marker? makeDogMarker(DateTime trim)
+  {
+    // アイコン画像を読み込んでおく
+    if(_iconImage == null){
+      var path = _deviceParams[_deviceId]?.iconImagePath;
+      if(path != null){
+        _iconImage = Image.asset(path);
+      }
+    }
+    if(_iconImage == null) return null;
+  
+    return Marker(
+      point: _points[_trimStartIndex].pos,
+      width: 42.0,  // メンバーマーカー小と同じサイズ。([64x72]の2/3)
+      height: 48.0,
+      anchorPos: AnchorPos.exactly(Anchor(21, 0)),
+      builder: (ctx) => _iconImage!,
+    );
   }
 }
 
@@ -653,6 +713,7 @@ void showGPSLogPopupMenu(BuildContext context)
         gpsLog.clear();
         gpsLog.downloadFromCloudStorage(filePath).then((res){
           gpsLog.makePolyLines();
+          gpsLog.makeDogMarkers();
           gpsLog.redraw();
         });
         break;
@@ -662,6 +723,7 @@ void showGPSLogPopupMenu(BuildContext context)
       // 読み込み成功したらマップを再描画
       if(res){
         gpsLog.makePolyLines();
+        gpsLog.makeDogMarkers();
         gpsLog.redraw();
         showTextBallonMessage("GPSログの読み込み成功");
         // 裏でクラウドストレージへのアップロードを実行
@@ -691,6 +753,7 @@ void _updateTrimRangeByUI(RangeValues values, int baseMS)
 
   // 描画
   gpsLog.makePolyLines();
+  gpsLog.makeDogMarkers();
   gpsLog.redraw();
 }
 

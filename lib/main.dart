@@ -171,6 +171,7 @@ class _MapViewState extends State<MapView> with AfterLayoutMixin<MapView>
         await gpsLog.loadGPSLogTrimRangeFromDB(openPath);
       }
       gpsLog.makePolyLines();
+      gpsLog.makeDogMarkers();
       gpsLog.redraw();
     });
   }
@@ -352,6 +353,7 @@ class _MapViewState extends State<MapView> with AfterLayoutMixin<MapView>
                         await gpsLog.loadGPSLogTrimRangeFromDB(path);
                       }
                       gpsLog.makePolyLines();
+                      gpsLog.makeDogMarkers();
                       gpsLog.redraw();
                     });
                   }
@@ -475,23 +477,35 @@ class _MapViewState extends State<MapView> with AfterLayoutMixin<MapView>
                 },
               ),
               nonRotatedLayers: [
+                // 高さ陰影図
                 TileLayerOptions(
                   urlTemplate: "https://cyberjapandata.gsi.go.jp/xyz/hillshademap/{z}/{x}/{y}.png",
                 ),
+                // 標準地図
                 TileLayerOptions(
                   urlTemplate: "https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png",
                   opacity: 0.64
                 ),
+                // GPSログのライン
                 MyPolylineLayerOptions(
                   polylines: gpsLog.makePolyLines(),
                   rebuild: gpsLog.reDrawStream,
                   polylineCulling: false,
                 ),
+                // タツママーカー
                 MarkerLayerOptions(
                   markers: tatsumaMarkers,
                   // NOTE: usePxCache=trueだと、非表示グレーマーカーで並び順が変わったときにバグる
                   usePxCache: false,
                 ),
+                // GPSログの犬マーカー
+                MarkerLayerOptions(
+                  markers: gpsLog.makeDogMarkers(),
+                  rebuild: gpsLog.reDrawStream,
+                  // NOTE: usePxCache=trueだと、ストリーム経由の再描画で位置が変わらない
+                  usePxCache: false,
+                ),
+                // メンバーマーカー
                 mainMapDragMarkerPluginOptions,
               ],
               mapController: mainMapController,

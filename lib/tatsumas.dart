@@ -1231,6 +1231,7 @@ class AreaFilterDialogState  extends State<AreaFilterDialog>
                         setState(() {
                           gpsLog.showLogLine = !gpsLog.showLogLine;
                           gpsLog.makePolyLines();
+                          gpsLog.makeDogMarkers();
                           gpsLog.redraw();
                         });
                       },
