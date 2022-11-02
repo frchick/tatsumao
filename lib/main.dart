@@ -336,6 +336,8 @@ class _MapViewState extends State<MapView> with AfterLayoutMixin<MapView>
           IconButton(
             icon: Icon(Icons.folder),
             onPressed: () {
+              // アニメーション停止
+              gpsLog.stopAnim();
               // BottomSheet を閉じる
               closeBottomSheet();
               // ファイル一覧画面に遷移して、ファイルの切り替え
@@ -498,6 +500,8 @@ class _MapViewState extends State<MapView> with AfterLayoutMixin<MapView>
                   // NOTE: usePxCache=trueだと、非表示グレーマーカーで並び順が変わったときにバグる
                   usePxCache: false,
                 ),
+                // メンバーマーカー
+                mainMapDragMarkerPluginOptions,
                 // GPSログの犬マーカー
                 MarkerLayerOptions(
                   markers: gpsLog.makeDogMarkers(),
@@ -505,8 +509,6 @@ class _MapViewState extends State<MapView> with AfterLayoutMixin<MapView>
                   // NOTE: usePxCache=trueだと、ストリーム経由の再描画で位置が変わらない
                   usePxCache: false,
                 ),
-                // メンバーマーカー
-                mainMapDragMarkerPluginOptions,
               ],
               mapController: mainMapController,
             ),
