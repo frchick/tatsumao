@@ -121,6 +121,65 @@ class GPSLog
   }
 
   //----------------------------------------------------------------------------
+  // アニメーション再生、停止、巻き戻し
+  void playAnim()
+  {
+    // すでに再生中なら何もしない
+    if(_animPlaying) return;
+    _animPlaying = true;
+
+    // タイマースタート
+    _animTimer = Timer.periodic(const Duration(milliseconds: 100), (_) {
+      // すすめる
+      // 60倍速(1時間を1分で再生)
+      _currentTime = _currentTime.add(const Duration(seconds:6));
+      // リピート
+      if(_trimEndTime.isBefore(_currentTime)){
+        _currentTime = _trimStartTime;
+      }
+      // 再描画
+      makeDogMarkers();
+      redraw();
+      bottomSheetSetState?.call((){});
+    });
+  }
+
+  void stopAnim()
+  {
+    // 再生中でなければ何もしない
+    if(!_animPlaying) return;
+    _animPlaying = false;
+
+    // タイマーを停止
+    _animTimer?.cancel();
+    _animTimer = null;
+
+    // 再描画
+    bottomSheetSetState?.call((){});
+  }
+
+  void firstRewindAnim()
+  {
+    // 再生位置リセット
+    _currentTime = _trimStartTime;
+    // 再描画
+    makeDogMarkers();
+    redraw();
+    bottomSheetSetState?.call((){});
+  }
+
+  bool isAnimPlaying()
+  {
+    return _animPlaying;
+  }
+
+  // アニメーション再生中かフラグ
+  bool _animPlaying = false;
+
+  // 描画更新用のタイマー
+  Timer? _animTimer;
+
+  //----------------------------------------------------------------------------
   // 再描画用の Stream
   var _stream = StreamController<void>.broadcast();
   // 再描画用のストリームを取得
@@ -333,7 +392,7 @@ class GPSLog
   //----------------------------------------------------------------------------
   // トリミング範囲の同期
   StreamSubscription<DatabaseEvent>? _updateTrimSyncEvent;
-  void Function(void Function())? onUpdateTrimSync;
+  void Function(void Function())? bottomSheetSetState;
 
   void saveGPSLogTrimRangeToDB(String path)
   {
@@ -382,7 +441,7 @@ class GPSLog
           gpsLog.makePolyLines();
           gpsLog.makeDogMarkers();
           gpsLog.redraw();
-          onUpdateTrimSync?.call((){});
+          bottomSheetSetState?.call((){});
         }
       } catch(e) {}
     }
@@ -797,6 +856,8 @@ void showGPSLogPopupMenu(BuildContext context)
   ).then((value) async {
     switch(value ?? -1){
     case 0: // GPSログの読み込み
+      // アニメーション停止
+      gpsLog.stopAnim();
       // BottomSheet を閉じる
       closeBottomSheet();
       // クラウドの方に新しいデータがあれば、まずはそちらを読み込む
@@ -805,8 +866,8 @@ void showGPSLogPopupMenu(BuildContext context)
       {
         await showOkDialog(context, title:"GPSログ",
           text:"オンラインに、他のユーザーによる新しいログデータがあります。まずそのデータを読み込みます。");
-        gpsLog.clear();
-        gpsLog.downloadFromCloudStorage(filePath).then((res){
+          gpsLog.clear();
+          gpsLog.downloadFromCloudStorage(filePath).then((res){
           gpsLog.makePolyLines();
           gpsLog.makeDogMarkers();
           gpsLog.redraw();
@@ -830,6 +891,8 @@ void showGPSLogPopupMenu(BuildContext context)
       break;
 
     case 1: // トリミング
+      // アニメーション停止
+      gpsLog.stopAnim();
       showTrimmingBottomSheet(context);
       break;
     
@@ -884,7 +947,7 @@ void showTrimmingBottomSheet(BuildContext context)
         builder: (context, StateSetter setModalState)
         {
           // 他のユーザーからのトリミング範囲の変更通知で再描画
-          gpsLog.onUpdateTrimSync = setModalState;
+          gpsLog.bottomSheetSetState = setModalState;
 
           // 現在のトリミング時間範囲
           final DateTime trimStartTime = gpsLog.trimStartTime;
@@ -956,7 +1019,7 @@ void showTrimmingBottomSheet(BuildContext context)
   );
   // 他のユーザーからのトリミング範囲の変更通知のコールバックをリセット
   bottomSheetController!.closed.whenComplete((){
-    gpsLog.onUpdateTrimSync = null;
+    gpsLog.bottomSheetSetState = null;
     bottomSheetController = null;
   });
 }
@@ -1020,7 +1083,7 @@ void showAnimationBottomSheet(BuildContext context)
       return StatefulBuilder(
         builder: (context, StateSetter setModalState)
         {
-          gpsLog.onUpdateTrimSync = setModalState;
+          gpsLog.bottomSheetSetState = setModalState;
 
           // 現在の時間とトリミング範囲
           final DateTime currentTime = gpsLog.currentTime;
@@ -1033,50 +1096,89 @@ void showAnimationBottomSheet(BuildContext context)
           String currentText =
             "${currentTime.hour}:" + _twoDigits(currentTime.minute);
 
+          final IconData playOrPauseIcon = 
+            (gpsLog.isAnimPlaying()? Icons.pause: Icons.play_arrow);
+
           return Scaffold(
             body: Container(
-              padding: EdgeInsets.only(top:15), // スライダーの上のパディング
               color: Colors.brown.shade100,
-              child: Column(
-                children: [
-                  // トリミング範囲スライダー
-                  SliderTheme(
-                    data: SliderThemeData(),
-                    child: Slider(
-                      value: currentValue,
-                      min: 0,
-                      max: durationSec,
-                      onChanged: (values) {
-                        // 再生位置の変更
-                        setModalState(() {
-                          _updateCurrentTimeByUI(values, baseMS);
-                      });
-                      },
+              child: Row(
+                children:[
+                  // 左側のボタン
+                  Column(
+                    children: [
+                      // 再生/停止ボタン
+                      IconButton(
+                        icon: Icon(playOrPauseIcon),
+                        constraints: const BoxConstraints(),
+                        padding: EdgeInsets.fromLTRB(28, 12, 10, 6),
+                        onPressed:(){
+                          if(gpsLog.isAnimPlaying()){
+                            gpsLog.stopAnim();
+                          }else{
+                            gpsLog.playAnim();
+                          }
+                        },
+                      ),
+                      // 先頭に巻き戻しボタン
+                      IconButton(
+                        icon: Icon(Icons.fast_rewind),
+                        constraints: const BoxConstraints(),
+                        padding: EdgeInsets.fromLTRB(28, 6, 10, 6),
+                        onPressed:(){
+                          gpsLog.firstRewindAnim();
+                        },
+                      )
+                    ],
+                  ),
+                  // 右側のスライダー
+                  Expanded(
+                    child: Padding(
+                      padding: EdgeInsets.only(top:15), // スライダーの上のパディング,
+                      child: Column(
+                        children: [
+                          // トリミング範囲スライダー
+                          SliderTheme(
+                            data: SliderThemeData(),
+                            child: Slider(
+                              value: currentValue,
+                              min: 0,
+                              max: durationSec,
+                              onChanged: (values) {
+                                // 再生位置の変更
+                                setModalState(() {
+                                  _updateCurrentTimeByUI(values, baseMS);
+                              });
+                              },
+                            ),
+                          ),
+                          Container(
+                            padding: EdgeInsets.symmetric(horizontal:20),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: <Widget>[
+                                // トリミング開始時間
+                                Text(
+                                  trimStartText,
+                                  style: const TextStyle(fontSize: 16),
+                                ),
+                                // 再生時間
+                                Text(
+                                  currentText,
+                                  style: const TextStyle(fontSize: 16),
+                                ),
+                                // トリミング終了時間
+                                Text(
+                                  trimEndText,
+                                  style: const TextStyle(fontSize: 16),
+                                ),
+                              ],
+                            ),
+                          )
+                        ]
+                      ),
                     ),
                   ),
-                  Container(
-                    padding: EdgeInsets.symmetric(horizontal:20),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: <Widget>[
-                        // トリミング開始時間
-                        Text(
-                          trimStartText,
-                          style: const TextStyle(fontSize: 16),
-                        ),
-                        // 再生時間
-                        Text(
-                          currentText,
-                          style: const TextStyle(fontSize: 16),
-                        ),
-                        // トリミング終了時間
-                        Text(
-                          trimEndText,
-                          style: const TextStyle(fontSize: 16),
-                        ),
-                      ],
-                    ),
-                  )
                 ]
               ),
             ),
@@ -1091,7 +1193,7 @@ void showAnimationBottomSheet(BuildContext context)
     constraints: BoxConstraints(minHeight:85, maxHeight:85),
   );
   bottomSheetController!.closed.whenComplete((){
-    gpsLog.onUpdateTrimSync = null;
+    gpsLog.bottomSheetSetState = null;
     bottomSheetController = null;
   });
 }
