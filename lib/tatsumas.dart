@@ -1134,6 +1134,8 @@ class AreaFilterDialogState  extends State<AreaFilterDialog>
             setState((){
               areaFilterBits = (areaFilterBits ^ maskBit);
             });
+            updateTatsumaMarkers();
+            updateMapView();
           },
         ),
       ));
@@ -1143,6 +1145,9 @@ class AreaFilterDialogState  extends State<AreaFilterDialog>
     List<bool> _memberMarkerSizeFlag = [ false, false, false ];
     _memberMarkerSizeFlag[memberMarkerSizeSelector] = true;
     List<bool> _showGPSLogFlag = [ gpsLog.showLogLine ];
+
+    // ダイアログタイトル
+    var titleText = widget.showMapDrawOptions? "表示/非表示設定": "エリアフィルター";
 
     // ダイアログ表示
     return WillPopScope(
@@ -1158,34 +1163,95 @@ class AreaFilterDialogState  extends State<AreaFilterDialog>
         // グレー表示スイッチ含む
         titlePadding: const EdgeInsets.fromLTRB(12.0, 12.0, 12.0, 0.0),
         title: Column(
-          children:[
-            Row(children:[
-              const Text("エリアフィルター"),
-              // 一律表示
-              IconButton(
-                icon: const Icon(Icons.visibility),
-                onPressed:() {
-                  // 表示非表示を反転
-                  setState((){
-                    areaFilterBits = _areaFullBits;
-                  });
-                },
-              ),
-              // 一律非表示
-              IconButton(
-                icon: const Icon(Icons.visibility_off),
-                onPressed:() {
-                  // 表示非表示を反転
-                  setState((){
-                    areaFilterBits = 0;
-                  });
-                },
-              ),
-            ]),
-            // マップ表示オプションスイッチ
-            if(widget.showMapDrawOptions) Column(
+          children: [
+            // タイアログタイトル
+            Row(
+              mainAxisAlignment: MainAxisAlignment.start,
+              children: [ Text(titleText) ],
+            ),
+            const SizedBox(height: 20),
+
+            // [2段目]メンバーマーカーサイズ/非表示、GPSログ表示/非表示スイッチ
+            if(widget.showMapDrawOptions) Row(
+              mainAxisAlignment: MainAxisAlignment.end,
               children: [
+                // メンバーマーカーサイズ/非表示スイッチ
+                ToggleButtons(
+                  children: [
+                    const Icon(Icons.location_pin, size:30),
+                    const Icon(Icons.location_pin, size:22),
+                    const Icon(Icons.location_off, size:22),
+                  ],
+                  isSelected: _memberMarkerSizeFlag,
+                  onPressed: (index) {
+                    setState(() {
+                      memberMarkerSizeSelector = index;
+                      mainMapDragMarkerPluginOptions.visible
+                        = isShowMemberMarker();
+                    });
+                    createMemberMarkers();
+                    updateMapView();
+                  },
+                ),
+                const SizedBox(width:5, height:30),
+                // GPSログ表示/非表示スイッチ
+                ToggleButtons(
+                  children: [
+                    const Icon(Icons.timeline, size:30),
+                  ],
+                  isSelected: _showGPSLogFlag,
+                  onPressed: (index) {
+                    setState(() {
+                      gpsLog.showLogLine = !gpsLog.showLogLine;
+                      gpsLog.makePolyLines();
+                      gpsLog.makeDogMarkers();
+                      gpsLog.redraw();
+                    });
+                  },
+                )
+              ],
+            ),
+            if(widget.showMapDrawOptions)
+              const SizedBox(height: 8),
+
+            // [3段目]一括表示/非表示スイッチ、グレー表示スイッチ
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                // (左寄せ)一括表示/非表示スイッチ
                 Row(
+                  mainAxisAlignment: MainAxisAlignment.start,
+                  children: [
+                    // 一括表示
+                    IconButton(
+                      icon: const Icon(Icons.visibility),
+                      onPressed:() {
+                        // 表示非表示を反転
+                        setState((){
+                          areaFilterBits = _areaFullBits;
+                        });
+                        updateTatsumaMarkers();
+                        updateMapView();
+                      },
+                    ),
+                    // 一括非表示
+                    IconButton(
+                      icon: const Icon(Icons.visibility_off),
+                      onPressed:() {
+                        // 表示非表示を反転
+                        setState((){
+                          areaFilterBits = 0;
+                        });
+                        updateTatsumaMarkers();
+                        updateMapView();
+                      },
+                    ),
+                    if(!widget.showMapDrawOptions)
+                      Text("一括", style: Theme.of(context).textTheme.subtitle1),
+                  ],
+                ),
+                // (右寄せ)グレー表示スイッチ
+                if(widget.showMapDrawOptions) Row(
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
                     Text("グレー表示", style: Theme.of(context).textTheme.subtitle1),
@@ -1201,49 +1267,12 @@ class AreaFilterDialogState  extends State<AreaFilterDialog>
                     ),
                   ],
                 ),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    ToggleButtons(
-                      children: [
-                        Icon(Icons.location_pin, size:30),
-                        Icon(Icons.location_pin, size:22),
-                        Icon(Icons.location_off, size:22),
-                      ],
-                      isSelected: _memberMarkerSizeFlag,
-                      onPressed: (index) {
-                        setState(() {
-                          memberMarkerSizeSelector = index;
-                          mainMapDragMarkerPluginOptions.visible
-                            = isShowMemberMarker();
-                        });
-                        createMemberMarkers();
-                        updateMapView();
-                      },
-                    ),
-                    SizedBox(width:5, height:30),
-                    ToggleButtons(
-                      children: [
-                        Icon(Icons.timeline, size:30),
-                      ],
-                      isSelected: _showGPSLogFlag,
-                      onPressed: (index) {
-                        setState(() {
-                          gpsLog.showLogLine = !gpsLog.showLogLine;
-                          gpsLog.makePolyLines();
-                          gpsLog.makeDogMarkers();
-                          gpsLog.redraw();
-                        });
-                      },
-                    )
-                  ],
-                )
-              ]
-            )
-          ],
+              ],
+            ),
+          ]
         ),
         // エリア一覧
-        children: areas
+        children: areas,
       )
     );
   }
