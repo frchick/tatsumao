@@ -710,7 +710,7 @@ class TatsumasPageState extends State<TatsumasPage>
                       changeFlag = true;
                     });
                     // エリアフィルターの設定をデータベースへ保存
-                    saveAreaFilterToDB(getCurrentFilePath());
+                    saveAreaFilterToDB(getOpenedFileUIDPath());
                   }
                 });
               },
@@ -1290,18 +1290,18 @@ Future<bool?> showAreaFilter(BuildContext context, { bool showMapDrawOptions=fal
 }
 
 // エリア表示フィルターの設定をデータベースへ保存
-void saveAreaFilterToDB(String path)
+void saveAreaFilterToDB(String uidPath)
 {
-  final String dbPath = "assign" + path + "/areaFilter";
+  final String dbPath = "assign" + uidPath + "/areaFilter";
   final DatabaseReference ref = database.ref(dbPath);
   List<String> data = areaFilterToStrings();
   ref.set(data);
 }
 
 // エリア表示フィルターの設定をデータベースから読み込み
-Future loadAreaFilterFromDB(String path) async
+Future loadAreaFilterFromDB(String uidPath) async
 {
-  final String dbPath = "assign" + path + "/areaFilter";
+  final String dbPath = "assign" + uidPath + "/areaFilter";
   final DatabaseReference ref = database.ref(dbPath);
   final DataSnapshot snapshot = await ref.get();
   if(snapshot.exists){

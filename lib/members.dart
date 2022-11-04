@@ -111,12 +111,12 @@ List<StreamSubscription<DatabaseEvent>> _membersListener = [];
 
 //---------------------------------------------------------------------------
 // 初期化
-Future initMemberSync(String path) async
+Future initMemberSync(String uidPath) async
 {
-  print(">initMemberSync($path)");
+  print(">initMemberSync($uidPath)");
 
   // 配置データのパス
-  _assignPath = "assign" + path;
+  _assignPath = "assign" + uidPath;
   final DatabaseReference ref = database.ref(_assignPath);
   final DataSnapshot snapshot = await ref.get();
   for(int index = 0; index < members.length; index++)
@@ -293,7 +293,7 @@ void copyAssignToClipboard(BuildContext context)
   text += assignText;
 
   // 起動リンク
-  String fullPath = getCurrentFilePath();
+  String fullPath = getOpenedFileUIDPath();
   fullPath = fullPath.replaceAll("/", "~");
   String fullURL = "https://tatsumao-976e2.web.app/#/?open=" + fullPath;
   fullURL = Uri.encodeFull(fullURL);
