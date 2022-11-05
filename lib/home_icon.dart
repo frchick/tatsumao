@@ -217,17 +217,7 @@ class HomeIconWidget extends StatelessWidget
       position: RelativeRect.fromLTRB(x, y, 0, 0),
       elevation: 8.0,
       items: [
-        PopupMenuItem(
-          value: 0,
-          child: Row(
-            children: [
-              Icon(Icons.hotel, color: Colors.black45),
-              const SizedBox(width: 5),
-              const Text('全員家に帰る'),
-            ]
-          ),
-          height: (kMinInteractiveDimension * 0.8),
-        ),
+        makePopupMenuItem(0, "全員家に帰る", Icons.hotel),
       ],
     ).then((value) {
       switch(value ?? -1){

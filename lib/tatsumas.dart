@@ -837,17 +837,7 @@ class TatsumasPageState extends State<TatsumasPage>
       position: RelativeRect.fromLTRB(offset.dx, offset.dy, offset.dx, offset.dy),
       elevation: 8.0,
       items: [
-        PopupMenuItem(
-          value: 0,
-          child: Row(
-            children: [
-              Icon(Icons.travel_explore, color: Colors.black45),
-              const SizedBox(width: 5),
-              const Text('この場所へ移動'),
-            ]
-          ),
-          height: (kMinInteractiveDimension * 0.8),
-        ),
+        makePopupMenuItem(0, "この場所へ移動", Icons.travel_explore),
       ],
     ).then((value) {
       switch(value ?? -1){

@@ -60,3 +60,24 @@ void closeBottomSheet()
 {
   bottomSheetController?.close();
 }
+
+//----------------------------------------------------------------------------
+// ポップアップメニューのヘルパー
+
+PopupMenuItem<int> makePopupMenuItem(
+  int value, String text, IconData icon,
+  { bool enabled=true, Color iconColor=Colors.black45})
+{
+  return PopupMenuItem<int>(
+    value: value,
+    enabled: enabled,
+    child: Row(
+      children: [
+        Icon(icon, color:iconColor),
+        const SizedBox(width: 5),
+        Text(text),
+      ]
+    ),
+    height: (kMinInteractiveDimension * 0.8),
+  );
+}

@@ -9,6 +9,7 @@ import 'text_ballon_widget.dart';
 import 'text_item_list_dialog.dart';
 import 'tatsumas.dart';
 import 'gps_log.dart';
+import 'globals.dart';
 
 //----------------------------------------------------------------------------
 //----------------------------------------------------------------------------
@@ -862,38 +863,17 @@ class FilesPageState extends State<FilesPage>
   {
     // メニューの位置をちょい左に
     // NOTE: メニュー右端の座標指定の方法を見つけたい…
-    offset = offset - Offset(230, 0);
+    offset = offset - Offset(180, 0);
 
-    // Note: アイコンカラーは ListTile のデフォルトカラー合わせ
     showMenu(
       context: context,
       position: RelativeRect.fromLTRB(offset.dx, offset.dy, offset.dx, offset.dy),
       elevation: 8.0,
       items: [
-        PopupMenuItem(
-          value: 0,
-          enabled: _canRename(item.uid),
-          child: Row(
-            children: [
-              Icon(Icons.drive_file_rename_outline, color: Colors.black45),
-              const SizedBox(width: 5),
-              const Text("リネーム"),
-            ]
-          ),
-          height: (kMinInteractiveDimension * 0.8),
-        ),
-        PopupMenuItem(
-          value: 1,
-          enabled: enableDelete && _canDelete(item.uid),
-          child: Row(
-            children: [
-              Icon(Icons.delete, color: Colors.black45),
-              const SizedBox(width: 5),
-              const Text("ファイルを削除"),
-            ]
-          ),
-          height: (kMinInteractiveDimension * 0.8),
-        ),
+        makePopupMenuItem(0, "リネーム", Icons.drive_file_rename_outline,
+          enabled: _canRename(item.uid)),
+        makePopupMenuItem(1, "削除", Icons.delete,
+          enabled: enableDelete && _canDelete(item.uid)),
       ],
     ).then((value) {
       switch(value ?? -1){

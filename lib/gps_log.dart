@@ -821,39 +821,9 @@ void showGPSLogPopupMenu(BuildContext context)
     position: RelativeRect.fromLTRB(x, y, x, y),
     elevation: 8.0,
     items: [
-      PopupMenuItem(
-        value: 0,
-        child: Row(
-          children: [
-            Icon(Icons.file_open, color: Colors.black45),
-            const SizedBox(width: 5),
-            const Text('ログ読み込み'),
-          ]
-        ),
-        height: (kMinInteractiveDimension * 0.8),
-      ),
-      PopupMenuItem(
-        value: 1,
-        child: Row(
-          children: [
-            Icon(Icons.content_cut, color: Colors.black45),
-            const SizedBox(width: 5),
-            const Text('トリミング'),
-          ]
-        ),
-        height: (kMinInteractiveDimension * 0.8),
-      ),
-      PopupMenuItem(
-        value: 2,
-        child: Row(
-          children: [
-            Icon(Icons.play_circle, color: Colors.black45),
-            const SizedBox(width: 5),
-            const Text('アニメーション'),
-          ]
-        ),
-        height: (kMinInteractiveDimension * 0.8),
-      ),
+      makePopupMenuItem(0, "ログ読み込み", Icons.file_open),
+      makePopupMenuItem(1, "トリミング", Icons.content_cut),
+      makePopupMenuItem(2, "アニメーション", Icons.play_circle),
     ],
   ).then((value) async {
     switch(value ?? -1){
