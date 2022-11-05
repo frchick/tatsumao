@@ -367,7 +367,11 @@ class _MapViewState extends State<MapView> with AfterLayoutMixin<MapView>
                       gpsLog.makeDogMarkers();
                       gpsLog.redraw();
                     });
-                  }
+                  },
+                  onChangeState: (){
+                    // ファイル変更に至らない程度の変更があった場合には、AppBar を更新
+                    setState((){});
+                  },
                 ))
               );
             }

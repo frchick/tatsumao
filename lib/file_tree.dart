@@ -17,15 +17,29 @@ import 'gps_log.dart';
 class FileItem {
   FileItem({
     required this.uid,
-    this.name = "",
+    String name = "",
     this.child,
-  });
+  }) : _name = name
+  {
+    // ユニークIDとファイル名/ディレクトリ名の対応を確実に更新する
+    _uid2name[uid] = _name;
+  }
+
   // ユニークID
   final int uid;
   // ファイル/ディレクトリ名
-  String name;
+  String _name;
   // 子階層
   List<FileItem>? child;
+
+  String get name => _name;
+
+  set name(String name)
+  {
+    // ユニークIDとファイル名/ディレクトリ名の対応を確実に更新する
+    _name = name;
+    _uid2name[uid] = _name;
+  }
 
   // ファイルか？
   bool isFile(){ return (0 < uid) && (child == null); }
@@ -35,13 +49,13 @@ class FileItem {
   // データベースに格納するMapを取得
   Map<String,dynamic> getDBData()
   {
-    return { "uid": uid, "name": name, "folder": isFolder() };
+    return { "uid": uid, "name": _name, "folder": isFolder() };
   }
 
   @override
   String toString ()
   {
-    return "${uid}:${name}";
+    return "${uid}:${_name}";
   }
 }
 
@@ -56,24 +70,35 @@ const int _invalidUID = -3;
 // 削除不可のデフォルトデータを示すユニークID
 const int _defaultFileUID = 1;
 
+// リネーム可能か判定
+bool _canRename(int uid)
+{
+  return (_defaultFileUID < uid);
+}
+
+// 削除可能か判定
+bool _canDelete(int uid)
+{
+  return (_defaultFileUID < uid);
+}
+
 // ルートノード
 FileItem _fileRoot = FileItem(uid:_rootDirId, name:"");
 
-// ルートから現在のディレクトリまでのスタック
+// ルートから現在のディレクトリまでのスタック(ファイル一覧画面でのカレント)
 List<FileItem> _directoryStack = [ _fileRoot ];
 
-// 現在開いているファイル
-// カレントディレクトリ内のファイルであるはず。
-FileItem? _openedFile;
+// 現在開いているファイルまでのスタック
+List<int> _openedUIDPathStack = [ _rootDirId ];
 
-// 現在開いているディレクトリへのユニークIDでのフルパス
-// ファイルを開いた時点で確定
-// ファイル一覧画面でのディレクトリ移動では変更されない
-String _openedUIDPath = "/";
-
-// 現在開いているディレクトリへのフルパス
-// _openedUIDPath と同じパスを表示名で表したデータ
-String _openedPath = "/";
+// ユニークIDと名前の対応表
+Map<int, String> _uid2name = {
+  _rootDirId: "",
+  _parentDirId: "..",
+  _currentDirId: ".",
+  _invalidUID: "",
+  _defaultFileUID: "デフォルトデータ",
+};
 
 //ファイルツリーの共有(Firebase RealtimeDataBase)
 FirebaseDatabase database = FirebaseDatabase.instance;
@@ -118,7 +143,14 @@ String getCurrentUIDPath()
 // 先頭は"/"から始まり、最後はファイル名
 String getOpenedFilePath()
 {
-  var path = _openedPath + (_openedFile?.name ?? "");
+  String path = "";
+  for(int d = 1; d < _openedUIDPathStack.length; d++){
+    final int uid = _openedUIDPathStack[d];
+    final String name = _uid2name[uid] ?? "";
+    path = path + "/" + name;
+  }
+  if(path == "") path = "/";
+
   return path;
 }
 
@@ -126,14 +158,22 @@ String getOpenedFilePath()
 // 先頭は"/"から始まり、最後はファイルのユニークID
 String getOpenedFileUIDPath()
 {
-  var path = _openedUIDPath + (_openedFile?.uid.toString() ?? "");
+  // ルートディレクトリのユニークID'0'は含まない
+  String path = "";
+  for(int d = 1; d < _openedUIDPathStack.length; d++){
+    final int uid = _openedUIDPathStack[d];
+    path = path + "/" + uid.toString();
+  }
+  if(path == "") path = "/";
+
   return path;
 }
 
 // 現在開かれているファイル名を取得
 String getCurrentFileName()
 {
-  return (_openedFile?.name ?? "");
+  String name = _uid2name[_openedUIDPathStack.last] ?? "";
+  return name;
 }
 
 // 開いたファイルへのUIDフルパスを設定
@@ -168,9 +208,9 @@ bool _setOpenedFileUIDPath(String uidPath)
   if(openFile == null) return false;
 
   // OK
-  _openedUIDPath = uidDirPart;
-  _openedPath = getCurrentPath();
-  _openedFile = openFile;
+  _openedUIDPathStack.clear();
+  _directoryStack.forEach((item){ _openedUIDPathStack.add(item.uid); });
+  _openedUIDPathStack.add(openFile!.uid);
 
   return true;
 }
@@ -213,10 +253,6 @@ Future initFileTree() async
   }
   // ルートディレクトリをデータベースから読み込み
   await moveDir(FileItem(uid:_currentDirId));
-  // とりあえず、ルートのデフォルトデータを開いたことにしておく
-  _openedUIDPath = "/";
-  _openedPath = "/";
-  _openedFile = defaultFile;
 }
 
 //----------------------------------------------------------------------------
@@ -267,28 +303,9 @@ Future<FileResult> createNewFolder(String folderName) async
 // ファイル/フォルダ追加の共通処理
 Future<FileResult> _addFileItem(String name, bool folder) async
 {
-  List<FileItem> currentDir = getCurrentDir();
-
-  // エラーチェック
-  if(name == ""){
-    return FileResult(res:false, message:"ファイル名が指定されていません");
-  }
-  if((name == ".") || (name == "..")){
-    return FileResult(res:false, message:"'.'および'..'はファイル名に使えません");
-  }
-  if(name.contains("/")){
-    return FileResult(res:false, message:"'/'はファイル名に使えません");
-  }
-  if(name.contains("~")){
-    return FileResult(res:false, message:"'~'はファイル名に使えません");
-  }
-  bool res = true;
-  currentDir.forEach((item){
-    if(item.name == name) res = false;
-  });
-  if(!res){
-    return FileResult(res:false, message:"既にあるファイル名は使えません");
-  }
+  // ファイル名のチェック
+  FileResult res = _checkFileName(name);
+  if(!res.res) return res;
 
   // 新しいユニークIDを取得
   int uid = await _getUniqueID();
@@ -302,6 +319,7 @@ Future<FileResult> _addFileItem(String name, bool folder) async
     // フォルダを作成する場合には、子階層をぶら下げておく。
     newItem.child = [ FileItem(uid:_parentDirId) ];
   }
+  List<FileItem> currentDir = getCurrentDir();
   currentDir.add(newItem);
 
   // 並びをソートする
@@ -315,6 +333,77 @@ Future<FileResult> _addFileItem(String name, bool folder) async
   final String newUIDPath = getCurrentUIDPath() + uid.toString();
 
   return FileResult(path:newPath, uidPath:newUIDPath);
+}
+
+// カレントディレクトリのファイル名変更
+FileResult renameFile(FileItem item, String newName)
+{
+  print(">renameFile(${item} newName:${newName})");
+
+  FileResult res = _renameFile(item, newName);
+
+  print(">renameFile(${item}) newName:${newName} ${res}");
+
+  return res;
+}
+
+FileResult _renameFile(FileItem item, String newName)
+{
+  // ファイル名に変更がなければ成功
+  if(item.name == newName) return FileResult();
+
+  // リネーム禁止のファイル
+  if(!_canRename(item.uid)){
+    return FileResult(res:false, message:"'デフォルトデータ'等はリネームできません");
+  }
+
+  // ファイル名のチェック
+  FileResult res = _checkFileName(newName);
+  if(!res.res) return res;
+
+  // データの変更
+  item.name = newName;
+
+  // 並びをソートする
+  List<FileItem> currentDir = getCurrentDir();
+  sortDir(currentDir);
+
+  // ディレクトリツリーのデータベースを更新
+  updateFileListToDB(getCurrentUIDPath(), currentDir);
+
+  // 変更されたファイルパスを返す
+  final String newPath = getCurrentPath() + newName;
+  final String newUIDPath = getCurrentUIDPath() + item.uid.toString();
+
+  return FileResult(path:newPath, uidPath:newUIDPath);
+}
+
+// ファイル名のチェック
+FileResult _checkFileName(String name)
+{
+  if(name == ""){
+    return FileResult(res:false, message:"ファイル名が指定されていません");
+  }
+  if((name == ".") || (name == "..")){
+    return FileResult(res:false, message:"'.'および'..'はファイル名に使えません");
+  }
+  if(name.contains("/")){
+    return FileResult(res:false, message:"'/'はファイル名に使えません");
+  }
+  if(name.contains("~")){
+    return FileResult(res:false, message:"'~'はファイル名に使えません");
+  }
+  List<FileItem> currentDir = getCurrentDir();
+  bool res = true;
+  currentDir.forEach((item){
+    if(item.name == name) res = false;
+  });
+  if(!res){
+    return FileResult(res:false, message:"既にあるファイル名は使えません");
+  }
+
+  // OK
+  return FileResult();
 }
 
 // カレントディレクトリのファイル削除
@@ -334,10 +423,11 @@ FileResult _deleteFile(FileItem item)
   if(!item.isFile()){
     return FileResult(res:false, message:"内部エラー: deleteFile()にフォルダを指定");
   }
-  if((_directoryStack.length == 1) && (item.uid == _defaultFileUID)){
-    return FileResult(res:false, message:"'デフォルトデータ'は削除できません");
+  if(!_canDelete(item.uid)){
+    return FileResult(res:false, message:"'デフォルトデータ'等は削除できません");
   }
-  if(item.uid == (_openedFile?.uid ?? _invalidUID)){
+  final int openedFileUID = _openedUIDPathStack.last;
+  if(item.uid == openedFileUID){
     return FileResult(res:false, message:"開いているファイルは削除できません");
   }
 
@@ -622,11 +712,15 @@ class FilesPage extends StatefulWidget
 {
   FilesPage({
     super.key,
-    required this.onSelectFile
+    required this.onSelectFile,
+    required this.onChangeState,
   }){}
 
   // ファイル選択決定時のコールバック
-  final Function(String)? onSelectFile;
+  final Function(String) onSelectFile;
+
+  // 何らかの変更コールバック(ファイル選択にまでは至らない、主にリネーム時)
+  final Function() onChangeState;
 
   @override
   FilesPageState createState() => FilesPageState();
@@ -703,7 +797,8 @@ class FilesPageState extends State<FilesPage>
       icon = (file.child == null)? Icons.description: Icons.folder;
     }
 
-    // 現在開いているファイルとその途中のフォルダは、強調表示する。
+    // 現在開いているファイルとその途中のフォルダは強調表示する。
+    // 削除も禁止
     final String thisUIDPath = getCurrentUIDPath() + currentDir[index].uid.toString();
     final String openedUIDPath = getOpenedFileUIDPath();
     late bool isOpenedFile;
@@ -715,8 +810,8 @@ class FilesPageState extends State<FilesPage>
       isOpenedFile = (openedUIDPath.indexOf(thisUIDPath+"/") == 0);
     }
 
-    // 「上階層に戻る」と、現在開いているファイルの途中は、削除アイコン表示しない。
-    final bool showDeleteIcon = !(goParentDir || isOpenedFile);
+    // アイコンボタンの座標を取得するため
+    GlobalKey iconGlobalKey = GlobalKey();
 
     return Container(
       // ファイル間の境界線
@@ -732,13 +827,15 @@ class FilesPageState extends State<FilesPage>
           style: (isOpenedFile? _textStyleBold: _textStyle),
         ),
 
-        // (右側)削除ボタン
-        trailing: !showDeleteIcon? null: IconButton(
-          icon: Icon(Icons.delete),
+        // (右側)メニューボタン
+        // 「親階層に戻る」では非表示
+        trailing: goParentDir? null: IconButton(
+          icon: Icon(Icons.more_horiz, key:iconGlobalKey),
           onPressed:() {
-            deleteFileSub(context, currentDir[index]).then((_){
-              setState((){});
-            });
+            // ボタンの座標を取得してメニューを表示
+            RenderBox box = iconGlobalKey.currentContext!.findRenderObject() as RenderBox;
+            var offset = box.localToGlobal(Offset.zero);
+            showFileItemMenu(context, currentDir[index], offset, !isOpenedFile);
           },
         ),
 
@@ -746,9 +843,7 @@ class FilesPageState extends State<FilesPage>
         onTap: () {
           if(currentDir[index].isFile()){
             // ファイルを切り替える
-            if(widget.onSelectFile != null){
-              widget.onSelectFile!(thisUIDPath);
-            }
+            widget.onSelectFile(thisUIDPath);
             Navigator.pop(context);
           }else{
             // ディレクトリ移動
@@ -759,6 +854,75 @@ class FilesPageState extends State<FilesPage>
         },
       ),
     );
+  }
+
+  // ファイルメニューを開く
+  void showFileItemMenu(
+    BuildContext context, FileItem item, Offset offset, bool enableDelete)
+  {
+    // メニューの位置をちょい左に
+    // NOTE: メニュー右端の座標指定の方法を見つけたい…
+    offset = offset - Offset(230, 0);
+
+    // Note: アイコンカラーは ListTile のデフォルトカラー合わせ
+    showMenu(
+      context: context,
+      position: RelativeRect.fromLTRB(offset.dx, offset.dy, offset.dx, offset.dy),
+      elevation: 8.0,
+      items: [
+        PopupMenuItem(
+          value: 0,
+          enabled: _canRename(item.uid),
+          child: Row(
+            children: [
+              Icon(Icons.drive_file_rename_outline, color: Colors.black45),
+              const SizedBox(width: 5),
+              const Text("リネーム"),
+            ]
+          ),
+          height: (kMinInteractiveDimension * 0.8),
+        ),
+        PopupMenuItem(
+          value: 1,
+          enabled: enableDelete && _canDelete(item.uid),
+          child: Row(
+            children: [
+              Icon(Icons.delete, color: Colors.black45),
+              const SizedBox(width: 5),
+              const Text("ファイルを削除"),
+            ]
+          ),
+          height: (kMinInteractiveDimension * 0.8),
+        ),
+      ],
+    ).then((value) {
+      switch(value ?? -1){
+      case 0:
+        // リネーム
+        showRenameFileDialog(context, item.name).then((String? newName){
+          if(newName != null){
+            var res = renameFile(item, newName);
+            if(res.res){
+              setState((){});
+              // AppBar の更新しておく
+              widget.onChangeState();
+            }else{
+              // エラーメッセージ
+              showDialog(
+                context: context,
+                builder: (_){ return AlertDialog(content: Text(res.message)); });
+            }
+          }
+        });
+        break;
+      case 1:
+        // ファイルを削除
+        deleteFileSub(context, item).then((_){
+          setState((){});
+        });
+        break;
+      }
+    });
   }
 
   // ファイル作成
@@ -772,9 +936,7 @@ class FilesPageState extends State<FilesPage>
     var res = await createNewFile(name);
     if(res.res){
       // 作成が成功したら、切り替えてマップに戻る
-      if(widget.onSelectFile != null){
-        widget.onSelectFile!(res.uidPath);
-      }
+      widget.onSelectFile(res.uidPath);
       Navigator.pop(context);
     }else{
       // エラーメッセージ
@@ -848,6 +1010,23 @@ Future<String?> showCreateFileDialog(BuildContext context)
         titleText:"ファイルの作成",
         hintText:"新規ファイル名",
         okText:"作成");
+    },
+  );
+}
+
+Future<String?> showRenameFileDialog(BuildContext context, String fileName)
+{
+  // アイコンボタン押して、カレンダーWidgetで日付を指定できる。
+  return showDialog<String>(
+    context: context,
+    useRootNavigator: true,
+    builder: (context) {
+      return TextEditIconDialog(
+        icon: Icons.calendar_month,
+        onIconTap: showCalendar,
+        titleText:"リネーム",
+        defaultText:fileName,
+        okText:"変更");
     },
   );
 }
