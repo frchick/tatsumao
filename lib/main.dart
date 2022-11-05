@@ -148,16 +148,18 @@ class _MapViewState extends State<MapView> with AfterLayoutMixin<MapView>
     final int pi = fullURL.indexOf("?open=");
     late String openPath;
     if(0 < pi) openPath = fullURL.substring(pi + 6);
-    else openPath = "/default_data";
+    else openPath = "/1";
     openPath = openPath.replaceAll("~", "/");
   
+    print(">initStateSub() fullURL=${fullURL} openPath=${openPath}");
+
     // ファイルツリーのデータベースを初期化
     await initFileTree();
     // 初期状態で開くファイルの位置までカレントディレクトリを移動
-    // 失敗していたら標準ファイル("/default_data")を開く
+    // 失敗していたら標準ファイル("/1")を開く
     bool res = await moveFullPathDir(openPath);
     if(!res){
-      openPath = "/default_data";
+      openPath = "/1";
       await moveFullPathDir(openPath);
     }
     // タツマデータをデータベースから取得
@@ -178,7 +180,8 @@ class _MapViewState extends State<MapView> with AfterLayoutMixin<MapView>
 
   //----------------------------------------------------------------------------
   // ファイルを読み込み、切り替え
-  Future<void> openFile(String filePath) async
+  // 指定されたファイルがカレントディレクトリになければエラー
+  Future<void> openFile(String fileUIDPath) async
   {
     // メンバーマーカーが非表示なら、表示に戻す。
     if(!isShowMemberMarker()){
@@ -188,20 +191,25 @@ class _MapViewState extends State<MapView> with AfterLayoutMixin<MapView>
     // GPSログが非表示なら、表示に戻す。(強制的に表示にする)
     gpsLog.showLogLine = true;
     
+    // ファイルを開く準備
+    // もし指定されたファイルが無ければ何もしない
+    if(!setOpenedFileUIDPath(fileUIDPath)){
+      return;
+    }
+
     // メンバーデータをデータベースから取得
-    await initMemberSync(filePath);
-    setCurrentFilePath(filePath);
+    await initMemberSync(fileUIDPath);
     // メンバーの位置へ地図を移動
     // 直前の地図が表示され続ける時間を短くするために、なるべく早めに
     moveMapToLocationOfMembers();
 
     // タツマのエリアフィルターを取得(表示/非表示)
     // それに応じてマーカー配列を作成
-    await loadAreaFilterFromDB(filePath);
+    await loadAreaFilterFromDB(fileUIDPath);
     updateTatsumaMarkers();
 
     // 編集ロックフラグを取得
-    await loadLockEditingFromDB(filePath, onLockChange:onLockChangeByOther);
+    await loadLockEditingFromDB(fileUIDPath, onLockChange:onLockChangeByOther);
   
     // GPSログをクリア
     gpsLog.clear();
@@ -323,7 +331,7 @@ class _MapViewState extends State<MapView> with AfterLayoutMixin<MapView>
           // ロック変更時の共通処理
           onLockChangeSub(lock);
           // データベース経由で他のユーザーに同期
-          saveLockEditingToDB(getCurrentFilePath());
+          saveLockEditingToDB(getOpenedFileUIDPath());
         }
       },
     );
@@ -344,26 +352,31 @@ class _MapViewState extends State<MapView> with AfterLayoutMixin<MapView>
               Navigator.push(
                 context,
                 MaterialPageRoute(builder: (context) => FilesPage(
-                  onSelectFile: (path) async {
+                  onSelectFile: (uidPath) async {
                     // ファイルを読み込み
-                    await openFile(path);
+                    await openFile(uidPath);
                     // ファイル名をバルーン表示
+                    String path = getOpenedFilePath();
                     showTextBallonMessage(path);
                     // GPSログを読み込み(遅延処理)
-                    gpsLog.downloadFromCloudStorage(path).then((res) async {
+                    gpsLog.downloadFromCloudStorage(uidPath).then((res) async {
                       if(res){
-                        await gpsLog.loadGPSLogTrimRangeFromDB(path);
+                        await gpsLog.loadGPSLogTrimRangeFromDB(uidPath);
                       }
                       gpsLog.makePolyLines();
                       gpsLog.makeDogMarkers();
                       gpsLog.redraw();
                     });
-                  }
+                  },
+                  onChangeState: (){
+                    // ファイル変更に至らない程度の変更があった場合には、AppBar を更新
+                    setState((){});
+                  },
                 ))
               );
             }
           ),
-          Text(getCurrentFilePath()),
+          Text(getOpenedFilePath()),
         ],
       ),
       // アプリケーションバーは半透明
@@ -418,7 +431,7 @@ class _MapViewState extends State<MapView> with AfterLayoutMixin<MapView>
                 updateTatsumaMarkers();
                 updateMapView();
                 // エリアフィルターの設定をデータベースへ保存
-                saveAreaFilterToDB(getCurrentFilePath());
+                saveAreaFilterToDB(getOpenedFileUIDPath());
               }
             });
           },
@@ -530,9 +543,9 @@ class _MapViewState extends State<MapView> with AfterLayoutMixin<MapView>
 
 //---------------------------------------------------------------------------
 // 編集ロックの設定をデータベースへ保存
-void saveLockEditingToDB(String path)
+void saveLockEditingToDB(String uidPath)
 {
-  final String dbPath = "assign" + path + "/lockEditing";
+  final String dbPath = "assign" + uidPath + "/lockEditing";
   final DatabaseReference ref = database.ref(dbPath);
   ref.set(lockEditing);
 }
@@ -543,9 +556,9 @@ StreamSubscription<DatabaseEvent>? _lockEditingListener;
 
 //---------------------------------------------------------------------------
 // 編集ロックの設定をデータベースから読み込み
-Future loadLockEditingFromDB(String path, { Function(bool)? onLockChange }) async
+Future loadLockEditingFromDB(String uidPath, { Function(bool)? onLockChange }) async
 {
-  final String dbPath = "assign" + path + "/lockEditing";
+  final String dbPath = "assign" + uidPath + "/lockEditing";
   final DatabaseReference ref = database.ref(dbPath);
   final DataSnapshot snapshot = await ref.get();
   if(snapshot.exists){

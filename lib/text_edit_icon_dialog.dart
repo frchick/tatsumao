@@ -65,7 +65,7 @@ class _TextEditIconDialogState extends State<TextEditIconDialog>
       ),
       content: TextField(
         controller: _dateTextController,
-        decoration: (widget.hintText != null)? InputDecoration(hintText: widget.hintText): null,
+        decoration: InputDecoration(hintText: widget.hintText),
         autofocus: true,
       ),
       actions: [

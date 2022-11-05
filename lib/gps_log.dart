@@ -327,7 +327,7 @@ class GPSLog
   Future<bool> downloadFromCloudStorage(String path) async
   {
     //!!!!
-    print("downloadFromCloudStorage(${path})");
+    print(">downloadFromCloudStorage(${path})");
 
     // ストレージ上のファイルパスを参照
     final gpxRef = _getRef(path);
@@ -352,7 +352,7 @@ class GPSLog
     }
 
     //!!!!
-    print("downloadFromCloudStorage() res=${res}");
+    print(">downloadFromCloudStorage(${path}) ${res}");
 
     return res;
   }
@@ -362,7 +362,9 @@ class GPSLog
   {
     // ストレージ上のファイルパスを参照
     final gpxRef = _getRef(path);
-    gpxRef.delete();
+    try {
+      gpxRef.delete();
+    } catch(e){}
   }
 
   // クラウドストレージのデータが更新されているか？
@@ -394,9 +396,9 @@ class GPSLog
   StreamSubscription<DatabaseEvent>? _updateTrimSyncEvent;
   void Function(void Function())? bottomSheetSetState;
 
-  void saveGPSLogTrimRangeToDB(String path)
+  void saveGPSLogTrimRangeToDB(String uidPath)
   {
-    final String dbPath = "assign" + path + "/gps_log";
+    final String dbPath = "assign" + uidPath + "/gps_log";
     final DatabaseReference ref = FirebaseDatabase.instance.ref(dbPath);
     final trimData = {
       "trimStartTime" : _trimStartTime.toIso8601String(),
@@ -405,14 +407,14 @@ class GPSLog
     ref.set(trimData);
   }
 
-  Future<void> loadGPSLogTrimRangeFromDB(String path) async
+  Future<void> loadGPSLogTrimRangeFromDB(String uidPath) async
   {
     // 直前の同期イベントを削除
     _updateTrimSyncEvent?.cancel();
     _updateTrimSyncEvent = null;
   
     // 読み込み
-    final String dbPath = "assign" + path + "/gps_log";
+    final String dbPath = "assign" + uidPath + "/gps_log";
     final DatabaseReference ref = FirebaseDatabase.instance.ref(dbPath);
     final DataSnapshot snapshot = await ref.get();
     if(snapshot.exists){
@@ -861,7 +863,7 @@ void showGPSLogPopupMenu(BuildContext context)
       // BottomSheet を閉じる
       closeBottomSheet();
       // クラウドの方に新しいデータがあれば、まずはそちらを読み込む
-      final filePath = getCurrentFilePath();
+      final filePath = getOpenedFileUIDPath();
       if(await gpsLog.isUpdateCloudStorage(filePath))
       {
         await showOkDialog(context, title:"GPSログ",
@@ -883,7 +885,7 @@ void showGPSLogPopupMenu(BuildContext context)
         gpsLog.redraw();
         showTextBallonMessage("GPSログの読み込み成功");
         // 裏でクラウドストレージへのアップロードを実行
-        final String filePath = getCurrentFilePath();
+        final String filePath = getOpenedFileUIDPath();
         gpsLog.uploadToCloudStorage(filePath);
       }else{
         showTextBallonMessage("GPSログの読み込み失敗");
@@ -981,7 +983,7 @@ void showTrimmingBottomSheet(BuildContext context)
                       },
                       onChangeEnd: (value) {
                         // トリム範囲の変更をデータベースへ保存
-                        final filePath = getCurrentFilePath();
+                        final filePath = getOpenedFileUIDPath();
                         gpsLog.saveGPSLogTrimRangeToDB(filePath);
                       },
                     ),
