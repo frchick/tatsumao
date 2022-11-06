@@ -46,9 +46,9 @@
   <!-- Flutter WEB アプリ起動前に表示するページ -->
   <div style="text-align:center; margin-top:100px;">
     <div style="display:inline-block; width:80%;">
-      <button id="start_app_button" style="display:none;">TatsumaOを起動</button>
-      <p id="ios_warning" style="display:none;">iPhone/iPadでは、アドレスバー左端の「<b><small>あ</small>あ</b>」→「<b>ツールバーを非表示</b>」をタップしてから、起動してください。</p>
-      <p id="startup_state"></p>
+      <button id="start_app_button" style="display:none; font-size:32px;">TatsumaOを起動</button>
+      <p id="ios_warning" style="display:none; font-size:32px;">iPhone/iPadでは、アドレスバー左端の「<b><small>あ</small>あ</b>」→「<b>ツールバーを非表示</b>」をタップしてから、起動してください。</p>
+      <p id="startup_state" style="font-size:32px;"></p>
     </div>
   </div>
 	<script>
@@ -77,10 +77,10 @@
 
       // iOS(iPhone/iPad)の場合、Safariのクラッシュバグ回避のために、ツールバーを非表示にさせてから起動する。
       const ua = navigator.userAgent
-//      const isIOS = (ua.indexOf("iPhone") >= 0) || (ua.indexOf("iPad") >= 0);
-      const isIOS = true;
-      setup_state.textContent = ua;
-
+      const isIOS =
+        (ua.indexOf("iPhone;") >= 0) ||
+        (ua.indexOf("iPad;") >= 0) ||
+        (ua.indexOf("Macintosh;") >= 0);  // iPad が 'Macintosh' を返してくる！
       if(isIOS){
         button.style.display = "inline-block";
         warning.style.display = "inline-block";
