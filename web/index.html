@@ -77,7 +77,10 @@
 
       // iOS(iPhone/iPad)の場合、Safariのクラッシュバグ回避のために、ツールバーを非表示にさせてから起動する。
       const ua = navigator.userAgent
-      const isIOS = (ua.indexOf("iPhone") >= 0) || (ua.indexOf("iPad") >= 0);
+//      const isIOS = (ua.indexOf("iPhone") >= 0) || (ua.indexOf("iPad") >= 0);
+      const isIOS = true;
+      setup_state.textContent = ua;
+
       if(isIOS){
         button.style.display = "inline-block";
         warning.style.display = "inline-block";
