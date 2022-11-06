@@ -46,6 +46,7 @@
     window.addEventListener('load', function(ev) {
       // フルスクリーン表示
       var button = document.getElementById('button1');
+      setup_state = document.querySelector('#flutter_startup_state');
       button.addEventListener('click', function(){
         // Chrome & Firefox v64以降
         if( document.body.requestFullscreen ) {
@@ -65,22 +66,20 @@
         }
 
         button.style.display = "none";
-      });
 
-      setup_state = document.querySelector('#flutter_startup_state');
-      setup_state.textContent = "Loading entrypoint...";
-
-      // Download main.dart.js
-      _flutter.loader.loadEntrypoint({
-        serviceWorker: {
-          serviceWorkerVersion: serviceWorkerVersion,
-        }
-      }).then(function(engineInitializer) {
-        setup_state.textContent = "Initializing engine...";
-        return engineInitializer.initializeEngine();
-      }).then(function(appRunner) {
-        setup_state.textContent = "Running app...";
-        return appRunner.runApp();
+        // Download main.dart.js
+        setup_state.textContent = "Loading entrypoint...";
+        _flutter.loader.loadEntrypoint({
+          serviceWorker: {
+            serviceWorkerVersion: serviceWorkerVersion,
+          }
+        }).then(function(engineInitializer) {
+          setup_state.textContent = "Initializing engine...";
+          return engineInitializer.initializeEngine();
+        }).then(function(appRunner) {
+          setup_state.textContent = "Running app...";
+          return appRunner.runApp();
+        });
       });
     });
   </script>
