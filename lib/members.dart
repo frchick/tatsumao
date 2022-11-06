@@ -92,7 +92,7 @@ class Member {
   // 起動直後のデータベース変更通知を受け取ったか
   bool firstSyncEvent = true;
   // ドラッグマーカーのアイコン
-  late Image icon0;
+  Image? icon0;
 }
 
 //---------------------------------------------------------------------------
@@ -434,12 +434,14 @@ void createMemberMarkers()
   int memberIndex = 0;
   members.forEach((member) {
     // アイコンを読み込んでおく
-    member.icon0 = Image.asset(member.iconPath, width:64, height:72);
+    if(member.icon0 == null){
+      member.icon0 = Image.asset(member.iconPath, width:64, height:72);
+    }
     // マーカーを作成
     memberMarkers.add(
       MyDragMarker2(
         point: member.pos,
-        builder: (ctx) => Image.asset(member.iconPath),
+        builder: (ctx) => member.icon0!,
         width: width,
         height: height,
         offset: Offset(0.0, -height/2),

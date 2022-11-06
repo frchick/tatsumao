@@ -164,8 +164,8 @@ class HomeIconWidget extends StatelessWidget
                 child: GestureDetector(
                   child: MyDraggable<int>(
                     data: index,
-                    child: member.icon0,
-                    feedback: member.icon0,
+                    child: member.icon0!,
+                    feedback: member.icon0!,
                     childWhenDragging: Container(
                       width: 64,
                       height: 72,
