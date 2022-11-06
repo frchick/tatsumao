@@ -321,8 +321,10 @@ class _MapViewState extends State<MapView> with AfterLayoutMixin<MapView>
   AppBar makeAppBar(BuildContext context)
   {
     // ウィンドウリサイズで再構築を走らせるためのおまじない
+    // 幅が狭ければ、微調整を入れる
     var screenSize = MediaQuery.of(context).size;
-
+    final bool narrowWidth = (screenSize.width < 640);
+  
     // AppBar-Action領域の、編集ロックボタン
     _lockEditingButton = OnOffIconButton(
       icon: const Icon(Icons.lock),
@@ -388,7 +390,11 @@ class _MapViewState extends State<MapView> with AfterLayoutMixin<MapView>
               onPressed: () => fileIconFunc(context),
             ),
             // ファイルパス
-            Text(getOpenedFilePath(), key:_filePathKey),
+            Text(
+              getOpenedFilePath(),
+              key:_filePathKey,
+              textScaleFactor: (narrowWidth? 0.8: null),  // 狭い画面なら文字小さく
+            ),
           ],
         ),
         // 機能ボタン群
@@ -417,6 +423,8 @@ class _MapViewState extends State<MapView> with AfterLayoutMixin<MapView>
       backgroundColor: Theme.of(context).primaryColor.withOpacity(0.4),
       elevation: 0,
       toolbarHeight: height,
+      automaticallyImplyLeading: false,
+      titleSpacing: (narrowWidth? 0: null), // 狭い画面なら左右パディングなし
       title: appBarContents,
     );
   }
