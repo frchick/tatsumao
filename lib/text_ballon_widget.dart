@@ -21,7 +21,17 @@ void resetTextBallonMessage()
 
 //---------------------------------------------------------------------------
 //---------------------------------------------------------------------------
-class TextBallonWidget extends StatelessWidget
+class TextBallonWidget extends StatefulWidget
+{
+  TextBallonWidget({
+    super.key,
+  }){}
+
+     @override
+  _TextBallonWidgetState createState() => _TextBallonWidgetState();
+}
+
+class _TextBallonWidgetState extends State<TextBallonWidget>
 {
   @override
   Widget build(BuildContext context)
@@ -112,6 +122,7 @@ class _MyFadeOutState extends State<MyFadeOut>
         setState(() {
           widget._completed = true;
         });
+        resetTextBallonMessage();
       }
     });
   }

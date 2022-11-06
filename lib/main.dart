@@ -312,132 +312,202 @@ class _MapViewState extends State<MapView> with AfterLayoutMixin<MapView>
 
   //----------------------------------------------------------------------------
   // アプリケーションバー構築
+
+  // ファイルパスと機能アイコンが重なっているか判定して、2行構成切り替え
+  GlobalKey _filePathKey = GlobalKey();
+  GlobalKey _actionButtonKey = GlobalKey();
+  bool _appBar2LineLayout = false;
+
   AppBar makeAppBar(BuildContext context)
   {
+    // ウィンドウリサイズで再構築を走らせるためのおまじない
+    var screenSize = MediaQuery.of(context).size;
+
     // AppBar-Action領域の、編集ロックボタン
     _lockEditingButton = OnOffIconButton(
       icon: const Icon(Icons.lock),
       iconOff: const Icon(Icons.lock_open),
       onSwitch: lockEditing,
-      onChange: (lock) async {
-        // ロックを解除するときには確認を促す
-        bool ok = true;
-        if(lock == false){
-          ok = await showOkCancelDialog(context,
-            title: "編集ロックの解除",
-            text: "注意：記録として保存してあるデータは変更しないで下さい。") ?? false;
-        }
-        if(ok){
-          // ロック変更時の共通処理
-          onLockChangeSub(lock);
-          // データベース経由で他のユーザーに同期
-          saveLockEditingToDB(getOpenedFileUIDPath());
-        }
+      onChange: (lock) {
+        lockEditingFunc(context, lock);
       },
     );
 
-    return AppBar(
-      // ファイルパスとファイルアイコン
-      title: Row(
+    // 右端の機能ボタン群
+    Widget actions = Padding(
+      padding: EdgeInsets.only(top:(_appBar2LineLayout? 30: 0)),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.end,
         children: [
-          // ファイル一覧ボタン
+          // ダミー
+          Container(key: _actionButtonKey, width:0, height:1),
+          // 編集ロックボタン
+          _lockEditingButton,
+          // クリップボードへコピーボタン
           IconButton(
-            icon: Icon(Icons.folder),
-            onPressed: () {
-              // アニメーション停止
-              gpsLog.stopAnim();
-              // BottomSheet を閉じる
-              closeBottomSheet();
-              // ファイル一覧画面に遷移して、ファイルの切り替え
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => FilesPage(
-                  onSelectFile: (uidPath) async {
-                    // ファイルを読み込み
-                    await openFile(uidPath);
-                    // ファイル名をバルーン表示
-                    String path = getOpenedFilePath();
-                    showTextBallonMessage(path);
-                    // GPSログを読み込み(遅延処理)
-                    gpsLog.downloadFromCloudStorage(uidPath).then((res) async {
-                      if(res){
-                        await gpsLog.loadGPSLogTrimRangeFromDB(uidPath);
-                      }
-                      gpsLog.makePolyLines();
-                      gpsLog.makeDogMarkers();
-                      gpsLog.redraw();
-                    });
-                  },
-                  onChangeState: (){
-                    // ファイル変更に至らない程度の変更があった場合には、AppBar を更新
-                    setState((){});
-                  },
-                ))
-              );
-            }
+            icon: Icon(Icons.content_copy),
+            onPressed:() {
+              copyAssignToClipboard(context);
+            },
           ),
-          Text(getOpenedFilePath()),
+          // GPSログの読み込み
+          IconButton(
+            icon: const Icon(Icons.timeline),
+            onPressed:() {
+              showGPSLogPopupMenu(context);
+            },
+          ),
+          // タツマの編集と読み込み
+          IconButton(
+            icon: const Icon(Icons.map),
+            onPressed:() {
+              tatsumaIconFunc(context);
+            },
+          ),
+          // エリアフィルター
+          IconButton(
+            icon: const Icon(Icons.filter_alt),
+            onPressed:() {
+              areaIconFunc(context);
+            },
+          ),
         ],
       ),
+    );
+
+    // 画面横幅が狭い場合は、AppBar上のファイルパスとアクションボタンを二行レイアウトにする
+    // いわゆるレスポンシブデザイン！？
+    Widget appBarContents = Stack(
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.start,
+          children: [
+            // ファイル一覧ボタン
+            IconButton(
+              icon: Icon(Icons.folder),
+              onPressed: () => fileIconFunc(context),
+            ),
+            // ファイルパス
+            Text(getOpenedFilePath(), key:_filePathKey),
+          ],
+        ),
+        // 機能ボタン群
+        actions,
+      ]
+    );
+    final double? height = _appBar2LineLayout? 80: null;
+
+    // ファイルパスとアイコンが重なっているか判定して、1行/2行構成を切り替える
+    WidgetsBinding.instance.addPostFrameCallback((_){
+      if((_filePathKey.currentContext != null) &&
+        (_actionButtonKey.currentContext != null)){
+        final RenderBox box0 = _filePathKey.currentContext!.findRenderObject() as RenderBox;
+        final RenderBox box1 = _actionButtonKey.currentContext!.findRenderObject() as RenderBox;
+        final double textRight = box0.localToGlobal(Offset.zero).dx + box0.size.width;
+        final double buttonsLeft = box1.localToGlobal(Offset.zero).dx;
+        final bool overlap = (buttonsLeft < textRight);
+        if(_appBar2LineLayout != overlap){
+          setState((){ _appBar2LineLayout = overlap; });
+        }
+      }
+    });
+
+    return AppBar(
       // アプリケーションバーは半透明
       backgroundColor: Theme.of(context).primaryColor.withOpacity(0.4),
       elevation: 0,
-      
-      actions: [
-        // 編集ロックボタン
-        _lockEditingButton,
-
-        // クリップボードへコピーボタン
-        IconButton(
-          icon: Icon(Icons.content_copy),
-          onPressed: () {
-            copyAssignToClipboard(context);
-          },
-        ),
-
-        // GPSログの読み込み
-        IconButton(
-          icon: const Icon(Icons.timeline),
-          onPressed:() {
-            showGPSLogPopupMenu(context);
-          },
-        ),
-
-        // タツマの編集と読み込み
-        IconButton(
-          icon: const Icon(Icons.map),
-          onPressed:() async {
-            bool? changeTatsuma = await Navigator.of(context).push(
-              MaterialPageRoute<bool>(
-                builder: (context) => TatsumasPage()
-              )
-            );
-            // タツマに変更があれば…
-            if(changeTatsuma ?? false){
-              // タツママーカーを再描画
-              updateTatsumaMarkers();
-              updateMapView();
-            }
-          },
-        ),
-
-        // エリアフィルター
-        IconButton(
-          icon: const Icon(Icons.filter_alt),
-          onPressed:() {
-            showAreaFilter(context, showMapDrawOptions:true).then((bool? res){
-              if(res ?? false){
-                // タツママーカーを再描画
-                updateTatsumaMarkers();
-                updateMapView();
-                // エリアフィルターの設定をデータベースへ保存
-                saveAreaFilterToDB(getOpenedFileUIDPath());
-              }
-            });
-          },
-        ),
-      ],
+      toolbarHeight: height,
+      title: appBarContents,
     );
+  }
+
+  //----------------------------------------------------------------------------
+  // ファイルアイコンタップしてファイル一覧画面に遷移
+  void fileIconFunc(BuildContext context)
+  {
+    // アニメーション停止
+    gpsLog.stopAnim();
+    // BottomSheet を閉じる
+    closeBottomSheet();
+    // ファイル一覧画面に遷移して、ファイルの切り替え
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => FilesPage(
+        onSelectFile: (uidPath) async {
+          // ファイルを読み込み
+          await openFile(uidPath);
+          // ファイル名をバルーン表示
+          String path = getOpenedFilePath();
+          showTextBallonMessage(path);
+          // GPSログを読み込み(遅延処理)
+          gpsLog.downloadFromCloudStorage(uidPath).then((res) async {
+            if(res){
+              await gpsLog.loadGPSLogTrimRangeFromDB(uidPath);
+            }
+            gpsLog.makePolyLines();
+            gpsLog.makeDogMarkers();
+            gpsLog.redraw();
+          });
+        },
+        onChangeState: (){
+          // ファイル変更に至らない程度の変更があった場合には、AppBar を更新
+          setState((){});
+        },
+      ))
+    );
+  }
+
+  //----------------------------------------------------------------------------
+  // タツマアイコンタップしてタツマ一覧画面に遷移
+  void tatsumaIconFunc(BuildContext context)
+  {
+    Navigator.of(context).push(
+      MaterialPageRoute<bool?>(
+        builder: (context) => TatsumasPage()
+      )
+    ).then((changeTatsuma){
+      // タツマに変更があれば…
+      if(changeTatsuma ?? false){
+        // タツママーカーを再描画
+        updateTatsumaMarkers();
+        updateMapView();
+      }
+    });
+  }
+
+  //----------------------------------------------------------------------------
+  // エリアアイコンタップしてエリアフィルターダイアログに遷移
+  void areaIconFunc(BuildContext context)
+  {
+    showAreaFilter(context, showMapDrawOptions:true).then((bool? res)
+    {
+      if(res ?? false){
+        // タツママーカーを再描画
+        updateTatsumaMarkers();
+        updateMapView();
+        // エリアフィルターの設定をデータベースへ保存
+        saveAreaFilterToDB(getOpenedFileUIDPath());
+      }
+    });
+  }
+
+  //----------------------------------------------------------------------------
+  // 編集ロックボタンのタップ
+  void lockEditingFunc(BuildContext context, bool lock) async
+  {
+    // ロックを解除するときには確認を促す
+    bool ok = true;
+    if(lock == false){
+      ok = await showOkCancelDialog(context,
+        title: "編集ロックの解除",
+        text: "注意：記録として保存してあるデータは変更しないで下さい。") ?? false;
+    }
+    if(ok){
+      // ロック変更時の共通処理
+      onLockChangeSub(lock);
+      // データベース経由で他のユーザーに同期
+      saveLockEditingToDB(getOpenedFileUIDPath());
+    }
   }
 
   //----------------------------------------------------------------------------
