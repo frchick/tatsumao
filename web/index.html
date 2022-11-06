@@ -32,6 +32,9 @@
   <title>tatsumao</title>
   <link rel="manifest" href="manifest.json">
 
+  <style type="text/css">
+  </style>
+
   <script>
     // The value below is injected by flutter build, do not touch.
     var serviceWorkerVersion = null;
@@ -40,47 +43,53 @@
   <script src="flutter.js" defer></script>
 </head>
 <body>
-	<div id="flutter_startup_state"></div>
-	<button id="button1">フルスクリーン表示</button>
+  <!-- Flutter WEB アプリ起動前に表示するページ -->
+  <div style="text-align:center; margin-top:100px;">
+    <div style="display:inline-block; width:80%;">
+      <button id="start_app_button" style="display:none;">TatsumaOを起動</button>
+      <p id="ios_warning" style="display:none;">iPhone/iPadでは、アドレスバー左端の「<b><small>あ</small>あ</b>」→「<b>ツールバーを非表示</b>」をタップしてから、起動してください。</p>
+      <p id="startup_state"></p>
+    </div>
+  </div>
 	<script>
-    window.addEventListener('load', function(ev) {
-      // フルスクリーン表示
-      var button = document.getElementById('button1');
-      setup_state = document.querySelector('#flutter_startup_state');
-      button.addEventListener('click', function(){
-        // Chrome & Firefox v64以降
-        if( document.body.requestFullscreen ) {
-          document.body.requestFullscreen();
-
-        // Firefox v63以前
-        } else if( document.body.mozRequestFullScreen ) {
-          document.body.mozRequestFullScreen();
-
-        // Safari & Edge & Chrome v68以前
-        } else if( document.body.webkitRequestFullscreen ) {
-          document.body.webkitRequestFullscreen();
-          
-        // IE11
-        } else if( document.body.msRequestFullscreen ) {
-          document.body.msRequestFullscreen();
+    // Flutter WEB アプリの標準的な起動シーケンス
+    function srart_app(setup_state)
+    {
+      setup_state.textContent = "起動中...(1/3)";
+      _flutter.loader.loadEntrypoint({
+        serviceWorker: {
+          serviceWorkerVersion: serviceWorkerVersion,
         }
-
-        button.style.display = "none";
-
-        // Download main.dart.js
-        setup_state.textContent = "Loading entrypoint...";
-        _flutter.loader.loadEntrypoint({
-          serviceWorker: {
-            serviceWorkerVersion: serviceWorkerVersion,
-          }
-        }).then(function(engineInitializer) {
-          setup_state.textContent = "Initializing engine...";
-          return engineInitializer.initializeEngine();
-        }).then(function(appRunner) {
-          setup_state.textContent = "Running app...";
-          return appRunner.runApp();
-        });
+      }).then(function(engineInitializer) {
+        setup_state.textContent = "起動中...(2/3)";
+        return engineInitializer.initializeEngine();
+      }).then(function(appRunner) {
+        setup_state.textContent = "起動中...(3/3)";
+        return appRunner.runApp();
       });
+    }
+
+    // iOSだけ起動シーケンスをかえるための処理
+    window.addEventListener('load', function(ev) {
+      var button = document.getElementById('start_app_button');
+      var warning = document.getElementById('ios_warning');
+      var setup_state = document.getElementById('startup_state');
+
+      // iOS(iPhone/iPad)の場合、Safariのクラッシュバグ回避のために、ツールバーを非表示にさせてから起動する。
+      const ua = navigator.userAgent
+      const isIOS = (ua.indexOf("iPhone") >= 0) || (ua.indexOf("iPad") >= 0);
+      if(isIOS){
+        button.style.display = "inline-block";
+        warning.style.display = "inline-block";
+
+        button.addEventListener('click', function(){
+          button.style.display = "none";
+          warning.style.display = "none";
+          srart_app(setup_state);
+        });
+      }else{
+        srart_app(setup_state);
+      }
     });
   </script>
 </body>
