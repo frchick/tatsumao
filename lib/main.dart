@@ -27,6 +27,9 @@ import 'home_icon.dart';
 import 'gps_log.dart';
 import 'globals.dart';
 
+//!!!!
+import 'text_edit_dialog.dart';
+
 //----------------------------------------------------------------------------
 // グローバル変数
 
@@ -146,6 +149,10 @@ class _MapViewState extends State<MapView> with AfterLayoutMixin<MapView>
     initStateSub();
   }
 
+//!!!!
+  double _mapSizeX = 100;
+  double _mapSizeY = 100;
+
   // 初期化(読み込み関連)
   Future initStateSub() async
   {
@@ -200,6 +207,22 @@ class _MapViewState extends State<MapView> with AfterLayoutMixin<MapView>
         text: "iPhone/iPadでは、アドレスバー左端の[ぁあ]→[ツールバーを非表示]をタップしてから進んでください。");
     }
 */  
+//!!!!
+    String? resolution = await showDialog<String>(
+      context: context,
+      useRootNavigator: true,
+      builder: (context) {
+        return TextEditDialog(
+          titleText:"Map解像度");
+      },
+    );
+    if(resolution != null){
+      var resXY = resolution.split("x");
+      _mapSizeX = double.parse(resXY[0]);
+      _mapSizeY = double.parse(resXY[1]);
+      print("_mapSize=[${_mapSizeX}x${_mapSizeY}]");
+    }
+
     // 再描画
     setState((){ _initializingApp = false; });
   }
@@ -571,73 +594,72 @@ class _MapViewState extends State<MapView> with AfterLayoutMixin<MapView>
       });
     }
   
-    return Center(
-      child: Row(
-        children: [
-          SizedBox(width:50),
-          Expanded(child: Stack(
-            children: [
-              // 地図
-              FlutterMap(
-                mapController: mainMapController,
-                options: MapOptions(
-                  allowPanningOnScrollingParent: false,
-                  interactiveFlags: InteractiveFlag.all & ~InteractiveFlag.rotate,
-                  plugins: [
-                    MyDragMarkerPlugin(),
-                    MyPolylineLayerPlugin(),
-                  ],
-                  center: LatLng(35.309934, 139.076056),  // 丸太の森P
-                  zoom: 16,
-                  maxZoom: 18,
-                  onTap: (TapPosition tapPos, LatLng point)
-                    => tapOnMap(context, tapPos),
-                ),
-                nonRotatedLayers: [
-                  // 高さ陰影図
-                  TileLayerOptions(
-                    urlTemplate: "https://cyberjapandata.gsi.go.jp/xyz/hillshademap/{z}/{x}/{y}.png",
-                  ),
-                  // 標準地図
-                  TileLayerOptions(
-                    urlTemplate: "https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png",
-                    opacity: 0.64
-                  ),
-                  // GPSログのライン
-                  MyPolylineLayerOptions(
-                    polylines: gpsLog.makePolyLines(),
-                    rebuild: gpsLog.reDrawStream,
-                    polylineCulling: false,
-                  ),
-                  // タツママーカー
-                  MarkerLayerOptions(
-                    markers: tatsumaMarkers,
-                    // NOTE: usePxCache=trueだと、非表示グレーマーカーで並び順が変わったときにバグる
-                    usePxCache: false,
-                  ),
-                  // メンバーマーカー
-                  mainMapDragMarkerPluginOptions,
-                  // GPSログの犬マーカー
-                  MarkerLayerOptions(
-                    markers: gpsLog.makeDogMarkers(),
-                    rebuild: gpsLog.reDrawStream,
-                    // NOTE: usePxCache=trueだと、ストリーム経由の再描画で位置が変わらない
-                    usePxCache: false,
-                  ),
+    return Center(child:
+      SizedBox(
+        width: _mapSizeX,
+        height: _mapSizeY,
+        child: Stack(
+          children: [
+            // 地図
+            FlutterMap(
+              mapController: mainMapController,
+              options: MapOptions(
+                allowPanningOnScrollingParent: false,
+                interactiveFlags: InteractiveFlag.all & ~InteractiveFlag.rotate,
+                plugins: [
+                  MyDragMarkerPlugin(),
+                  MyPolylineLayerPlugin(),
                 ],
+                center: LatLng(35.309934, 139.076056),  // 丸太の森P
+                zoom: 16,
+                maxZoom: 18,
+                onTap: (TapPosition tapPos, LatLng point)
+                  => tapOnMap(context, tapPos),
               ),
+              nonRotatedLayers: [
+                // 高さ陰影図
+                TileLayerOptions(
+                  urlTemplate: "https://cyberjapandata.gsi.go.jp/xyz/hillshademap/{z}/{x}/{y}.png",
+                ),
+                // 標準地図
+                TileLayerOptions(
+                  urlTemplate: "https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png",
+                  opacity: 0.64
+                ),
+                // GPSログのライン
+                MyPolylineLayerOptions(
+                  polylines: gpsLog.makePolyLines(),
+                  rebuild: gpsLog.reDrawStream,
+                  polylineCulling: false,
+                ),
+                // タツママーカー
+                MarkerLayerOptions(
+                  markers: tatsumaMarkers,
+                  // NOTE: usePxCache=trueだと、非表示グレーマーカーで並び順が変わったときにバグる
+                  usePxCache: false,
+                ),
+                // メンバーマーカー
+                mainMapDragMarkerPluginOptions,
+                // GPSログの犬マーカー
+                MarkerLayerOptions(
+                  markers: gpsLog.makeDogMarkers(),
+                  rebuild: gpsLog.reDrawStream,
+                  // NOTE: usePxCache=trueだと、ストリーム経由の再描画で位置が変わらない
+                  usePxCache: false,
+                ),
+              ],
+            ),
 
-              // 家アイコン
-              homeIconWidget,
+            // 家アイコン
+            homeIconWidget,
 
-              // ポップアップメッセージ
-              Align(
-                alignment: Alignment(0.0, 0.0),
-                child: TextBallonWidget(),
-              ),
-            ]
-          )),
-        ],
+            // ポップアップメッセージ
+            Align(
+              alignment: Alignment(0.0, 0.0),
+              child: TextBallonWidget(),
+            ),
+          ]
+        ),
       ),
     );
   }
