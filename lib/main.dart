@@ -25,6 +25,7 @@ import 'ok_cancel_dialog.dart';
 import 'onoff_icon_button.dart';
 import 'home_icon.dart';
 import 'gps_log.dart';
+import 'password.dart';
 import 'globals.dart';
 
 //----------------------------------------------------------------------------
@@ -123,7 +124,8 @@ class MapView extends StatefulWidget
   _MapViewState createState() => _MapViewState();
 }
 
-class _MapViewState extends State<MapView> with AfterLayoutMixin<MapView>
+class _MapViewState extends State<MapView>
+  with AfterLayoutMixin<MapView>
 {
   // 家アイコン
   late HomeIconWidget homeIconWidget;
@@ -191,6 +193,9 @@ class _MapViewState extends State<MapView> with AfterLayoutMixin<MapView>
       Navigator.of(context).pop();
       _progressIndicatorState = ProgressIndicatorState.NoIndicate;
     }
+
+    // パスワードチェック
+    await askAndCheckPassword(context);
 
     // iOS版 Safari の謎クラッシュ対策
     final bool iOS = 
@@ -310,8 +315,19 @@ class _MapViewState extends State<MapView> with AfterLayoutMixin<MapView>
         appBar: AppBar(
           title: Text("TatsumaO"),
         ),
-        body: Center(
-          child: Text("初期化中...", textScaleFactor:2.0),
+        body: Container(
+          child: Stack(
+            children: [
+              Center(
+                child: Text("初期化中...", textScaleFactor:2.0),
+              ),
+              // ポップアップメッセージ
+              Align(
+                alignment: Alignment(0.0, 0.0),
+                child: TextBallonWidget(),
+              ),
+            ]
+          ),
         ),
       );
     }else{
