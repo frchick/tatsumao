@@ -32,9 +32,6 @@
   <title>tatsumao</title>
   <link rel="manifest" href="manifest.json">
 
-  <style type="text/css">
-  </style>
-
   <script>
     // The value below is injected by flutter build, do not touch.
     var serviceWorkerVersion = null;
@@ -47,15 +44,14 @@
   <!-- CSSでスタイル指定すると FlutterApp の表示に影響するので、各タグに直接書く -->
   <div style="text-align:center; margin-top:100px;">
     <div style="display:inline-block; width:80%;">
-      <button id="start_app_button" style="display:none; font-size:32px; font-family:sans-serif;">TatsumaOを起動</button>
-      <p id="ios_warning" style="display:none; font-size:32px; font-family:sans-serif;">iPhone/iPadでは、アドレスバー左端の「<b><small>あ</small>あ</b>」→「<b>ツールバーを非表示</b>」をタップしてから、起動してください。</p>
       <p id="startup_state" style="font-size:32px; font-family:sans-serif;"></p>
     </div>
   </div>
-	<script>
-    // Flutter WEB アプリの標準的な起動シーケンス
-    function srart_app(state)
-    {
+  <script>
+    window.addEventListener('load', function(ev) {
+      var state = document.getElementById('startup_state');
+
+	  // Flutter WEB アプリの標準的な起動シーケンス
       state.textContent = "起動中...(1/3)";
       _flutter.loader.loadEntrypoint({
         serviceWorker: {
@@ -68,32 +64,6 @@
         state.textContent = "起動中...(3/3)";
         return appRunner.runApp();
       });
-    }
-
-    // iOSだけ起動シーケンスをかえるための処理
-    window.addEventListener('load', function(ev) {
-      var button = document.getElementById('start_app_button');
-      var warning = document.getElementById('ios_warning');
-      var state = document.getElementById('startup_state');
-
-      // iOS(iPhone/iPad)の場合、Safariのクラッシュバグ回避のために、ツールバーを非表示にさせてから起動する。
-      const ua = navigator.userAgent
-      const isIOS =
-        (ua.indexOf("iPhone;") >= 0) ||
-        (ua.indexOf("iPad;") >= 0) ||
-        (ua.indexOf("Macintosh;") >= 0);  // iPad が 'Macintosh' を返してくる！
-      if(isIOS){
-        button.style.display = "inline-block";
-        warning.style.display = "inline-block";
-
-        button.addEventListener('click', function(){
-          button.style.display = "none";
-          warning.style.display = "none";
-          srart_app(state);
-        });
-      }else{
-        srart_app(state);
-      }
     });
   </script>
 </body>
