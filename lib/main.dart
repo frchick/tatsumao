@@ -191,6 +191,7 @@ class _MapViewState extends State<MapView> with AfterLayoutMixin<MapView>
     }
 
     // iPhone/iPadでの特殊シーケンス
+/*
     final bool iOS = 
       (defaultTargetPlatform == TargetPlatform.iOS) ||
       (defaultTargetPlatform == TargetPlatform.macOS);
@@ -198,7 +199,7 @@ class _MapViewState extends State<MapView> with AfterLayoutMixin<MapView>
       await showOkDialog(context,
         text: "iPhone/iPadでは、アドレスバー左端の[ぁあ]→[ツールバーを非表示]をタップしてから進んでください。");
     }
-  
+*/  
     // 再描画
     setState((){ _initializingApp = false; });
   }
@@ -571,69 +572,72 @@ class _MapViewState extends State<MapView> with AfterLayoutMixin<MapView>
     }
   
     return Center(
-      child: Container(
-        child: Stack(
-          children: [
-            // 地図
-            FlutterMap(
-              mapController: mainMapController,
-              options: MapOptions(
-                allowPanningOnScrollingParent: false,
-                interactiveFlags: InteractiveFlag.all & ~InteractiveFlag.rotate,
-                plugins: [
-                  MyDragMarkerPlugin(),
-                  MyPolylineLayerPlugin(),
+      child: Row(
+        children: [
+          SizedBox(width:50),
+          Expanded(child: Stack(
+            children: [
+              // 地図
+              FlutterMap(
+                mapController: mainMapController,
+                options: MapOptions(
+                  allowPanningOnScrollingParent: false,
+                  interactiveFlags: InteractiveFlag.all & ~InteractiveFlag.rotate,
+                  plugins: [
+                    MyDragMarkerPlugin(),
+                    MyPolylineLayerPlugin(),
+                  ],
+                  center: LatLng(35.309934, 139.076056),  // 丸太の森P
+                  zoom: 16,
+                  maxZoom: 18,
+                  onTap: (TapPosition tapPos, LatLng point)
+                    => tapOnMap(context, tapPos),
+                ),
+                nonRotatedLayers: [
+                  // 高さ陰影図
+                  TileLayerOptions(
+                    urlTemplate: "https://cyberjapandata.gsi.go.jp/xyz/hillshademap/{z}/{x}/{y}.png",
+                  ),
+                  // 標準地図
+                  TileLayerOptions(
+                    urlTemplate: "https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png",
+                    opacity: 0.64
+                  ),
+                  // GPSログのライン
+                  MyPolylineLayerOptions(
+                    polylines: gpsLog.makePolyLines(),
+                    rebuild: gpsLog.reDrawStream,
+                    polylineCulling: false,
+                  ),
+                  // タツママーカー
+                  MarkerLayerOptions(
+                    markers: tatsumaMarkers,
+                    // NOTE: usePxCache=trueだと、非表示グレーマーカーで並び順が変わったときにバグる
+                    usePxCache: false,
+                  ),
+                  // メンバーマーカー
+                  mainMapDragMarkerPluginOptions,
+                  // GPSログの犬マーカー
+                  MarkerLayerOptions(
+                    markers: gpsLog.makeDogMarkers(),
+                    rebuild: gpsLog.reDrawStream,
+                    // NOTE: usePxCache=trueだと、ストリーム経由の再描画で位置が変わらない
+                    usePxCache: false,
+                  ),
                 ],
-                center: LatLng(35.309934, 139.076056),  // 丸太の森P
-                zoom: 16,
-                maxZoom: 18,
-                onTap: (TapPosition tapPos, LatLng point)
-                  => tapOnMap(context, tapPos),
               ),
-              nonRotatedLayers: [
-                // 高さ陰影図
-                TileLayerOptions(
-                  urlTemplate: "https://cyberjapandata.gsi.go.jp/xyz/hillshademap/{z}/{x}/{y}.png",
-                ),
-                // 標準地図
-                TileLayerOptions(
-                  urlTemplate: "https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png",
-                  opacity: 0.64
-                ),
-                // GPSログのライン
-                MyPolylineLayerOptions(
-                  polylines: gpsLog.makePolyLines(),
-                  rebuild: gpsLog.reDrawStream,
-                  polylineCulling: false,
-                ),
-                // タツママーカー
-                MarkerLayerOptions(
-                  markers: tatsumaMarkers,
-                  // NOTE: usePxCache=trueだと、非表示グレーマーカーで並び順が変わったときにバグる
-                  usePxCache: false,
-                ),
-                // メンバーマーカー
-                mainMapDragMarkerPluginOptions,
-                // GPSログの犬マーカー
-                MarkerLayerOptions(
-                  markers: gpsLog.makeDogMarkers(),
-                  rebuild: gpsLog.reDrawStream,
-                  // NOTE: usePxCache=trueだと、ストリーム経由の再描画で位置が変わらない
-                  usePxCache: false,
-                ),
-              ],
-            ),
 
-            // 家アイコン
-            homeIconWidget,
+              // 家アイコン
+              homeIconWidget,
 
-            // ポップアップメッセージ
-            Align(
-              alignment: Alignment(0.0, 0.0),
-              child: TextBallonWidget(),
-            ),
-          ]
-        ),
+              // ポップアップメッセージ
+              Align(
+                alignment: Alignment(0.0, 0.0),
+                child: TextBallonWidget(),
+              ),
+            ]
+          )),
+        ],
       ),
     );
   }
