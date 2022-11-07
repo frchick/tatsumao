@@ -39,6 +39,8 @@ ProgressIndicatorState _progressIndicatorState = ProgressIndicatorState.NoIndica
 
 // 初期化完了
 bool _initializingApp = true;
+// 初回の Map ビルド
+bool _firstMapBuild = true;
 
 //---------------------------------------------------------------------------
 //---------------------------------------------------------------------------
@@ -552,6 +554,15 @@ class _MapViewState extends State<MapView> with AfterLayoutMixin<MapView>
     // 家アイコン更新
     HomeIconWidget.update();
 
+    // 最初にロードしたフィルの初期位置にマップの表示位置を移動
+    // 初回 build の後でないと mainMapController が使えないので…
+    if(_firstMapBuild){
+      _firstMapBuild = false;
+      WidgetsBinding.instance.addPostFrameCallback((_){
+        moveMapToLocationOfMembers();
+      });
+    }
+  
     return Center(
       child: Container(
         child: Stack(
