@@ -46,7 +46,7 @@ bool _initializingApp = true;
 // 初回の Map ビルド
 bool _firstMapBuild = true;
 //!!!! iOS対応
-double _rowGapWidth = 96;
+double _rowGapWidth = 0.5;
 
 //---------------------------------------------------------------------------
 //---------------------------------------------------------------------------
@@ -592,10 +592,14 @@ class _MapViewState extends State<MapView> with AfterLayoutMixin<MapView>
       });
     }
   
+    // iOS対策用の、画面左側ギャップ幅
+    var screenSize = MediaQuery.of(context).size;
+    double rowGapWidth = screenSize.width * _rowGapWidth;
+  
     return Center(child:
       Row(
         children:[
-          SizedBox(width:_rowGapWidth),
+          SizedBox(width: rowGapWidth),
           Expanded(
             child: Stack(
               children: [
