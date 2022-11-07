@@ -37,6 +37,9 @@ enum ProgressIndicatorState {
 }
 ProgressIndicatorState _progressIndicatorState = ProgressIndicatorState.NoIndicate;
 
+// 初期化完了
+bool _initializingApp = true;
+
 //---------------------------------------------------------------------------
 //---------------------------------------------------------------------------
 // メンバーデータの同期(firebase realtime database)
@@ -83,9 +86,6 @@ void main() async
     options: DefaultFirebaseOptions.currentPlatform,    
   );
 
-  // 地図コントローラを作成
-  mainMapController = MapController();
-
   runApp(MyApp());
 }
 
@@ -128,6 +128,9 @@ class _MapViewState extends State<MapView> with AfterLayoutMixin<MapView>
   @override
   void initState() {
     super.initState();
+
+    // 地図コントローラを作成
+    mainMapController = MapController();
 
     // メンバーデータからマーカー配列を作成
     // メンバーは組み込みデータなのでデータベースからの読み込みはない
@@ -176,6 +179,13 @@ class _MapViewState extends State<MapView> with AfterLayoutMixin<MapView>
       gpsLog.makeDogMarkers();
       gpsLog.redraw();
     });
+    // 初期化完了(GPSログ除く)
+    // 一通りの処理が終わるので、処理中インジケータを消す
+    if(_progressIndicatorState == ProgressIndicatorState.Showing){
+      _progressIndicatorState = ProgressIndicatorState.Stopping;
+    }
+    // 再描画
+    setState((){ _initializingApp = false; });
   }
 
   //----------------------------------------------------------------------------
@@ -201,7 +211,9 @@ class _MapViewState extends State<MapView> with AfterLayoutMixin<MapView>
     await initMemberSync(fileUIDPath);
     // メンバーの位置へ地図を移動
     // 直前の地図が表示され続ける時間を短くするために、なるべく早めに
-    moveMapToLocationOfMembers();
+    if(!_initializingApp){
+      moveMapToLocationOfMembers();
+    }
 
     // タツマのエリアフィルターを取得(表示/非表示)
     // それに応じてマーカー配列を作成
@@ -213,14 +225,7 @@ class _MapViewState extends State<MapView> with AfterLayoutMixin<MapView>
   
     // GPSログをクリア
     gpsLog.clear();
-  
-    // 一通りの処理が終わるので、処理中インジケータを消す
-    if(_progressIndicatorState == ProgressIndicatorState.Showing){
-      _progressIndicatorState = ProgressIndicatorState.Stopping;
-    }
-    // 再描画
-    setState((){});
-}
+  }
 
   //----------------------------------------------------------------------------
   // 終了処理
@@ -277,17 +282,30 @@ class _MapViewState extends State<MapView> with AfterLayoutMixin<MapView>
       _progressIndicatorState = ProgressIndicatorState.NoIndicate;
     }
 
-    final AppBar appBar = makeAppBar(context);
-    final Widget appBody = makeAppBody(context);
+    if(_initializingApp){
+      // 初期化中
+      return Scaffold(
+        appBar: AppBar(
+          title: Text("TatsumaO"),
+        ),
+        body: Center(
+          child: Text("初期化中...", textScaleFactor:2.0),
+        ),
+      );
+    }else{
+      // 初期化完了後
+      final AppBar appBar = makeAppBar(context);
+      final Widget appBody = makeAppBody(context);
 
-    return Scaffold(
-      key: appScaffoldKey,
-      extendBodyBehindAppBar: true,
-      // アプリケーションバー
-      appBar: appBar,
-      // メインとなる地図画面
-      body: appBody,
-    );
+      return Scaffold(
+        key: appScaffoldKey,
+        extendBodyBehindAppBar: true,
+        // アプリケーションバー
+        appBar: appBar,
+        // メインとなる地図画面
+        body: appBody,
+      );
+    }
   }
 
   //----------------------------------------------------------------------------
@@ -444,6 +462,8 @@ class _MapViewState extends State<MapView> with AfterLayoutMixin<MapView>
         onSelectFile: (uidPath) async {
           // ファイルを読み込み
           await openFile(uidPath);
+          // 再描画
+          setState((){});
           // ファイル名をバルーン表示
           String path = getOpenedFilePath();
           showTextBallonMessage(path);
@@ -538,6 +558,7 @@ class _MapViewState extends State<MapView> with AfterLayoutMixin<MapView>
           children: [
             // 地図
             FlutterMap(
+              mapController: mainMapController,
               options: MapOptions(
                 allowPanningOnScrollingParent: false,
                 interactiveFlags: InteractiveFlag.all & ~InteractiveFlag.rotate,
@@ -549,25 +570,7 @@ class _MapViewState extends State<MapView> with AfterLayoutMixin<MapView>
                 zoom: 16,
                 maxZoom: 18,
                 onTap: (TapPosition tapPos, LatLng point)
-                {
-                  // タツマをタップしたら、タツマ編集ダイアログ
-                  int? index = searchTatsumaByScreenPos(
-                    mainMapController, tapPos.global.dx, tapPos.global.dy);
-                  if(index != null){
-                    var tatsuma = tatsumas[index];
-                    showChangeTatsumaDialog(context, tatsuma).then((res){
-                      if(res != null){
-                        // タツマデータに反映
-                        tatsuma.name     = res["name"] as String;
-                        tatsuma.visible  = res["visible"] as bool;
-                        tatsuma.areaBits = res["areaBits"] as int;
-                        updateTatsumaMarkers();
-                        // データベースに同期
-                        updateTatsumaToDB(index);
-                      }
-                    });
-                  }        
-                },
+                  => tapOnMap(context, tapPos),
               ),
               nonRotatedLayers: [
                 // 高さ陰影図
@@ -601,7 +604,6 @@ class _MapViewState extends State<MapView> with AfterLayoutMixin<MapView>
                   usePxCache: false,
                 ),
               ],
-              mapController: mainMapController,
             ),
 
             // 家アイコン
@@ -617,6 +619,29 @@ class _MapViewState extends State<MapView> with AfterLayoutMixin<MapView>
       ),
     );
   }
+}
+
+//---------------------------------------------------------------------------
+// マップをタップ
+void tapOnMap(BuildContext context, TapPosition tapPos)
+{
+  // タツマをタップしたら、タツマ編集ダイアログ
+  int? index = searchTatsumaByScreenPos(
+    mainMapController, tapPos.global.dx, tapPos.global.dy);
+  if(index != null){
+    var tatsuma = tatsumas[index];
+    showChangeTatsumaDialog(context, tatsuma).then((res){
+      if(res != null){
+        // タツマデータに反映
+        tatsuma.name     = res["name"] as String;
+        tatsuma.visible  = res["visible"] as bool;
+        tatsuma.areaBits = res["areaBits"] as int;
+        updateTatsumaMarkers();
+        // データベースに同期
+        updateTatsumaToDB(index);
+      }
+    });
+  }        
 }
 
 //---------------------------------------------------------------------------
