@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_map/plugin_api.dart';
+import 'package:flutter/foundation.dart'; // defaultTargetPlatform
 import 'mypolyline_layer.dart'; // マップ上のカスタムポリライン
 import 'package:latlong2/latlong.dart';
 import 'package:positioned_tap_detector_2/positioned_tap_detector_2.dart'; // マップのタップ
@@ -181,11 +182,23 @@ class _MapViewState extends State<MapView> with AfterLayoutMixin<MapView>
       gpsLog.makeDogMarkers();
       gpsLog.redraw();
     });
+
     // 初期化完了(GPSログ除く)
     // 一通りの処理が終わるので、処理中インジケータを消す
     if(_progressIndicatorState == ProgressIndicatorState.Showing){
-      _progressIndicatorState = ProgressIndicatorState.Stopping;
+      Navigator.of(context).pop();
+      _progressIndicatorState = ProgressIndicatorState.NoIndicate;
     }
+
+    // iPhone/iPadでの特殊シーケンス
+    final bool iOS = 
+      (defaultTargetPlatform == TargetPlatform.iOS) ||
+      (defaultTargetPlatform == TargetPlatform.macOS);
+    if(iOS){
+      await showOkDialog(context,
+        text: "iPhone/iPadでは、アドレスバー左端の[ぁあ]→[ツールバーを非表示]をタップしてから進んでください。");
+    }
+  
     // 再描画
     setState((){ _initializingApp = false; });
   }
@@ -278,12 +291,6 @@ class _MapViewState extends State<MapView> with AfterLayoutMixin<MapView>
   @override
   Widget build(BuildContext context)
   {
-    // 処理中インジケータを消す
-    if(_progressIndicatorState == ProgressIndicatorState.Stopping){
-      Navigator.of(context).pop();
-      _progressIndicatorState = ProgressIndicatorState.NoIndicate;
-    }
-
     if(_initializingApp){
       // 初期化中
       return Scaffold(
