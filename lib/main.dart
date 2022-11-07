@@ -595,8 +595,8 @@ class _MapViewState extends State<MapView> with AfterLayoutMixin<MapView>
       // FlutterMap に Body サイズを正しく渡すために、SizedBox で囲む。
       // これしないと、iOS版 Safari で謎クラッシュに見舞われる…
       SizedBox(
-        width: 640,
-        height: 640,
+        width: 1088,
+        height: 736,
         child: Stack(
           children: [
             // 地図
