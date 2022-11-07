@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
 
-final _textBallonStream = StreamController<String?>();
+final _textBallonStream = StreamController<String?>.broadcast();
 
 //-----------------------------------------------------------------------------
 // ポップアップメッセージの表示

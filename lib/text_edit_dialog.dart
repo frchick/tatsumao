@@ -42,7 +42,7 @@ class _TextEditDialogState extends State<TextEditDialog>
       title: Text(widget.titleText),
       content: TextField(
         controller: _dateTextController,
-        decoration: (widget.hintText != null)? InputDecoration(hintText: widget.hintText): null,
+        decoration: InputDecoration(hintText: widget.hintText),
         autofocus: true,
       ),
       actions: [
