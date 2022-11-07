@@ -149,10 +149,6 @@ class _MapViewState extends State<MapView> with AfterLayoutMixin<MapView>
     initStateSub();
   }
 
-//!!!!
-  double _mapSizeX = 100;
-  double _mapSizeY = 100;
-
   // 初期化(読み込み関連)
   Future initStateSub() async
   {
@@ -195,32 +191,6 @@ class _MapViewState extends State<MapView> with AfterLayoutMixin<MapView>
     if(_progressIndicatorState == ProgressIndicatorState.Showing){
       Navigator.of(context).pop();
       _progressIndicatorState = ProgressIndicatorState.NoIndicate;
-    }
-
-    // iPhone/iPadでの特殊シーケンス
-/*
-    final bool iOS = 
-      (defaultTargetPlatform == TargetPlatform.iOS) ||
-      (defaultTargetPlatform == TargetPlatform.macOS);
-    if(iOS){
-      await showOkDialog(context,
-        text: "iPhone/iPadでは、アドレスバー左端の[ぁあ]→[ツールバーを非表示]をタップしてから進んでください。");
-    }
-*/  
-//!!!!
-    String? resolution = await showDialog<String>(
-      context: context,
-      useRootNavigator: true,
-      builder: (context) {
-        return TextEditDialog(
-          titleText:"Map解像度");
-      },
-    );
-    if(resolution != null){
-      var resXY = resolution.split("x");
-      _mapSizeX = double.parse(resXY[0]);
-      _mapSizeY = double.parse(resXY[1]);
-      print("_mapSize=[${_mapSizeX}x${_mapSizeY}]");
     }
 
     // 再描画
@@ -311,17 +281,36 @@ class _MapViewState extends State<MapView> with AfterLayoutMixin<MapView>
   }
 
   //----------------------------------------------------------------------------
+  // 画面サイズを取得するための、Body 直下 Widget を識別するキー
+  GlobalKey _bodyKey = GlobalKey();
+  // Body サイズ
+  double _bodySizeX = 0;
+  double _bodySizeY = 0;
+
+  //----------------------------------------------------------------------------
   // 画面構築
   @override
   Widget build(BuildContext context)
   {
     if(_initializingApp){
       // 初期化中
+      // Body 直下の Widget から画面サイズを取得
+      WidgetsBinding.instance.addPostFrameCallback((_){
+        if(_bodyKey.currentContext != null){
+          final RenderBox box0 = _bodyKey.currentContext!.findRenderObject() as RenderBox;
+          _bodySizeX = box0.size.width;
+          _bodySizeY = box0.size.height;
+          print("_bodySize=[${_bodySizeX}x${_bodySizeY}]");
+        }
+      });
+
       return Scaffold(
+        extendBodyBehindAppBar: true,
         appBar: AppBar(
           title: Text("TatsumaO"),
         ),
         body: Center(
+          key: _bodyKey,
           child: Text("初期化中...", textScaleFactor:2.0),
         ),
       );
@@ -441,10 +430,11 @@ class _MapViewState extends State<MapView> with AfterLayoutMixin<MapView>
               onPressed: () => fileIconFunc(context),
             ),
             // ファイルパス
+            // 狭い画面なら文字小さく
             Text(
               getOpenedFilePath(),
               key:_filePathKey,
-              textScaleFactor: (narrowWidth? 0.8: null),  // 狭い画面なら文字小さく
+              textScaleFactor: (narrowWidth? 0.8: null),
             ),
           ],
         ),
@@ -594,10 +584,15 @@ class _MapViewState extends State<MapView> with AfterLayoutMixin<MapView>
       });
     }
   
+    // 画面サイズ
+    var screenSize = MediaQuery.of(context).size;
+
     return Center(child:
+      // FlutterMap に Body サイズを正しく渡すために、SizedBox で囲む。
+      // これしないと、iOS版 Safari で謎クラッシュに見舞われる…
       SizedBox(
-        width: _mapSizeX,
-        height: _mapSizeY,
+        width: screenSize.width,
+        height: screenSize.height,
         child: Stack(
           children: [
             // 地図
