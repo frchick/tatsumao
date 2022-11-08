@@ -178,7 +178,9 @@ class _MapViewState extends State<MapView>
     // 初期状態のファイルを読み込み
     await openFile(openPath);
     // GPSログを読み込み(遅延処理)
-    gpsLog.downloadFromCloudStorage(openPath).then((res) async {
+    final String gpsLogPath = await gpsLog.getReferencePath(openPath);
+    final bool refLink = (gpsLogPath != openPath);
+    gpsLog.downloadFromCloudStorage(gpsLogPath, refLink).then((res) async {
       if(res){
         await gpsLog.loadGPSLogTrimRangeFromDB(openPath);
       }
@@ -504,10 +506,12 @@ class _MapViewState extends State<MapView>
           // 再描画
           setState((){});
           // ファイル名をバルーン表示
-          String path = getOpenedFilePath();
+          final String path = getOpenedFilePath();
           showTextBallonMessage(path);
           // GPSログを読み込み(遅延処理)
-          gpsLog.downloadFromCloudStorage(uidPath).then((res) async {
+          final String gpsLogPath = await gpsLog.getReferencePath(uidPath);
+          final bool refLink = (gpsLogPath != uidPath);
+          gpsLog.downloadFromCloudStorage(gpsLogPath, refLink).then((res) async {
             if(res){
               await gpsLog.loadGPSLogTrimRangeFromDB(uidPath);
             }

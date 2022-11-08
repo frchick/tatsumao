@@ -144,15 +144,9 @@ String getCurrentUIDPath()
 // 先頭は"/"から始まり、最後はファイル名
 String getOpenedFilePath()
 {
-  String path = "";
-  for(int d = 1; d < _openedUIDPathStack.length; d++){
-    final int uid = _openedUIDPathStack[d];
-    final String name = _uid2name[uid] ?? "";
-    path = path + "/" + name;
-  }
-  if(path == "") path = "/";
-
-  return path;
+  String uidPath = getOpenedFileUIDPath();
+  String namePath = convertUIDPath2NamePath(uidPath);
+  return namePath;
 }
 
 // 現在開かれているファイルへのUIDフルパスを取得
@@ -160,14 +154,29 @@ String getOpenedFilePath()
 String getOpenedFileUIDPath()
 {
   // ルートディレクトリのユニークID'0'は含まない
-  String path = "";
+  String uidPath = "";
   for(int d = 1; d < _openedUIDPathStack.length; d++){
     final int uid = _openedUIDPathStack[d];
-    path = path + "/" + uid.toString();
+    uidPath = uidPath + "/" + uid.toString();
   }
-  if(path == "") path = "/";
+  if(uidPath == "") uidPath = "/";
 
-  return path;
+  return uidPath;
+}
+
+// UIDパスから表示名パスへ変換
+String convertUIDPath2NamePath(String uidPath)
+{
+  List<String> uidsText = uidPath.split("/");
+  String namePath = "";
+  uidsText.forEach((uidText){
+    if(uidText != ""){
+      final int uid = int.parse(uidText);
+      final String name = _uid2name[uid] ?? uid.toString();
+      namePath = namePath + "/" + name;
+    }
+  });
+  return namePath;
 }
 
 // 現在開かれているファイル名を取得

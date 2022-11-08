@@ -57,6 +57,11 @@ class GPSLog
   // マップ上の犬マーカー配列
   List<Marker> _dogMarkers = [];
 
+  // 現在読み込んでいるログの、クラウド上のパス(ユニークID)
+  String? _openedUIDPath;
+  // 他のデータへの参照か？
+  bool _isReferenceLink = false;
+
   //----------------------------------------------------------------------------
   // 開始時間
   DateTime _startTime = _dummyStartTime;
@@ -204,6 +209,9 @@ class GPSLog
   
     _thisUpdateTime = null;
 
+    _openedUIDPath = null;
+    _isReferenceLink = false;
+
     // 直前の同期イベントを削除
     _updateTrimSyncEvent?.cancel();
     _updateTrimSyncEvent = null;
@@ -317,6 +325,11 @@ class GPSLog
       res = false;
     }
 
+    // 成功していたらパスを記録
+    if(res){
+      _openedUIDPath = path;
+    }
+  
     //!!!!
     print("uploadToCloudStorage() res=${res}");
 
@@ -324,7 +337,7 @@ class GPSLog
   }
 
   // クラウドストレージからダウンロード
-  Future<bool> downloadFromCloudStorage(String path) async
+  Future<bool> downloadFromCloudStorage(String path, bool referenceLink) async
   {
     //!!!!
     print(">downloadFromCloudStorage(${path})");
@@ -349,6 +362,12 @@ class GPSLog
       res = false;
     } on Exception catch (e) {
       res = false;
+    }
+
+    // 成功していたらパスを記録
+    if(res){
+      _openedUIDPath = path;
+      _isReferenceLink = referenceLink;
     }
 
     //!!!!
@@ -392,6 +411,67 @@ class GPSLog
   }
 
   //----------------------------------------------------------------------------
+  // 読み込んでいるログのクラウド上のパスを取得(ユニークID)
+  String? getOpenedPath()
+  {
+    return _openedUIDPath;
+  }
+
+  //----------------------------------------------------------------------------
+  // 他のデータへの参照かを取得
+  bool isReferenceLink()
+  {
+    return _isReferenceLink;
+  }
+
+  //----------------------------------------------------------------------------
+  // 他のデータを参照
+  void saveReferencePath(String thisUIDPath, String refUIDPath)
+  {
+    print(">saveReferencePath(${thisUIDPath} -> ${refUIDPath})");
+  
+    final String dbPath = "assign" + thisUIDPath + "/gps_log";
+    final DatabaseReference ref = FirebaseDatabase.instance.ref(dbPath);
+    final data = {
+      "referencePath" : refUIDPath,
+    };
+    ref.update(data);
+  }
+
+  // 読み込むべきデータのパスを取得
+  // 他のデータを参照していれば、そちらのパスを返す
+  Future<String> getReferencePath(String thisUIDPath) async
+  {
+    print(">getReferencePath(${thisUIDPath})");
+
+    String? refUIDPath;
+    final String dbPath = "assign" + thisUIDPath + "/gps_log";
+    final DatabaseReference ref = FirebaseDatabase.instance.ref(dbPath);
+    final DataSnapshot snapshot = await ref.get();
+    if(snapshot.exists){
+      try {
+        var data = snapshot.value as Map<String, dynamic>;
+        refUIDPath = data["referencePath"];
+      } catch(e) {}
+    }
+    if(refUIDPath == null) refUIDPath = thisUIDPath;
+  
+    print(">getReferencePath(${thisUIDPath}) -> ${refUIDPath}");
+
+    return refUIDPath;
+  }
+
+  // 他のデータへの参照を削除
+  void removeReferencePath(String thisUIDPath)
+  {
+    print(">removeReferencePath(${thisUIDPath})");
+
+    final String dbPath = "assign" + thisUIDPath + "/gps_log";
+    final DatabaseReference ref = FirebaseDatabase.instance.ref(dbPath);
+    ref.remove();
+  }
+
+  //----------------------------------------------------------------------------
   // トリミング範囲の同期
   StreamSubscription<DatabaseEvent>? _updateTrimSyncEvent;
   void Function(void Function())? bottomSheetSetState;
@@ -404,7 +484,7 @@ class GPSLog
       "trimStartTime" : _trimStartTime.toIso8601String(),
       "trimEndTime" : _trimEndTime.toIso8601String(),
     };
-    ref.set(trimData);
+    ref.update(trimData);
   }
 
   Future<void> loadGPSLogTrimRangeFromDB(String uidPath) async
@@ -822,57 +902,108 @@ void showGPSLogPopupMenu(BuildContext context)
     elevation: 8.0,
     items: [
       makePopupMenuItem(0, "ログ読み込み", Icons.file_open),
-      makePopupMenuItem(1, "トリミング", Icons.content_cut),
-      makePopupMenuItem(2, "アニメーション", Icons.play_circle),
+      makePopupMenuItem(1, "ログ参照", Icons.link),
+      makePopupMenuItem(2, "トリミング", Icons.content_cut),
+      makePopupMenuItem(3, "アニメーション", Icons.play_circle),
     ],
   ).then((value) async {
     switch(value ?? -1){
     case 0: // GPSログの読み込み
-      // アニメーション停止
-      gpsLog.stopAnim();
-      // BottomSheet を閉じる
-      closeBottomSheet();
-      // クラウドの方に新しいデータがあれば、まずはそちらを読み込む
-      final filePath = getOpenedFileUIDPath();
-      if(await gpsLog.isUpdateCloudStorage(filePath))
-      {
-        await showOkDialog(context, title:"GPSログ",
-          text:"オンラインに、他のユーザーによる新しいログデータがあります。まずそのデータを読み込みます。");
-          gpsLog.clear();
-          gpsLog.downloadFromCloudStorage(filePath).then((res){
-          gpsLog.makePolyLines();
-          gpsLog.makeDogMarkers();
-          gpsLog.redraw();
-        });
-        break;
-      }
-
-      bool res = await readGPSLog(context);
-      // 読み込み成功したらマップを再描画
-      if(res){
-        gpsLog.makePolyLines();
-        gpsLog.makeDogMarkers();
-        gpsLog.redraw();
-        showTextBallonMessage("GPSログの読み込み成功");
-        // 裏でクラウドストレージへのアップロードを実行
-        final String filePath = getOpenedFileUIDPath();
-        gpsLog.uploadToCloudStorage(filePath);
-      }else{
-        showTextBallonMessage("GPSログの読み込み失敗");
-      }
+      loadGPSLogFunc(context);
       break;
 
-    case 1: // トリミング
+    case 1: // ログ参照
+      linkGPSLogFunc(context);
+      break;
+
+    case 2: // トリミング
       // アニメーション停止
       gpsLog.stopAnim();
       showTrimmingBottomSheet(context);
       break;
     
-    case 2: // アニメーション
+    case 3: // アニメーション
       showAnimationBottomSheet(context);
       break;
     }
   });
+}
+
+//----------------------------------------------------------------------------
+// GPSログ読み込み
+void loadGPSLogFunc(BuildContext context) async
+{
+  // アニメーション停止
+  gpsLog.stopAnim();
+  // BottomSheet を閉じる
+  closeBottomSheet();
+  // クラウドの方に新しいデータがあれば、まずはそちらを読み込む
+  final filePath = getOpenedFileUIDPath();
+  final String gpsLogPath = await gpsLog.getReferencePath(filePath);
+  final bool refLink = (gpsLogPath != filePath);
+  if(await gpsLog.isUpdateCloudStorage(gpsLogPath))
+  {
+    await showOkDialog(context, title:"GPSログ",
+      text:"オンラインに、他のユーザーによる新しいログデータがあります。まずそのデータを読み込みます。");
+    gpsLog.clear();
+    gpsLog.downloadFromCloudStorage(gpsLogPath, refLink).then((res){
+      gpsLog.makePolyLines();
+      gpsLog.makeDogMarkers();
+      gpsLog.redraw();
+    });
+    return;
+  }
+
+  bool res = await readGPSLog(context);
+  // 読み込み成功したらマップを再描画
+  if(res){
+    gpsLog.makePolyLines();
+    gpsLog.makeDogMarkers();
+    gpsLog.redraw();
+    showTextBallonMessage("GPSログの読み込み成功");
+    // 裏でクラウドストレージへのアップロードを実行
+    gpsLog.uploadToCloudStorage(gpsLogPath);
+  }else{
+    showTextBallonMessage("GPSログの読み込み失敗");
+  }
+}
+
+//----------------------------------------------------------------------------
+// GPSログ参照
+void linkGPSLogFunc(BuildContext context) async
+{
+  // アニメーション停止
+  gpsLog.stopAnim();
+  // BottomSheet を閉じる
+  closeBottomSheet();
+  // ファイル一覧画面に遷移して、ファイルの切り替え
+  Navigator.push(
+    context,
+    MaterialPageRoute(builder: (context) => FilesPage(
+      onSelectFile: (refUIDPath) async {
+        //!!!!
+        print("linkGPSLogFunc.onSelectFile(${refUIDPath})");
+
+        // 今と同じGPSログを選択した場合には、何もしない
+        if(gpsLog.getOpenedPath() == refUIDPath) return;
+
+        // GPSログを読み込み(遅延処理)
+        gpsLog.clear();
+        gpsLog.downloadFromCloudStorage(refUIDPath, true).then((res) async {
+          if(res){
+            String openedFileUIDPath = getOpenedFileUIDPath();
+            gpsLog.saveReferencePath(openedFileUIDPath, refUIDPath);
+          }
+          showTextBallonMessage(
+            (res? "他のファイルからGPSログを参照": "GPSログの参照に失敗"));
+          gpsLog.makePolyLines();
+          gpsLog.makeDogMarkers();
+          gpsLog.redraw();
+        });
+      },
+      onChangeState: (){},
+    ))
+  );
 }
 
 //----------------------------------------------------------------------------
@@ -932,6 +1063,25 @@ void showTrimmingBottomSheet(BuildContext context)
           String trimEndText =
             "${trimEndTime.hour}:" + _twoDigits(trimEndTime.minute);
 
+          // 他のフィルを参照していれば、参照先のファイル名を表示
+          Widget? refFileName;
+          if(gpsLog.isReferenceLink()){
+            String uidPath = gpsLog.getOpenedPath() ?? "";
+            final int t = uidPath.lastIndexOf("/");
+            if(0 <= t){
+              uidPath = uidPath.substring(t);
+              final String fileName = convertUIDPath2NamePath(uidPath);
+              refFileName = Row(children:[
+                Text("["),
+                const Icon(Icons.link, size:20),
+                Text(
+                  " " + fileName.substring(1) + "]",
+                  style: const TextStyle(fontSize: 16),
+                ),
+              ]);
+            }
+          }
+
           return Scaffold(
             body: Container(
               padding: EdgeInsets.only(top:15), // スライダーの上のパディング
@@ -968,6 +1118,8 @@ void showTrimmingBottomSheet(BuildContext context)
                           trimStartText,
                           style: const TextStyle(fontSize: 16),
                         ),
+                        // 参照先(参照していれば)
+                        if(refFileName != null) refFileName,
                         // トリミング終了時間
                         Text(
                           trimEndText,
