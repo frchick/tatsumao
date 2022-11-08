@@ -444,7 +444,7 @@ class GPSLog
   {
     print(">getReferencePath(${thisUIDPath})");
 
-    String refUIDPath = thisUIDPath;
+    String? refUIDPath;
     final String dbPath = "assign" + thisUIDPath + "/gps_log";
     final DatabaseReference ref = FirebaseDatabase.instance.ref(dbPath);
     final DataSnapshot snapshot = await ref.get();
@@ -454,7 +454,8 @@ class GPSLog
         refUIDPath = data["referencePath"];
       } catch(e) {}
     }
-
+    if(refUIDPath == null) refUIDPath = thisUIDPath;
+  
     print(">getReferencePath(${thisUIDPath}) -> ${refUIDPath}");
 
     return refUIDPath;
