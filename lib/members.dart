@@ -21,6 +21,8 @@ import 'globals.dart';
 //----------------------------------------------------------------------------
 // 外部参照されるグローバル変数
 
+// この配列の並び順が配置データと関連しているので、順番を変えないこと！
+// TODO: メンバー一覧 BottomSheet でのメンバーアイコンの並び順を変えられるようにする。
 List<Member> members = [
   Member(name:"ママっち", iconPath:"assets/member_icon/000.png", pos:LatLng(35.302880, 139.05100), attended: true),
   Member(name:"パパっち", iconPath:"assets/member_icon/002.png", pos:LatLng(35.302880, 139.05200), attended: true),
@@ -49,6 +51,11 @@ List<Member> members = [
   Member(name:"福島さん", iconPath:"assets/member_icon/026.png", pos:LatLng(35.302880, 139.05500)),
   Member(name:"池田さん", iconPath:"assets/member_icon/027.png", pos:LatLng(35.302880, 139.05500)),
   Member(name:"山口さん", iconPath:"assets/member_icon/028.png", pos:LatLng(35.302880, 139.05500)),
+  Member(name:"石井さん", iconPath:"assets/member_icon/029.png", pos:LatLng(35.302880, 139.05500)),
+
+  Member(name:"見学A", iconPath:"assets/member_icon/100.png", pos:LatLng(35.302880, 139.05500)),
+  Member(name:"見学B", iconPath:"assets/member_icon/101.png", pos:LatLng(35.302880, 139.05500)),
+  Member(name:"見学C", iconPath:"assets/member_icon/102.png", pos:LatLng(35.302880, 139.05500)),
 
   Member(name:"娘っち", iconPath:"assets/member_icon/001.png", pos:LatLng(35.302880, 139.05200)),
   Member(name:"りんたろー", iconPath:"assets/member_icon/003.png", pos:LatLng(35.302880, 139.05200)),
