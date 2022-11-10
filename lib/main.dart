@@ -26,6 +26,7 @@ import 'onoff_icon_button.dart';
 import 'home_icon.dart';
 import 'gps_log.dart';
 import 'password.dart';
+import 'misc_marker.dart';
 import 'globals.dart';
 
 //----------------------------------------------------------------------------
@@ -146,6 +147,9 @@ class _MapViewState extends State<MapView>
     // 家アイコン作成
     homeIconWidget = HomeIconWidget();
 
+    // その他の初期化
+    miscMarkers.initialize();
+  
     // データベースからもろもろ読み込んで初期状態をセットアップ
     initStateSub();
   }
@@ -260,6 +264,9 @@ class _MapViewState extends State<MapView>
   
     // GPSログをクリア
     gpsLog.clear();
+
+    // 汎用マーカーをクリア
+    miscMarkers.clear();
   }
 
   //----------------------------------------------------------------------------
@@ -410,7 +417,7 @@ class _MapViewState extends State<MapView>
               copyAssignToClipboard(context);
             },
           ),
-          // GPSログの読み込み
+          // ログ関連
           IconButton(
             icon: const Icon(Icons.timeline),
             onPressed:() {
@@ -653,6 +660,8 @@ class _MapViewState extends State<MapView>
                 ),
                 // メンバーマーカー
                 mainMapDragMarkerPluginOptions,
+                // その他のマーカー
+                miscMarkers.getMapLayerOptions(),
                 // GPSログの犬マーカー
                 MarkerLayerOptions(
                   markers: gpsLog.makeDogMarkers(),

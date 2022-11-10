@@ -17,6 +17,7 @@ import 'file_tree.dart';
 import 'text_ballon_widget.dart';
 import 'ok_cancel_dialog.dart';
 import 'mypolyline_layer.dart'; // マップ上のカスタムポリライン
+import 'misc_marker.dart';  // キルマーカー
 import 'globals.dart';  // 画面解像度
 
 // ログデータがないときに使う、ダミーの開始終了時間
@@ -905,6 +906,7 @@ void showGPSLogPopupMenu(BuildContext context)
       makePopupMenuItem(1, "ログ参照", Icons.link),
       makePopupMenuItem(2, "トリミング", Icons.content_cut),
       makePopupMenuItem(3, "アニメーション", Icons.play_circle),
+      makePopupMenuItem(4, "キルマーカー", Icons.pin_drop),
     ],
   ).then((value) async {
     switch(value ?? -1){
@@ -924,6 +926,10 @@ void showGPSLogPopupMenu(BuildContext context)
     
     case 3: // アニメーション
       showAnimationBottomSheet(context);
+      break;
+    
+    case 4: // キルマーカー
+      addKillMarkerFunc(context);
       break;
     }
   });
@@ -1004,6 +1010,16 @@ void linkGPSLogFunc(BuildContext context) async
       onChangeState: (){},
     ))
   );
+}
+
+//----------------------------------------------------------------------------
+// キルマーカーの追加
+void addKillMarkerFunc(BuildContext context)
+{
+  // 現在のマップ表示の中心に
+  miscMarkers.addMarker(mainMapController.center);
+  // 再描画
+  updateMapView();
 }
 
 //----------------------------------------------------------------------------
