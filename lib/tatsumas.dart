@@ -75,7 +75,7 @@ List<TatsumaData> tatsumas = [];
 const List<String> _areaNames = [
   "暗闇沢", "ホンダメ", "苅野上", "笹原林道",
   "桧山", "桧山下", "桧山上", "明神下側",
-  "解体場上", "解体場東", "解体場下", "小土肥",
+  "金太郎L上", "金太郎L東", "金太郎L下", "小土肥",
 ];
 
 List<String> getAreaNames()
