@@ -6,7 +6,7 @@ import 'mydragmarker.dart';   // マップ上のメンバーマーカー
 // 地図関連
 
 // 地図のコントローラ
-late MapController mainMapController;
+MapController? mainMapController;
 
 // マップ上のメンバーマーカーの作成オプション
 // ドラッグ許可/禁止を後から変更するために、インスタンスをアクセス可能に定義する
@@ -20,10 +20,10 @@ void updateMapView()
   // ここからは通常の方法で更新できないので、MapController 経由で地図を微妙に動かして再描画を走らせる。
   // MyDragMarkerPlugin.createLayer() で作成した StreamBuilder が動作する。
   const double jitter = 1.0/4096.0;
-  var center = mainMapController.center;
-  var zoom = mainMapController.zoom;
-  mainMapController.move(center, zoom + jitter);
-  mainMapController.move(center, zoom);
+  var center = mainMapController!.center;
+  var zoom = mainMapController!.zoom;
+  mainMapController!.move(center, zoom + jitter);
+  mainMapController!.move(center, zoom);
 
   // NOTE:
   // MapController._state.rebuildLayers() を呼び出せればスマートに再描画できるが、
@@ -32,6 +32,11 @@ void updateMapView()
 
 // 編集がロックされているか
 bool lockEditing = false;
+
+// このアプリケーションインスタンスを一意に識別するキー
+// マーカーのドラッグによる変更通知が、自分自身によるものか、他のユーザーからかを識別
+final String appInstKey = UniqueKey().toString();
+
 
 //----------------------------------------------------------------------------
 // 画面サイズ関連

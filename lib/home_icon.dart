@@ -47,7 +47,7 @@ class HomeIconWidget extends StatelessWidget
     if((screenHeight - menuHeight) < py) return;
   
     // ドラッグ座標からマーカーの緯度経度を計算
-    LatLng? point = mainMapController.pointToLatLng(CustomPoint(px, py));
+    LatLng? point = mainMapController!.pointToLatLng(CustomPoint(px, py));
     if(point == null) return;
 
     // タツママーカーにスナップ

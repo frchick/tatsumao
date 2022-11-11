@@ -107,9 +107,6 @@ class Member {
 // メンバーデータの同期(firebase realtime database)
 FirebaseDatabase database = FirebaseDatabase.instance;
 
-// このアプリケーションインスタンスを一意に識別するキー
-final String _appInstKey = UniqueKey().toString();
-
 // メンバーのアサインデータへのパス
 String _assignPath = "";
 
@@ -178,7 +175,7 @@ void syncMemberState(final int index, { bool goEveryoneHome=false}) async
 {
   final Member member = members[index];
   final String id = index.toString().padLeft(3, '0');
-  final String senderId = goEveryoneHome? "GoEveryoneHome": _appInstKey;
+  final String senderId = goEveryoneHome? "GoEveryoneHome": appInstKey;
 
   DatabaseReference memberRef = database.ref(_assignPath + "/" + id);
   memberRef.update({
@@ -208,7 +205,7 @@ void onChangeMemberState(final int index, DatabaseEvent event)
   // 自分が送った変更には(当然)反応しない。送信者IDと自分のIDを比較する。
   final String sender_id = snapshot.child("sender_id").value as String;
   final bool fromOther =
-    (sender_id != _appInstKey) &&
+    (sender_id != appInstKey) &&
     (event.type == DatabaseEventType.value);
   if(fromOther){
     print("onChangeMemberState(index:${index}) -> from other");

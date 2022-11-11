@@ -1017,7 +1017,7 @@ void linkGPSLogFunc(BuildContext context) async
 void addKillMarkerFunc(BuildContext context)
 {
   // 現在のマップ表示の中心に
-  miscMarkers.addMarker(mainMapController.center);
+  miscMarkers.addMarker(MiscMarker(position:mainMapController!.center));
   // 再描画
   updateMapView();
 }

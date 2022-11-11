@@ -179,7 +179,7 @@ LatLng snapToTatsuma(LatLng point)
 {
   // 画面座標に変換してマーカーとの距離を判定
   // 指定された座標が画面外なら何もしない
-  final CustomPoint<num>? pixelPos0 = mainMapController.latLngToScreenPoint(point);
+  final CustomPoint<num>? pixelPos0 = mainMapController!.latLngToScreenPoint(point);
   if(pixelPos0 == null) return point;
 
   // マーカーサイズが16x16である前提
@@ -188,7 +188,7 @@ LatLng snapToTatsuma(LatLng point)
     // 非表示のタツマは除外
     if(!tatsuma.isVisible()) return;
  
-    final CustomPoint<num>? pixelPos1 = mainMapController.latLngToScreenPoint(tatsuma.pos);
+    final CustomPoint<num>? pixelPos1 = mainMapController!.latLngToScreenPoint(tatsuma.pos);
     if(pixelPos1 != null){
       final num dx = (pixelPos0.x - pixelPos1.x).abs();
       final num dy = (pixelPos0.y - pixelPos1.y).abs();
@@ -844,11 +844,11 @@ class TatsumasPageState extends State<TatsumasPage>
       case 0:
         // 座標を指定して地図に戻る
         // ある程度のズーム率まで拡大表示する
-        double zoom = mainMapController.zoom;
+        double zoom = mainMapController!.zoom;
         const double zoomInTarget = 16.25;
         if(zoom < zoomInTarget) zoom = zoomInTarget;
         final TatsumaData tatsuma = tatsumas[index];
-        mainMapController.move(tatsuma.pos, zoom);
+        mainMapController!.move(tatsuma.pos, zoom);
         Navigator.pop(context);
         break;
       }
