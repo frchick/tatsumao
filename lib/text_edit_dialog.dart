@@ -12,12 +12,14 @@ class TextEditDialog extends StatefulWidget
     this.hintText,
     this.defaultText,
     this.okText = "決定",
+    this.cancelText = "キャンセル",
   }){}
 
   String titleText = "";
   String? hintText;
   String? defaultText;
   String okText;
+  String? cancelText;
 
   @override
   State createState() => _TextEditDialogState();
@@ -46,8 +48,8 @@ class _TextEditDialogState extends State<TextEditDialog>
         autofocus: true,
       ),
       actions: [
-        ElevatedButton(
-          child: Text("キャンセル"),
+        if(widget.cancelText != null) ElevatedButton(
+          child: Text(widget.cancelText!),
           onPressed: () => Navigator.pop(context),
         ),
         ElevatedButton(
