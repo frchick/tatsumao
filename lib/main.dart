@@ -26,6 +26,7 @@ import 'onoff_icon_button.dart';
 import 'home_icon.dart';
 import 'gps_log.dart';
 import 'password.dart';
+import 'misc_marker.dart';
 import 'globals.dart';
 
 //----------------------------------------------------------------------------
@@ -55,6 +56,9 @@ FirebaseDatabase database = FirebaseDatabase.instance;
 // メンバー達の位置へマップを移動する
 void moveMapToLocationOfMembers()
 {
+  // MapViewが未初期化ならば何もしない
+  if(mainMapController == null) return;
+
   // 参加しているメンバーの座標の範囲に、マップをフィットさせる
   List<LatLng> points = [];
   members.forEach((member){
@@ -65,7 +69,7 @@ void moveMapToLocationOfMembers()
   if(points.length == 0) return;
   var bounds = LatLngBounds.fromPoints(points);
 
-  mainMapController.fitBounds(bounds,
+  mainMapController!.fitBounds(bounds,
     options: FitBoundsOptions(
       padding: EdgeInsets.all(64),
       maxZoom: 16));
@@ -133,11 +137,9 @@ class _MapViewState extends State<MapView>
   //----------------------------------------------------------------------------
   // 初期化
   @override
-  void initState() {
+  void initState()
+  {
     super.initState();
-
-    // 地図コントローラを作成
-    mainMapController = MapController();
 
     // メンバーデータからマーカー配列を作成
     // メンバーは組み込みデータなのでデータベースからの読み込みはない
@@ -146,6 +148,9 @@ class _MapViewState extends State<MapView>
     // 家アイコン作成
     homeIconWidget = HomeIconWidget();
 
+    // その他の初期化
+    miscMarkers.initialize();
+  
     // データベースからもろもろ読み込んで初期状態をセットアップ
     initStateSub();
   }
@@ -198,6 +203,10 @@ class _MapViewState extends State<MapView>
 
     // パスワードチェック
     await askAndCheckPassword(context);
+
+    // 地図コントローラを作成
+    // このさきで初回の build が走った後から使えるようになる
+    mainMapController = MapController();
 
     // iOS版 Safari の謎クラッシュ対策
     final bool iOS = 
@@ -260,6 +269,10 @@ class _MapViewState extends State<MapView>
   
     // GPSログをクリア
     gpsLog.clear();
+
+    // 汎用マーカーを読み込み
+    miscMarkers.clear();
+    miscMarkers.initSync(fileUIDPath);
   }
 
   //----------------------------------------------------------------------------
@@ -275,7 +288,8 @@ class _MapViewState extends State<MapView>
     releaseTatsumasSync();
     _lockEditingListener?.cancel();
     _lockEditingListener = null;
-
+    miscMarkers.releaseSync();
+  
     super.dispose();
   }
 
@@ -410,7 +424,7 @@ class _MapViewState extends State<MapView>
               copyAssignToClipboard(context);
             },
           ),
-          // GPSログの読み込み
+          // ログ関連
           IconButton(
             icon: const Icon(Icons.timeline),
             onPressed:() {
@@ -653,6 +667,8 @@ class _MapViewState extends State<MapView>
                 ),
                 // メンバーマーカー
                 mainMapDragMarkerPluginOptions,
+                // その他のマーカー
+                miscMarkers.getMapLayerOptions(),
                 // GPSログの犬マーカー
                 MarkerLayerOptions(
                   markers: gpsLog.makeDogMarkers(),
@@ -684,7 +700,7 @@ void tapOnMap(BuildContext context, TapPosition tapPos)
 {
   // タツマをタップしたら、タツマ編集ダイアログ
   int? index = searchTatsumaByScreenPos(
-    mainMapController, tapPos.global.dx, tapPos.global.dy);
+    mainMapController!, tapPos.global.dx, tapPos.global.dy);
   if(index != null){
     var tatsuma = tatsumas[index];
     showChangeTatsumaDialog(context, tatsuma).then((res){
