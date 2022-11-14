@@ -1018,6 +1018,7 @@ void addKillMarkerFunc(BuildContext context)
 {
   // 現在のマップ表示の中心に
   miscMarkers.addMarker(MiscMarker(position:mainMapController!.center));
+  miscMarkers.sync();
   // 再描画
   updateMapView();
 }

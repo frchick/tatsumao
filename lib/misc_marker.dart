@@ -39,6 +39,9 @@ class MiscMarker
   // メモ
   String memo;
 
+  // マーカーの build に渡された BuildContext
+  BuildContext? _context;
+
   // データベースに保存する用のMapデータを取得
   Map<String, dynamic> toMapData()
   {
@@ -83,15 +86,24 @@ class MiscMarker
 
     return MyDragMarker(
       point: position,
-      builder: (cnx) => _icons[iconType].image!,
+      builder: (cnx) {
+        _context = cnx;
+        return _icons[iconType].image!;
+      },
       width: 64,
       height: 64,
       offset: Offset(0.0, 64/2),
       feedbackOffset: Offset(0.0, 64/2),
       index: index,
       onDragEnd: onMapMarkerDragEnd,
+      onTap: (LatLng position, int index){
+        if(_context != null){
+          miscMarkers.onMapMarkerTap(_context!, position, index);
+        }
+      },
     );
   }
+
 
   LatLng onMapMarkerDragEnd(DragEndDetails detail, LatLng pos, Offset offset, int index, MapState? state)
   {
@@ -131,8 +143,7 @@ class MiscMarkers
   // クリア
   void clear()
   {
-    _syncListener?.cancel();
-    _syncListener = null;
+    releaseSync();
     _markers.clear();
     _mapOption.markers.clear();
   }
@@ -187,8 +198,7 @@ class MiscMarkers
     print(">MiscMarkers.initSync(${openedPath})");
   
     // 直前の変更通知リスナーを停止
-    _syncListener?.cancel();
-    _syncListener = null;
+    releaseSync();
 
     _openedPath = openedPath;
     final String path = "assign" + _openedPath + "/misc_markers";
@@ -197,6 +207,13 @@ class MiscMarkers
     _syncListener = ref.onValue.listen((DatabaseEvent event){
       _onSync(event);
     });
+  }
+
+  // 同期リスナーを停止
+  void releaseSync()
+  {
+    _syncListener?.cancel();
+    _syncListener = null;
   }
 
   // 変更通知受けたときの処理
@@ -242,4 +259,137 @@ class MiscMarkers
 
     _firstOnSyncAfterOpenFile = false;
   }
+
+  //----------------------------------------------------------------------------
+  // マーカーをタップして編集
+  void onMapMarkerTap(BuildContext context, LatLng position, int index)
+  {
+    //!!!!
+    print(">MiscMarkers.onMapMarkerTap(${index})");
+
+    // タツマ名の変更ダイアログ
+    var marker = _markers[index];
+    _showMiscMarkerDialog(context, marker).then((res){
+      if(res != null){
+        if(res.containsKey("delete")){
+          // 削除
+          _markers.removeAt(index);
+          _mapOption.markers.clear();
+          for(int index = 0; index < _markers.length; index++){
+            _mapOption.markers.add(_markers[index].makeMapMarker(index));
+          }
+          //!!!!
+          print(">MiscMarkers.onMapMarkerTap(${index}) ... delete");
+        }else{
+          // 変更
+          marker.iconType = res["iconType"] as int;
+          marker.memo     = res["memo"] as String;
+          _mapOption.markers[index] = marker.makeMapMarker(index);
+          //!!!!
+          print(">MiscMarkers.onMapMarkerTap(${index}) ... modify");
+        }
+        // 同期
+        sync();
+        // 再描画
+        updateMapView();
+      }
+    });
+  }
+}
+
+//----------------------------------------------------------------------------
+//----------------------------------------------------------------------------
+// 汎用マーカーダイアログ
+class MiscMarkerDialog extends StatefulWidget
+{
+  MiscMarkerDialog({
+    super.key,
+    required this.iconType,
+    required this.memo,
+  }){}
+
+  // アイコン
+  int iconType;
+  // メモ
+  String memo;
+
+  @override
+  State createState() => _MiscMarkerDialogState();
+}
+
+class _MiscMarkerDialogState extends State<MiscMarkerDialog>
+{
+  late TextEditingController _dateTextController;
+
+  @override 
+  void initState()
+  {
+    super.initState();
+
+    // NOTE: 初期値の設定を build() に書くと、他の Widget 由来の再描画があるたびに、
+    // NOTE: テキストフィールドが元に戻ってしまう。initState() に書くのが正解。
+    _dateTextController = TextEditingController(text: widget.memo);
+  }
+
+  @override
+  Widget build(BuildContext context)
+  {
+    return AlertDialog(
+      title: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          const Text("キルマーカー"),
+          // 削除ボタン
+          IconButton(
+            icon: const Icon(Icons.delete),
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
+            onPressed: (){
+              Navigator.pop<Map<String,dynamic>>(context, {
+                "delete": true,
+            });
+            },
+          ),
+        ],
+      ),
+      // メモ
+      content: TextField(
+        controller: _dateTextController,
+        autofocus: true,
+      ),
+      actions: [
+        ElevatedButton(
+          child: const Text("キャンセル"),
+          onPressed: () {
+            Navigator.pop(context);
+          }
+        ),
+        ElevatedButton(
+          child: const Text("OK"),
+          onPressed: () {
+            Navigator.pop<Map<String,dynamic>>(context, {
+              "memo": _dateTextController.text,
+              "iconType": widget.iconType,
+            });
+          },
+        ),
+      ],
+    );
+  }
+}
+
+//----------------------------------------------------------------------------
+// 汎用マーカーダイアログ
+Future<Map<String,dynamic>?>
+  _showMiscMarkerDialog(BuildContext context, MiscMarker data)
+{
+  return showDialog<Map<String,dynamic>>(
+    context: context,
+    useRootNavigator: true,
+    builder: (context) {
+      return MiscMarkerDialog(
+        iconType: data.iconType,
+        memo: data.memo);
+    },
+  );
 }

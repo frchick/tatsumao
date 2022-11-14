@@ -288,7 +288,8 @@ class _MapViewState extends State<MapView>
     releaseTatsumasSync();
     _lockEditingListener?.cancel();
     _lockEditingListener = null;
-
+    miscMarkers.releaseSync();
+  
     super.dispose();
   }
 
