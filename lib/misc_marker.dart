@@ -23,8 +23,13 @@ class _MiscMarkerIcon
   Image? image;
 }
 List<_MiscMarkerIcon> _icons = [
-  _MiscMarkerIcon(path:"assets/misc/deer_icon0.png"),
+  _MiscMarkerIcon(path:"assets/misc/deer_icon0.png"), // index = 0
+  _MiscMarkerIcon(path:"assets/misc/deer_icon1.png"),
+  _MiscMarkerIcon(path:"assets/misc/deer_icon2.png"),
 ];
+
+const double _iconWidth = 56;
+const double _iconHeight = 56;
 
 //-----------------------------------------------------------------------------
 // 汎用マーカーのデータ
@@ -90,10 +95,10 @@ class MiscMarker
         _context = cnx;
         return _icons[iconType].image!;
       },
-      width: 64,
-      height: 64,
-      offset: Offset(0.0, 64/2),
-      feedbackOffset: Offset(0.0, 64/2),
+      width: _iconWidth,
+      height: _iconHeight,
+      offset: Offset(0.0, _iconHeight/2),
+      feedbackOffset: Offset(0.0, _iconHeight/2),
       index: index,
       onDragEnd: onMapMarkerDragEnd,
       onTap: (LatLng position, int index){
@@ -334,6 +339,10 @@ class _MiscMarkerDialogState extends State<MiscMarkerDialog>
   @override
   Widget build(BuildContext context)
   {
+    // アイコンタイプの表示スイッチ
+    List<bool> iconTypeFlag = [ false, false, false ];
+    iconTypeFlag[widget.iconType] = true;
+
     return AlertDialog(
       title: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -352,10 +361,33 @@ class _MiscMarkerDialogState extends State<MiscMarkerDialog>
           ),
         ],
       ),
-      // メモ
-      content: TextField(
-        controller: _dateTextController,
-        autofocus: true,
+      content: Column(
+        mainAxisAlignment: MainAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // アイコン選択
+          ToggleButtons(
+            children: [
+              _icons[0].image!,
+              _icons[1].image!,
+              _icons[2].image!,
+            ],
+            isSelected: iconTypeFlag,
+            onPressed: (index) {
+              setState((){
+                widget.iconType = index;
+              });
+            },
+          ),
+          // メモ
+          const SizedBox(width:5, height:25),
+          Text("メモ："),
+          TextField(
+            controller: _dateTextController,
+            autofocus: true,
+          ),
+        ]
       ),
       actions: [
         ElevatedButton(
