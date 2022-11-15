@@ -327,6 +327,7 @@ class _MapViewState extends State<MapView>
     _lockEditingButton?.changeState(lock);
     // マップ上のマーカーのドラッグ許可/禁止を更新
     mainMapDragMarkerPluginOptions.draggable = !lockEditing;
+    miscMarkers.getMapLayerOptions().draggable = !lockEditing;
     updateMapView();
   }
 
@@ -620,12 +621,14 @@ class _MapViewState extends State<MapView>
   Widget makeAppBody(BuildContext context)
   {
     // マップ上のメンバーマーカーの作成オプション
+    // TODO: MapOption への値の代入を、適切な位置に移動したい
     mainMapDragMarkerPluginOptions = MyDragMarkerPluginOptions(
       markers: memberMarkers,
       draggable: !lockEditing,
       visible: isShowMemberMarker(),
     );
-  
+    miscMarkers.getMapLayerOptions().draggable = !lockEditing;
+
     // 家アイコン更新
     HomeIconWidget.update();
 
@@ -719,6 +722,8 @@ class _MapViewState extends State<MapView>
 void tapOnMap(BuildContext context, TapPosition tapPos)
 {
   // タツマをタップしたら、タツマ編集ダイアログ
+  // 編集ロック中はできない
+  if(lockEditing) return;
   int? index = searchTatsumaByScreenPos(
     mainMapController!, tapPos.global.dx, tapPos.global.dy);
   if(index != null){
