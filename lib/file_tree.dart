@@ -13,6 +13,23 @@ import 'globals.dart';
 
 //----------------------------------------------------------------------------
 //----------------------------------------------------------------------------
+// グローバル
+
+// ファイル名作成機能で選択できる、エリア名
+List<String> _areaFileNames = const [
+  "暗闇沢", "ホンダメ", "苅野上", "笹原林道",
+  "桧山", "桧山下", "桧山上",
+  "桧山858", "桧山858裏",
+
+  "金太郎L上", "水源の碑", "桧山ゲート上", "桧山ゲート下",
+  
+  "小土肥9号鉄塔", "小土肥6号鉄塔", "小土肥水車",
+
+  "マムシ沢", "中道",
+];
+
+//----------------------------------------------------------------------------
+//----------------------------------------------------------------------------
 // ファイル/ディレクトリ階層構造
 
 class FileItem {
@@ -1045,11 +1062,10 @@ Future<String?> showCalendar(BuildContext context) async
   if(round == null) return null;
 
   // 最後にエリア名を選択
-  final areaNames = getAreaNames();
   String? areaName = await showDialog<String>(
     context: context,
     builder: (context) {
-      return TextItemListDialog(title: "エリア", items: areaNames);
+      return TextItemListDialog(title: "エリア", items: _areaFileNames);
     }
   );
   if(areaName == null) return null;
