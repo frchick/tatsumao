@@ -25,25 +25,38 @@ final _dummyStartTime = DateTime(2022, 1, 1, 7);  // 2022/1/1 AM7:00
 final _dummyEndTime = DateTime(2022, 1, 1, 11);  // 2022/1/1 AM11:00
 
 // GPS端末のパラメータ
-final Map<int, GPSDeviceParam> _deviceParams = {
-  1568: GPSDeviceParam(
+final Map<String, GPSDeviceParam> _deviceParams = {
+  "ムロ": GPSDeviceParam(
     name: "ムロ",
-    color:Color.fromARGB(255,255,0,110),
+    color:const Color.fromARGB(255,255,0,110),
     iconImagePath: "assets/dog_icon/001.png"),
-  1674: GPSDeviceParam(
+  "ロト": GPSDeviceParam(
     name: "ロト",
-    color:Color.fromARGB(255,128,0,255),
+    color:const Color.fromARGB(255,128,0,255),
     iconImagePath: "assets/dog_icon/002.png"),
-  4539: GPSDeviceParam(
+  "ガロ": GPSDeviceParam(
     name: "ガロ",
-    color:Color.fromARGB(255,255,106,0),
+    color:const Color.fromARGB(255,255,106,0),
     iconImagePath: "assets/dog_icon/000.png"),
-  4739: GPSDeviceParam(
+  "アオ": GPSDeviceParam(
     name:"アオ",
-    color:Color.fromARGB(255,255,216,0),
+    color:const Color.fromARGB(255,255,216,0),
     iconImagePath: "assets/dog_icon/003.png"),
+  "予備1": GPSDeviceParam(
+    name:"予備1",
+    color:const Color.fromARGB(255,128,128,128),
+    iconImagePath: "assets/dog_icon/003.png"),
+
 };
 
+// GPS端末IDと犬の対応(最新のデフォルト値)
+final Map<int, String> _defaultDeviceID2Dogs = {
+  1568: "ムロ",
+  4539: "ガロ",
+  4739: "アオ",
+  4737: "ロト",
+  5218: "予備1",
+};
 
 //----------------------------------------------------------------------------
 //----------------------------------------------------------------------------
@@ -57,6 +70,9 @@ class GPSLog
 
   // マップ上の犬マーカー配列
   List<Marker> _dogMarkers = [];
+
+  // 子機のデバイスIDと犬の対応
+  Map<int,String> _deviceID2Dogs = {};
 
   // 現在読み込んでいるログの、クラウド上のパス(ユニークID)
   String? _openedUIDPath;
@@ -207,7 +223,8 @@ class GPSLog
     routes.clear();
     _mapLines.clear();
     _dogMarkers.clear();
-  
+    _deviceID2Dogs.clear();
+
     _thisUpdateTime = null;
 
     _openedUIDPath = null;
@@ -216,6 +233,30 @@ class GPSLog
     // 直前の同期イベントを削除
     _updateTrimSyncEvent?.cancel();
     _updateTrimSyncEvent = null;
+  }
+
+  //----------------------------------------------------------------------------
+  // デバイスIDと犬の対応を読み込む
+  Future<void> loadDeviceID2DogFromDB(String uidPath) async
+  {
+    //!!!!
+    print(">loadDeviceID2DogFromDB(${uidPath})");
+
+    final String dbPath = "assign" + uidPath + "/deviceIDs";
+    final DatabaseReference ref = FirebaseDatabase.instance.ref(dbPath);
+    final DataSnapshot snapshot = await ref.get();
+    if(snapshot.exists){
+      try {
+        var data = snapshot.value as Map<String, dynamic>;
+        _deviceID2Dogs.clear();
+        data.forEach((idText, dogName){
+          int id = int.parse(idText);
+          _deviceID2Dogs[id] = dogName as String;
+        });
+      } catch(e) {}
+    }
+ 
+    print(">loadDeviceID2DogFromDB(${uidPath}) ${_deviceID2Dogs}");
   }
 
   //----------------------------------------------------------------------------
@@ -239,25 +280,40 @@ class GPSLog
       final XmlElement? name_ = rte_.getElement("name");
       if(name_ == null) return;
       final String name = name_.text;
-      // 名前からデバイスIDを取得
+      // 名前からデバイスID、犬名、GPS端末パラメータを取得
       int i = name.indexOf("ID_");
       int deviceId = 0;
       if(0 <= i){
         deviceId = int.tryParse(name.substring(i + 3)) ?? 0;
       }
-      print("name=${name}, deviceId=${deviceId}");
-
-      _Route newRoute = _Route();
-      bool res = newRoute.readFromGPX(rte_, name, deviceId);
-      if(res){
-        if(!routes.containsKey(deviceId)){
-          // 新しいログを追加
-          routes[deviceId] = newRoute;
+      String? dogName;
+      if(0 <= deviceId){
+        if(_deviceID2Dogs.isNotEmpty){
+          dogName = _deviceID2Dogs[deviceId];
         }else{
-          // 既にあるログと結合
-          routes[deviceId]!.merge(newRoute);
+          dogName = _defaultDeviceID2Dogs[deviceId];
         }
-        addCount++;
+      }
+      GPSDeviceParam? deviceParam;
+      if(dogName != null){
+        deviceParam = _deviceParams[dogName];
+      }
+      print("name=${name}, deviceId=${deviceId}, dogName=${dogName}, deviceParam=${deviceParam?.name}");
+
+      // 登録されているデバイスのログのみを読み込み
+      if(deviceParam != null){
+        _Route newRoute = _Route();
+        bool res = newRoute.readFromGPX(rte_, deviceId, deviceParam);
+        if(res){
+          if(!routes.containsKey(deviceId)){
+            // 新しいログを追加
+            routes[deviceId] = newRoute;
+          }else{
+            // 既にあるログと結合
+            routes[deviceId]!.merge(newRoute);
+          }
+          addCount++;
+        }
       }
     });
     bool res = (0 < addCount);
@@ -589,10 +645,12 @@ class _Route
 {
   // 通過点リスト
   List<_Point> _points = [];
-  // 端末名
-  String _name = "";
   // ID(nameに書かれている端末ID)
   int _deviceId = 0;
+  // パスの描画用パラメータ
+  GPSDeviceParam _deviecParam = GPSDeviceParam(
+    name: "",
+    color: const Color.fromARGB(255,128,128,128));
   // アイコンイメージ
   Image? _iconImage = null;
 
@@ -613,10 +671,10 @@ class _Route
 
   //----------------------------------------------------------------------------
   // GPXファイルからログを作成
-  bool readFromGPX(XmlElement rte_, String name, int deviceId)
+  bool readFromGPX(XmlElement rte_, int deviceId, GPSDeviceParam deviecParam)
   {
-    _name = name;
     _deviceId = deviceId;
+    _deviecParam = deviecParam;
     
     // ルートの通過ポイントを読み取り
     bool ok = true;
@@ -806,14 +864,9 @@ class _Route
     for(int i = _trimStartIndex; i < _trimEndIndex; i++){
       line.add(_points[i].pos);
     }
-    // 端末IDからカラー
-    final Color color =
-      _deviceParams[_deviceId]?.color ??
-      const Color.fromARGB(255,128,128,128);
-
     return MyPolyline(
       points:line,
-      color:color,
+      color:_deviecParam.color,
       strokeWidth:2.0);
   }
 
@@ -822,7 +875,7 @@ class _Route
   {
     // アイコン画像を読み込んでおく
     if(_iconImage == null){
-      var path = _deviceParams[_deviceId]?.iconImagePath;
+      var path = _deviecParam.iconImagePath;
       if(path != null){
         _iconImage = Image.asset(path);
       }

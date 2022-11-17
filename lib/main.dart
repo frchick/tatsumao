@@ -277,8 +277,9 @@ class _MapViewState extends State<MapView>
     // 編集ロックフラグを取得
     await loadLockEditingFromDB(fileUIDPath, onLockChange:onLockChangeByOther);
   
-    // GPSログをクリア
+    // GPSログをクリア、デバイスIDと犬の対応を取得
     gpsLog.clear();
+    await gpsLog.loadDeviceID2DogFromDB(fileUIDPath);
 
     // 汎用マーカーを読み込み
     miscMarkers.clear();
