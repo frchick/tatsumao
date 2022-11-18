@@ -73,6 +73,8 @@ class GPSLog
 
   // 子機のデバイスIDと犬の対応
   Map<int,String> _deviceID2Dogs = {};
+  // デバイスIDと犬の対応が更新されたか？
+  bool _modifyDeviceID2Dogs = false;
 
   // 現在読み込んでいるログの、クラウド上のパス(ユニークID)
   String? _openedUIDPath;
@@ -224,7 +226,8 @@ class GPSLog
     _mapLines.clear();
     _dogMarkers.clear();
     _deviceID2Dogs.clear();
-
+    _modifyDeviceID2Dogs = false;
+  
     _thisUpdateTime = null;
 
     _openedUIDPath = null;
@@ -242,22 +245,51 @@ class GPSLog
     //!!!!
     print(">loadDeviceID2DogFromDB(${uidPath})");
 
-    final String dbPath = "assign" + uidPath + "/deviceIDs";
+    final String dbPath = "assign" + uidPath + "/gps_log/deviceIDs";
     final DatabaseReference ref = FirebaseDatabase.instance.ref(dbPath);
     final DataSnapshot snapshot = await ref.get();
     if(snapshot.exists){
       try {
         var data = snapshot.value as Map<String, dynamic>;
         _deviceID2Dogs.clear();
+        _modifyDeviceID2Dogs = false;
         data.forEach((idText, dogName){
           int id = int.parse(idText);
           _deviceID2Dogs[id] = dogName as String;
         });
       } catch(e) {}
+      print(">loadDeviceID2DogFromDB(${uidPath}) ${_deviceID2Dogs}");
+    }else{
+      // デフォルトの対応表を使用
+      _deviceID2Dogs = {..._defaultDeviceID2Dogs};
+      _modifyDeviceID2Dogs = true;
+      print(">loadDeviceID2DogFromDB(${uidPath}) _defaultDeviceID2Dogs");
     }
- 
-    print(">loadDeviceID2DogFromDB(${uidPath}) ${_deviceID2Dogs}");
   }
+
+  //----------------------------------------------------------------------------
+  // デバイスIDと犬の対応を保存
+  void saveDeviceID2DogToDB(String uidPath)
+  {
+    //!!!!
+    print(">saveDeviceID2DogToDB(${uidPath})");
+
+    // 変更がなければ保存しない
+    if(!_modifyDeviceID2Dogs) return;
+  
+    final String dbPath = "assign" + uidPath + "/gps_log/deviceIDs";
+    final DatabaseReference ref = FirebaseDatabase.instance.ref(dbPath);
+    Map<String,dynamic> data = {};
+    try {
+      _deviceID2Dogs.forEach((key, value){
+        final String k = key.toString().padLeft(4, '0');
+        data[k] = value;
+      });
+      ref.update(data);
+    } catch(e) {}
+  
+    print(">saveDeviceID2DogToDB(${uidPath}) ${data}");
+}
 
   //----------------------------------------------------------------------------
   // GPXファイルからログを読み込む
@@ -288,11 +320,7 @@ class GPSLog
       }
       String? dogName;
       if(0 <= deviceId){
-        if(_deviceID2Dogs.isNotEmpty){
-          dogName = _deviceID2Dogs[deviceId];
-        }else{
-          dogName = _defaultDeviceID2Dogs[deviceId];
-        }
+        dogName = _deviceID2Dogs[deviceId];
       }
       GPSDeviceParam? deviceParam;
       if(dogName != null){

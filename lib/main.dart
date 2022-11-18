@@ -188,6 +188,7 @@ class _MapViewState extends State<MapView>
     gpsLog.downloadFromCloudStorage(gpsLogPath, refLink).then((res) async {
       if(res){
         await gpsLog.loadGPSLogTrimRangeFromDB(openPath);
+        gpsLog.saveDeviceID2DogToDB(openPath);
       }
       gpsLog.makePolyLines();
       gpsLog.makeDogMarkers();
@@ -540,6 +541,7 @@ class _MapViewState extends State<MapView>
           gpsLog.downloadFromCloudStorage(gpsLogPath, refLink).then((res) async {
             if(res){
               await gpsLog.loadGPSLogTrimRangeFromDB(uidPath);
+              gpsLog.saveDeviceID2DogToDB(uidPath);
             }
             gpsLog.makePolyLines();
             gpsLog.makeDogMarkers();
