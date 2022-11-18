@@ -731,13 +731,21 @@ void tapOnMap(BuildContext context, TapPosition tapPos)
     var tatsuma = tatsumas[index];
     showChangeTatsumaDialog(context, tatsuma).then((res){
       if(res != null){
-        // タツマデータに反映
-        tatsuma.name     = res["name"] as String;
-        tatsuma.visible  = res["visible"] as bool;
-        tatsuma.areaBits = res["areaBits"] as int;
-        updateTatsumaMarkers();
-        // データベースに同期
-        updateTatsumaToDB(index);
+        if(res.containsKey("delete")){
+          // 削除
+          deleteTatsuma(index);
+          updateTatsumaMarkers();
+          // データベース全体を更新
+          saveAllTatsumasToDB();
+        }else{
+          // タツマデータに変更を反映
+          tatsuma.name     = res["name"] as String;
+          tatsuma.visible  = res["visible"] as bool;
+          tatsuma.areaBits = res["areaBits"] as int;
+          updateTatsumaMarkers();
+          // データベースに同期
+          updateTatsumaToDB(index);
+        }
       }
     });
   }        

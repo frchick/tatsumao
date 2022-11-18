@@ -417,6 +417,24 @@ Map<String,int>? readTatsumaFromGPX(String fileContent)
 }
 
 //----------------------------------------------------------------------------
+// タツマデータを削除
+void deleteTatsuma(int index)
+{
+  // インデックスが範囲外なら何もしない
+  if((index < 0) || (tatsumas.length <= index)) return;
+
+  // もとの表示順を先に詰めておく
+  final int deleteOriginalIndex = tatsumas[index].originalIndex;
+  tatsumas.forEach((tatsuma){
+    if(deleteOriginalIndex <= tatsuma.originalIndex){
+      tatsuma.originalIndex--;
+    }
+  });
+  // 配列から削除
+  tatsumas.removeAt(index);
+}
+
+//----------------------------------------------------------------------------
 // タツマデータをマージ
 int mergeTatsumas(List<TatsumaData> newTatsumas)
 {
@@ -752,14 +770,24 @@ class TatsumasPageState extends State<TatsumasPage>
         // タツマ名の変更ダイアログ
         showChangeTatsumaDialog(context, tatsuma).then((res){
           if(res != null){
-            setState((){
-              changeFlag = true;
-              tatsuma.name     = res["name"] as String;
-              tatsuma.visible  = res["visible"] as bool;
-              tatsuma.areaBits = res["areaBits"] as int;
-            });
-            // データベースに同期
-            updateTatsumaToDB(index);
+            changeFlag = true;
+            if(res.containsKey("delete")){
+              // 削除
+              setState((){
+                deleteTatsuma(index);
+              });
+              // データベース全体を更新
+              saveAllTatsumasToDB();
+            }else{
+              // 変更
+              setState((){
+                tatsuma.name     = res["name"] as String;
+                tatsuma.visible  = res["visible"] as bool;
+                tatsuma.areaBits = res["areaBits"] as int;
+              });
+              // データベースに同期
+              updateTatsumaToDB(index);
+            }
           }
         });
       }
@@ -936,7 +964,23 @@ class _TatsumaDialogDialogState extends State<TatsumaDialog>
       widget.visible? const Icon(Icons.visibility): const Icon(Icons.visibility_off);
 
     return AlertDialog(
-      title: const Text("タツマ"),
+      title: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          const Text("タツマ"),
+          // 削除ボタン
+          IconButton(
+            icon: const Icon(Icons.delete),
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
+            onPressed: (){
+              Navigator.pop<Map<String,dynamic>>(context, {
+                "delete": true,
+            });
+            },
+          ),
+        ]
+      ),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
