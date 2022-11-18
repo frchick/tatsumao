@@ -955,11 +955,16 @@ void showGPSLogPopupMenu(BuildContext context)
     position: RelativeRect.fromLTRB(x, y, x, y),
     elevation: 8.0,
     items: [
-      makePopupMenuItem(0, "ログ読み込み", Icons.file_open),
-      makePopupMenuItem(1, "ログ参照", Icons.link),
-      makePopupMenuItem(2, "トリミング", Icons.content_cut),
-      makePopupMenuItem(3, "アニメーション", Icons.play_circle),
-      makePopupMenuItem(4, "キルマーカー", Icons.pin_drop),
+      makePopupMenuItem(
+        0, "ログ読み込み", Icons.file_open, enabled:!lockEditing),
+      makePopupMenuItem(
+        1, "ログ参照", Icons.link, enabled:!lockEditing),
+      makePopupMenuItem(
+        2, "ログトリミング", Icons.content_cut, enabled:!lockEditing),
+      makePopupMenuItem(
+        3, "アニメーション", Icons.play_circle),
+      makePopupMenuItem(
+        4, "キルマーカー", Icons.pin_drop, enabled:!lockEditing),
     ],
   ).then((value) async {
     switch(value ?? -1){
