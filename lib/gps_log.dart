@@ -225,7 +225,7 @@ class GPSLog
     routes.clear();
     _mapLines.clear();
     _dogMarkers.clear();
-    _deviceID2Dogs.clear();
+    _deviceID2Dogs = {..._defaultDeviceID2Dogs};
     _modifyDeviceID2Dogs = false;
   
     _thisUpdateTime = null;
@@ -259,11 +259,6 @@ class GPSLog
         });
       } catch(e) {}
       print(">loadDeviceID2DogFromDB(${uidPath}) ${_deviceID2Dogs}");
-    }else{
-      // デフォルトの対応表を使用
-      _deviceID2Dogs = {..._defaultDeviceID2Dogs};
-      _modifyDeviceID2Dogs = true;
-      print(">loadDeviceID2DogFromDB(${uidPath}) _defaultDeviceID2Dogs");
     }
   }
 
@@ -435,6 +430,11 @@ class GPSLog
     try {
       final Uint8List? data = await gpxRef.getData();
       res = (data != null);
+      // 他のファイルからの参照の場合、デバイスIDと犬の対応表も読み込む
+      // addLogFromGPX() より前で。
+      if(res && referenceLink){
+        await loadDeviceID2DogFromDB(path);
+      }
       if(res){
         var gpxText = utf8.decode(data);
         res = addLogFromGPX(gpxText);
