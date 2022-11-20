@@ -220,9 +220,12 @@ class _MapViewState extends State<MapView>
     mainMapController = MapController();
 
     // iOS版 Safari の謎クラッシュ対策
+/*
     final bool iOS = 
       (defaultTargetPlatform == TargetPlatform.iOS) ||
       (defaultTargetPlatform == TargetPlatform.macOS);
+*/
+    final bool iOS = false;
     if(iOS){
       // MapView を半分の幅で作成、表示して、しばらくしてから全画面にする
       // 原因不明で、超対処療法。この対処法も偶然見つけたダケ。
