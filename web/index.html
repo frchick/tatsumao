@@ -44,42 +44,32 @@
   <!-- CSSでスタイル指定すると FlutterApp の表示に影響するので、各タグに直接書く -->
   <div style="text-align:center; margin-top:100px;">
     <div style="display:inline-block; width:80%;">
-	  <button id="start_html" style="font-size:32px;">HTML</button>
-	  <button id="start_canvaskit" style="font-size:32px;">CanvasKit</button>
       <p id="startup_state" style="font-size:32px; font-family:sans-serif;">起動中...(0/3)</p>
     </div>
   </div>
   <script>
-	function start_app(state, renderer)
+	function start_app(state)
 	{
 	  // Flutter WEB アプリの標準的な起動シーケンス
-      state.textContent = renderer + "起動中...(1/3)";
+      state.textContent = "起動中...(1/3)";
       _flutter.loader.loadEntrypoint({
         serviceWorker: {
           serviceWorkerVersion: serviceWorkerVersion,
         }
       }).then(function(engineInitializer) {
-        state.textContent = renderer + "起動中...(2/3)";
+        state.textContent = "起動中...(2/3)";
         return engineInitializer.initializeEngine();
       }).then(function(appRunner) {
-        state.textContent = renderer + "起動中...(3/3)";
+        state.textContent = "起動中...(3/3)";
         return appRunner.runApp();
       });
     }
 
 	window.addEventListener('load', function(ev) {
-	  var btnHtml = document.getElementById('start_html');
-	  var btnCanvasKit = document.getElementById('start_canvaskit');
+	  // iOSの謎クラッシュ回避。WebRenderer を CanvasKit に固定するといいみたい。
+      window.flutterWebRenderer = "canvaskit";
 	  var state = document.getElementById('startup_state');
-
-	  btnHtml.addEventListener('click', function(){
-        window.flutterWebRenderer = "html";
-		start_app(state, "HTML:");
-      });
-	  btnCanvasKit.addEventListener('click', function(){
-        window.flutterWebRenderer = "canvaskit";
-		start_app(state, "CanvasKit:");
-      });
+	  start_app(state);
 	});
   </script>
 </body>

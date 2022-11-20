@@ -220,6 +220,8 @@ class _MapViewState extends State<MapView>
     mainMapController = MapController();
 
     // iOS版 Safari の謎クラッシュ対策
+    // WebRenderer を CanvasKit 固定にするとクラッシュしないみたいなので、一旦無効化。
+    // index.html で window.flutterWebRenderer = "canvaskit"; により指定。
 /*
     final bool iOS = 
       (defaultTargetPlatform == TargetPlatform.iOS) ||
