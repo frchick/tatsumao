@@ -118,19 +118,37 @@ class GPSLog
   // トリミング開始時間
   DateTime _trimStartTime = _dummyStartTime;
   DateTime get trimStartTime => _trimStartTime;
-  void setTrimStartTime(DateTime t)
+  void setTrimStartTime(DateTime t, { bool snapCurrentTimeIfModify = false})
   {
-    _trimStartTime = (t.isAfter(_startTime)? t: _startTime);
-    if(_currentTime.isBefore(_trimStartTime)) _currentTime = _trimStartTime;
+    final DateTime tt = (t.isAfter(_startTime)? t: _startTime);
+    final bool modify = (_trimStartTime != tt);
+    _trimStartTime = tt;
+
+    // 指定されていたら、現在のアニメーション時間を、トリミング開始時間にする
+    // もしアニメーション時間がトリミング範囲外になったら補正する
+    // そうでなければ、そのまま
+    final bool snap = (modify && snapCurrentTimeIfModify);
+    if(_currentTime.isBefore(_trimStartTime) || snap){
+      _currentTime = _trimStartTime;
+    }
   }
 
   // トリミング終了時間
   DateTime _trimEndTime = _dummyEndTime;
   DateTime get trimEndTime => _trimEndTime;
-  void setTrimEndTime(DateTime t)
+  void setTrimEndTime(DateTime t, { bool snapCurrentTimeIfModify = false})
   {
-    _trimEndTime = (t.isBefore(_endTime)? t: _endTime);
-    if(_trimEndTime.isBefore(_currentTime)) _currentTime = _trimEndTime;
+    final DateTime tt = (t.isBefore(_endTime)? t: _endTime);;
+    final bool modify = (_trimEndTime != tt);
+    _trimEndTime = tt;
+
+    // 指定されていたら、現在のアニメーション時間を、トリミング開始時間にする
+    // もしアニメーション時間がトリミング範囲外になったら補正する
+    // そうでなければ、そのまま
+    final bool snap = (modify && snapCurrentTimeIfModify);
+    if(_trimEndTime.isBefore(_currentTime) || snap){
+      _currentTime = _trimEndTime;
+    }
   }
 
   //----------------------------------------------------------------------------
@@ -1114,10 +1132,14 @@ void addKillMarkerFunc(BuildContext context)
 void _updateTrimRangeByUI(RangeValues values, int baseMS)
 {
   final int trimStartMS = baseMS + (values.start.toInt() * 1000);
-  gpsLog.setTrimStartTime(DateTime.fromMillisecondsSinceEpoch(trimStartMS));
+  gpsLog.setTrimStartTime(
+    DateTime.fromMillisecondsSinceEpoch(trimStartMS),
+    snapCurrentTimeIfModify:true);
 
   final int trimEndMS = baseMS + (values.end.toInt() * 1000);
-  gpsLog.setTrimEndTime(DateTime.fromMillisecondsSinceEpoch(trimEndMS));
+  gpsLog.setTrimEndTime(
+    DateTime.fromMillisecondsSinceEpoch(trimEndMS),
+    snapCurrentTimeIfModify:true);
 
   // 描画
   gpsLog.makePolyLines();
