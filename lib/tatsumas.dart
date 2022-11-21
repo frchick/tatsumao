@@ -438,9 +438,9 @@ void deleteTatsuma(int index)
 // タツマデータをマージ
 int mergeTatsumas(List<TatsumaData> newTatsumas)
 {
-  // 同じ座標のタツマは上書きしない。
-  // 新しい座標のタツマのみを取り込む。
-  // 結果として、本ツール上で変更した名前と表示/非表示フラグは維持される。
+  // 既存のタツマは名前のみを上書き。(名前の変更に対応)
+  // 新しい座標のタツマは取り込む。
+  // 結果として、本ツール上で設定したと表示/非表示フラグとエリアは維持される。
   final int numTatsumas = tatsumas.length;
   int addCount = 0;
   int index = numTatsumas;
@@ -448,6 +448,7 @@ int mergeTatsumas(List<TatsumaData> newTatsumas)
     bool existed = false;
     for(int i = 0; i < numTatsumas; i++){
       if(newTatsuma.pos == tatsumas[i].pos){
+        tatsumas[i].name = newTatsuma.name;
         existed = true;
         break;
       }
