@@ -678,6 +678,7 @@ class _MapViewState extends State<MapView>
                 // 高さ陰影図
                 TileLayerOptions(
                   urlTemplate: "https://cyberjapandata.gsi.go.jp/xyz/hillshademap/{z}/{x}/{y}.png",
+                  maxNativeZoom: 16,
                 ),
                 // 標準地図
                 TileLayerOptions(
