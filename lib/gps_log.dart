@@ -1112,6 +1112,7 @@ void linkGPSLogFunc(BuildContext context) async
         });
       },
       onChangeState: (){},
+      readOnlyMode: true,
     ))
   );
 }

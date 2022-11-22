@@ -741,6 +741,7 @@ class FilesPage extends StatefulWidget
     super.key,
     required this.onSelectFile,
     required this.onChangeState,
+    this.readOnlyMode = false,
   }){}
 
   // ファイル選択決定時のコールバック
@@ -748,6 +749,9 @@ class FilesPage extends StatefulWidget
 
   // 何らかの変更コールバック(ファイル選択にまでは至らない、主にリネーム時)
   final Function() onChangeState;
+
+  // 読み取り専用モード(作成や削除、リネームはできない)
+  final bool readOnlyMode;
 
   @override
   FilesPageState createState() => FilesPageState();
@@ -778,14 +782,14 @@ class FilesPageState extends State<FilesPage>
         title: Text("ファイル：" + getCurrentPath()),
         actions: [
           // (左)フォルダ作成ボタン
-          IconButton(
+          if(!widget.readOnlyMode) IconButton(
             icon: Icon(Icons.create_new_folder),
             onPressed:() async {
               createNewFolderSub(context);
             },
           ),
           // (右)ファイル作成ボタン
-          IconButton(
+          if(!widget.readOnlyMode) IconButton(
             icon: Icon(Icons.note_add),
             onPressed:() async {
               createNewFileSub(context);
@@ -840,6 +844,9 @@ class FilesPageState extends State<FilesPage>
     // アイコンボタンの座標を取得するため
     GlobalKey iconGlobalKey = GlobalKey();
 
+    // メニュードット「…」を表示するか？
+    final bool showMenuDot = !goParentDir && !widget.readOnlyMode;
+
     return Container(
       // ファイル間の境界線
       decoration: BoxDecoration(border:_borderStyle),
@@ -856,7 +863,7 @@ class FilesPageState extends State<FilesPage>
 
         // (右側)メニューボタン
         // 「親階層に戻る」では非表示
-        trailing: goParentDir? null: IconButton(
+        trailing: showMenuDot? IconButton(
           icon: Icon(Icons.more_horiz, key:iconGlobalKey),
           onPressed:() {
             // ボタンの座標を取得してメニューを表示
@@ -864,7 +871,7 @@ class FilesPageState extends State<FilesPage>
             var offset = box.localToGlobal(Offset.zero);
             showFileItemMenu(context, currentDir[index], offset, !isOpenedFile);
           },
-        ),
+        ) : null,
 
         // タップでファイルを切り替え
         onTap: () {
