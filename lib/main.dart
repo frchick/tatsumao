@@ -27,6 +27,7 @@ import 'home_icon.dart';
 import 'gps_log.dart';
 import 'password.dart';
 import 'misc_marker.dart';
+import 'responsiveAppBar.dart';
 import 'globals.dart';
 
 //----------------------------------------------------------------------------
@@ -402,16 +403,11 @@ class _MapViewState extends State<MapView>
 
   //----------------------------------------------------------------------------
   // アプリケーションバー構築
-
-  // ファイルパスと機能アイコンが重なっているか判定して、2行構成切り替え
-  GlobalKey _filePathKey = GlobalKey();
-  GlobalKey _actionButtonKey = GlobalKey();
-  bool _appBar2LineLayout = false;
+  var _responsiveAppBar = ResponsiveAppBar();
 
   AppBar makeAppBar(BuildContext context)
   {
-    // ウィンドウリサイズで再構築を走らせるためのおまじない
-    // 幅が狭ければ、微調整を入れる
+    // 幅が狭ければ、文字を小さくする
     var screenSize = MediaQuery.of(context).size;
     final bool narrowWidth = (screenSize.width < 640);
   
@@ -426,98 +422,62 @@ class _MapViewState extends State<MapView>
     );
 
     // 右端の機能ボタン群
-    Widget actions = Padding(
-      padding: EdgeInsets.only(top:(_appBar2LineLayout? 30: 0)),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.end,
-        children: [
-          // ダミー
-          Container(key: _actionButtonKey, width:0, height:1),
-          // 編集ロックボタン
-          _lockEditingButton,
-          // クリップボードへコピーボタン
-          IconButton(
-            icon: Icon(Icons.content_copy),
-            onPressed:() {
-              copyAssignToClipboard(context);
-            },
-          ),
-          // ログ関連
-          IconButton(
-            icon: const Icon(Icons.timeline),
-            onPressed:() {
-              showGPSLogPopupMenu(context);
-            },
-          ),
-          // タツマの編集と読み込み
-          IconButton(
-            icon: const Icon(Icons.map),
-            onPressed:() {
-              tatsumaIconFunc(context);
-            },
-          ),
-          // エリアフィルター
-          IconButton(
-            icon: const Icon(Icons.filter_alt),
-            onPressed:() {
-              areaIconFunc(context);
-            },
-          ),
-        ],
+    List<Widget> actionsLine = [
+      // 編集ロックボタン
+      _lockEditingButton,
+      // クリップボードへコピーボタン
+      IconButton(
+        icon: Icon(Icons.content_copy),
+        onPressed:() {
+          copyAssignToClipboard(context);
+        },
       ),
-    );
+      // ログ関連
+      IconButton(
+        icon: const Icon(Icons.timeline),
+        onPressed:() {
+          showGPSLogPopupMenu(context);
+        },
+      ),
+      // タツマの編集と読み込み
+      IconButton(
+        icon: const Icon(Icons.map),
+        onPressed:() {
+          tatsumaIconFunc(context);
+        },
+      ),
+      // エリアフィルター
+      IconButton(
+        icon: const Icon(Icons.filter_alt),
+        onPressed:() {
+          areaIconFunc(context);
+        },
+      ),
+    ];
 
-    // 画面横幅が狭い場合は、AppBar上のファイルパスとアクションボタンを二行レイアウトにする
-    // いわゆるレスポンシブデザイン！？
-    Widget appBarContents = Stack(
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.start,
-          children: [
-            // ファイル一覧ボタン
-            IconButton(
-              icon: Icon(Icons.folder),
-              onPressed: () => fileIconFunc(context),
-            ),
-            // ファイルパス
-            // 狭い画面なら文字小さく
-            Text(
-              getOpenedFilePath(),
-              key:_filePathKey,
-              textScaleFactor: (narrowWidth? 0.8: null),
-            ),
-          ],
-        ),
-        // 機能ボタン群
-        actions,
-      ]
-    );
-    final double? height = _appBar2LineLayout? 80: null;
+    // 右側のタイトル
+    List<Widget> titleLine = [
+      // ファイル一覧ボタン
+      IconButton(
+        icon: Icon(Icons.folder),
+        onPressed: () => fileIconFunc(context),
+      ),
+      // ファイルパス
+      // 狭い画面なら文字小さく
+      Text(
+        getOpenedFilePath(),
+        textScaleFactor: (narrowWidth? 0.8: null),
+      ),
+    ];
 
-    // ファイルパスとアイコンが重なっているか判定して、1行/2行構成を切り替える
-    WidgetsBinding.instance.addPostFrameCallback((_){
-      if((_filePathKey.currentContext != null) &&
-        (_actionButtonKey.currentContext != null)){
-        final RenderBox box0 = _filePathKey.currentContext!.findRenderObject() as RenderBox;
-        final RenderBox box1 = _actionButtonKey.currentContext!.findRenderObject() as RenderBox;
-        final double textRight = box0.localToGlobal(Offset.zero).dx + box0.size.width;
-        final double buttonsLeft = box1.localToGlobal(Offset.zero).dx;
-        final bool overlap = (buttonsLeft < textRight);
-        if(_appBar2LineLayout != overlap){
-          setState((){ _appBar2LineLayout = overlap; });
-        }
-      }
-    });
-
-    return AppBar(
-      // アプリケーションバーは半透明
-      backgroundColor: Theme.of(context).primaryColor.withOpacity(0.4),
-      elevation: 0,
-      toolbarHeight: height,
+    // レスポンシブ対応 AppBar
+    return _responsiveAppBar.makeAppBar(
+      context,
+      titleLine: titleLine,
+      actionsLine: actionsLine,
+      opacity: 0.4,
       automaticallyImplyLeading: false,
-      titleSpacing: (narrowWidth? 0: null), // 狭い画面なら左右パディングなし
-      title: appBarContents,
-    );
+      setState: setState);
   }
 
   //----------------------------------------------------------------------------

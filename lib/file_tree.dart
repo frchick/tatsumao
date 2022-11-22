@@ -9,6 +9,7 @@ import 'text_ballon_widget.dart';
 import 'text_item_list_dialog.dart';
 import 'tatsumas.dart';
 import 'gps_log.dart';
+import 'responsiveAppBar.dart';
 import 'globals.dart';
 
 //----------------------------------------------------------------------------
@@ -774,13 +775,27 @@ class FilesPageState extends State<FilesPage>
     super.initState();
   }
 
+  var _responsiveAppBar = ResponsiveAppBar();
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context)
+  {
+    // 幅が狭ければ、文字を小さくする
+    var screenSize = MediaQuery.of(context).size;
+    final bool narrowWidth = (screenSize.width < 640);
+
     final List<FileItem> currentDir = getCurrentDir();
+
     return Scaffold(
-      appBar: AppBar(
-        title: Text("ファイル：" + getCurrentPath()),
-        actions: [
+      appBar: _responsiveAppBar.makeAppBar(
+        context,
+        titleLine: [
+          Text(
+            getCurrentPath(),
+            textScaleFactor: (narrowWidth? 0.8: null),
+          ),
+        ],
+        actionsLine: [
           // (左)フォルダ作成ボタン
           if(!widget.readOnlyMode) IconButton(
             icon: Icon(Icons.create_new_folder),
@@ -796,6 +811,7 @@ class FilesPageState extends State<FilesPage>
             },
           ),
         ],
+        setState: setState,
       ),
       // カレントディレクトリのファイル/ディレクトリを表示
       body: ListView.builder(
