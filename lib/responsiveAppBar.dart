@@ -59,7 +59,6 @@ class ResponsiveAppBar
           children: [
             ...titleLine,
             Container(key:_titleLineTailKey, width:0, height:lineHeight),
-            Expanded(child: Text("")),
           ]
         ),
         if(actions != null) actions,
