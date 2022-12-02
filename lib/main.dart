@@ -28,6 +28,7 @@ import 'gps_log.dart';
 import 'password.dart';
 import 'misc_marker.dart';
 import 'responsiveAppBar.dart';
+import 'freehand_drawing.dart';
 import 'globals.dart';
 
 //----------------------------------------------------------------------------
@@ -142,6 +143,10 @@ class _MapViewState extends State<MapView>
   {
     super.initState();
 
+    // 地図コントローラを作成
+    // このさきで初回の build が走った後から使えるようになる
+    mainMapController = MapController();
+
     // メンバーデータからマーカー配列を作成
     // メンバーは組み込みデータなのでデータベースからの読み込みはない
     createMemberMarkers();
@@ -151,7 +156,13 @@ class _MapViewState extends State<MapView>
 
     // その他の初期化
     miscMarkers.initialize();
-  
+
+    // 手書き図の初期化
+    freehandDrawing = FreehandDrawing(
+      mapController: mainMapController!,
+      appInstKey: appInstKey);
+    freehandDrawing.setColor(Color.fromARGB(255,0,255,0));
+
     // データベースからもろもろ読み込んで初期状態をセットアップ
     initStateSub();
   }
@@ -183,6 +194,7 @@ class _MapViewState extends State<MapView>
 
     // 初期状態のファイルを読み込み
     await openFile(openPath);
+    
     // GPSログを読み込み(遅延処理)
     final String gpsLogPath = await gpsLog.getReferencePath(openPath);
     final bool refLink = (gpsLogPath != openPath);
@@ -215,10 +227,6 @@ class _MapViewState extends State<MapView>
         await new Future.delayed(new Duration(seconds: 2));
       }
     }while(!authenOk);
-
-    // 地図コントローラを作成
-    // このさきで初回の build が走った後から使えるようになる
-    mainMapController = MapController();
 
     // iOS版 Safari の謎クラッシュ対策
     // WebRenderer を CanvasKit 固定にするとクラッシュしないみたいなので、一旦無効化。
@@ -291,6 +299,10 @@ class _MapViewState extends State<MapView>
     // 汎用マーカーを読み込み
     miscMarkers.clear();
     miscMarkers.initSync(fileUIDPath);
+  
+    // 手書き図の同期をセットアップ
+    freehandDrawing.close();
+    freehandDrawing.open(fileUIDPath);
   }
 
   //----------------------------------------------------------------------------
@@ -668,11 +680,18 @@ class _MapViewState extends State<MapView>
                   // NOTE: usePxCache=trueだと、ストリーム経由の再描画で位置が変わらない
                   usePxCache: false,
                 ),
+                // 手書き図形レイヤー
+                freehandDrawing.getFiguresLayerOptions(),
+                // 手書きの今引いている最中のライン
+                freehandDrawing.getCurrentStrokeLayerOptions(),
               ],
             ),
 
             // 家アイコン
             homeIconWidget,
+
+            // 手書き図
+            FreehandDrawingOnMap(),
 
             // ポップアップメッセージ
             Align(
