@@ -676,10 +676,10 @@ class FreehandDrawingOnMap extends StatefulWidget
   const FreehandDrawingOnMap({super.key});
 
   @override
-  State<FreehandDrawingOnMap> createState() => _FreehandDrawingOnMapState();
+  State<FreehandDrawingOnMap> createState() => FreehandDrawingOnMapState();
 }
 
-class _FreehandDrawingOnMapState extends State<FreehandDrawingOnMap>
+class FreehandDrawingOnMapState extends State<FreehandDrawingOnMap>
 {
   // 手書き有効/無効スイッチ
   bool _dawingActive = false;
@@ -741,5 +741,11 @@ class _FreehandDrawingOnMapState extends State<FreehandDrawingOnMap>
         ),
       ],
     );
+  }
+
+  // 手書きを無効化
+  void disableDrawing()
+  {
+    setState((){ _dawingActive = false; });
   }
 }

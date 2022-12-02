@@ -135,6 +135,9 @@ class _MapViewState extends State<MapView>
 {
   // 家アイコン
   late HomeIconWidget homeIconWidget;
+  
+  // 手書き図へのアクセスキー
+  final _freehandDrawingOnMapKey = GlobalKey<FreehandDrawingOnMapState>();
 
   //----------------------------------------------------------------------------
   // 初期化
@@ -194,7 +197,7 @@ class _MapViewState extends State<MapView>
 
     // 初期状態のファイルを読み込み
     await openFile(openPath);
-    
+
     // GPSログを読み込み(遅延処理)
     final String gpsLogPath = await gpsLog.getReferencePath(openPath);
     final bool refLink = (gpsLogPath != openPath);
@@ -301,6 +304,7 @@ class _MapViewState extends State<MapView>
     miscMarkers.initSync(fileUIDPath);
   
     // 手書き図の同期をセットアップ
+    _freehandDrawingOnMapKey.currentState?.disableDrawing();
     freehandDrawing.close();
     freehandDrawing.open(fileUIDPath);
   }
@@ -691,7 +695,7 @@ class _MapViewState extends State<MapView>
             homeIconWidget,
 
             // 手書き図
-            FreehandDrawingOnMap(),
+            FreehandDrawingOnMap(key:_freehandDrawingOnMapKey),
 
             // ポップアップメッセージ
             Align(
