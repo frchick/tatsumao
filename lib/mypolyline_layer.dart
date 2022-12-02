@@ -43,7 +43,7 @@ class MyPolyline {
   final List<LatLng> points;
   final List<Offset> offsets = [];
   final double strokeWidth;
-  final Color color;
+  /*final*/ Color color;    // 変更可能！！
   final double borderStrokeWidth;
   final Color? borderColor;
   final List<Color>? gradientColors;
@@ -54,6 +54,7 @@ class MyPolyline {
   final bool startCapMarker;
   final bool endCapMarker;
   late LatLngBounds boundingBox;
+  final bool shouldRepaint;
 
   MyPolyline({
     required this.points,
@@ -66,8 +67,9 @@ class MyPolyline {
     this.isDotted = false,
     this.strokeCap = StrokeCap.round,
     this.strokeJoin = StrokeJoin.round,
-    this.startCapMarker = true,
-    this.endCapMarker = true,
+    this.startCapMarker = false,
+    this.endCapMarker = false,
+    this.shouldRepaint = false,
   });
 }
 
@@ -295,7 +297,12 @@ class MyPolylinePainter extends CustomPainter {
 
   //NOTE: これが true を返さないと、StreamBuilder が走っても再描画されないことがある。
   @override
-  bool shouldRepaint(MyPolylinePainter oldDelegate) => true;
+  bool shouldRepaint(MyPolylinePainter oldDelegate)
+  {
+    // NOTE: 本来は this と oldDelegate を比較して変更あるかチェックする。
+    // 面倒なので、MyPolyline のフラグに持たせた。
+    return polylineOpt.shouldRepaint;
+  }
 }
 
 double _dist(Offset v, Offset w) {

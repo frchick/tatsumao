@@ -913,7 +913,10 @@ class _Route
     return MyPolyline(
       points:line,
       color:_deviecParam.color,
-      strokeWidth:2.0);
+      strokeWidth:2.0,
+      startCapMarker:true,
+      endCapMarker:true,
+      shouldRepaint:true);
   }
 
   // FlutterMap用の犬マーカーを作成
