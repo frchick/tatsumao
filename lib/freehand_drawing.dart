@@ -704,7 +704,7 @@ class FreehandDrawingOnMapState extends State<FreehandDrawingOnMap>
           child: FractionalTranslation(
             translation: const Offset(0, -1),
             child: TextButton(
-              child: const Icon(Icons.border_color, size: 55),
+              child: const Icon(Icons.border_color, size: 50),
               style: TextButton.styleFrom(
                 foregroundColor: Colors.orange.shade900,
                 backgroundColor: _dawingActive? Colors.white: Colors.transparent,

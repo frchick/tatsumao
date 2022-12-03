@@ -82,13 +82,14 @@ class HomeIconWidget extends StatelessWidget
       alignment: const Alignment(1.0, 1.0),
       child: Stack(children:[
         // 家アイコン
-        ElevatedButton(
+        TextButton(
           child: const Icon(Icons.home, size: 50),
-          style: ElevatedButton.styleFrom(
+          style: TextButton.styleFrom(
             foregroundColor: Colors.orange.shade900,
             backgroundColor: Colors.transparent,
             shadowColor: Colors.transparent,
             fixedSize: Size(80,80),
+            shape: const CircleBorder(),
           ),
 
           // 家ボタンタップでメンバー一覧メニューを開く
