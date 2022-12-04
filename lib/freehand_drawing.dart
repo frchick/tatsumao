@@ -13,6 +13,15 @@ import 'package:firebase_database/firebase_database.dart';
 // 手書き図の実装
 late FreehandDrawing freehandDrawing;
 
+// ペンカラー
+List<Color> _penColorTable = const [
+  Color.fromARGB(255,255,106,  0),
+  Color.fromARGB(255,255,216,  0),
+  Color.fromARGB(255, 76,255,  0),
+  Color.fromARGB(255,  0,255,255),
+  Color.fromARGB(255,255,  0,220),
+];
+
 //-----------------------------------------------------------------------------
 //-----------------------------------------------------------------------------
 // 手書き図の実装
@@ -48,8 +57,9 @@ class FreehandDrawing
   var _redrawStrokeStream = StreamController<void>.broadcast();
 
   // カラー
-  Color _color = Colors.orange.shade700;
+  Color _color = _penColorTable[2];
   void setColor(Color color){ _color = color; }
+  Color get color => _color;
 
   //---------------------------------------------------------------------------
   // FlutterMap のレイヤー(描画した図形)
@@ -684,6 +694,9 @@ class FreehandDrawingOnMapState extends State<FreehandDrawingOnMap>
   // 手書き有効/無効スイッチ
   bool _dawingActive = false;
 
+  // カラーパレットへのアクセスキー
+  final _colorPaletteWidgetKey = GlobalKey<_ColorPaletteWidgetState>();
+
   @override
   void initState()
   {
@@ -697,6 +710,19 @@ class FreehandDrawingOnMapState extends State<FreehandDrawingOnMap>
 
     return Stack(
       children: [
+        // 展開するカラーパレット
+        Align(
+          // 画面右下に配置
+          alignment: const Alignment(1.0, 1.0),
+          child: FractionalTranslation(
+            translation: const Offset(0, -1),
+            child: _ColorPaletteWidget(
+              key: _colorPaletteWidgetKey,
+              onChangeColor: _onChangeColor),
+          ),
+        ),
+
+        // 機能ボタン
         // 手書き有効/無効ボタン
         Align(
           // 画面右下に配置
@@ -706,23 +732,35 @@ class FreehandDrawingOnMapState extends State<FreehandDrawingOnMap>
             child: TextButton(
               child: const Icon(Icons.border_color, size: 50),
               style: TextButton.styleFrom(
-                foregroundColor: Colors.orange.shade900,
+                foregroundColor: freehandDrawing.color,
                 backgroundColor: _dawingActive? Colors.white: Colors.transparent,
                 shadowColor: Colors.transparent,
                 fixedSize: const Size(80,80),
-                padding: const EdgeInsets.fromLTRB(0,0,0,20),
+                padding: const EdgeInsets.fromLTRB(0,0,0,10),
                 shape: const CircleBorder(),
               ),
+              // 有効/無効切り替え
               onPressed: ()
               {
                 // この setState() は FreehandDrawingOnMap の範囲のみ build を実行
                 // FlutterMap 含む MyHomePage は build されない
-                setState((){ _dawingActive = !_dawingActive; });
+                var colorPalette = _colorPaletteWidgetKey.currentState;
+                if(!(colorPalette?.isExpanded() ?? false)){
+                  setState((){ _dawingActive = !_dawingActive; });
+                }else{
+                  // もしカラーパレットが開いていたら、一旦閉じる
+                  colorPalette?.close();
+                }
               },
+              // カラーパレットを展開
+              onLongPress: ()
+              {
+                _colorPaletteWidgetKey.currentState?.expand();
+              }
             ),
           ),
         ),
-
+        
         // 手書きジェスチャー
         if(_dawingActive) GestureDetector(
           dragStartBehavior: DragStartBehavior.down,
@@ -743,9 +781,200 @@ class FreehandDrawingOnMapState extends State<FreehandDrawingOnMap>
     );
   }
 
+  // カラー変更(UIイベントハンドラ)
+  void _onChangeColor(Color color)
+  {
+    print(">_onChangeColor(${color})");
+    // カラーパレットを閉じる
+    _colorPaletteWidgetKey.currentState?.close();
+    // カラーを設定し、ペンアイコンの色を変えるために再build
+    freehandDrawing.setColor(color);
+    setState((){});
+  }
+
   // 手書きを無効化
   void disableDrawing()
   {
+    _colorPaletteWidgetKey.currentState?.close();
     setState((){ _dawingActive = false; });
+  }
+}
+
+//-----------------------------------------------------------------------------
+// カラーパレットメニュー(横に展開するやつ)
+class _ColorPaletteWidget extends StatefulWidget
+{
+  const _ColorPaletteWidget({super.key,
+    required this.onChangeColor});
+ 
+  final Function(Color) onChangeColor;
+
+  @override
+  State<_ColorPaletteWidget> createState() => _ColorPaletteWidgetState();
+}
+
+class _ColorPaletteWidgetState
+  extends State<_ColorPaletteWidget>
+  with    SingleTickerProviderStateMixin
+{
+  late AnimationController _menuAnimation;
+
+  @override
+  void initState()
+  {
+    super.initState();
+
+    // アニメーションの時間進行の制御オブジェクトを作成
+    _menuAnimation = AnimationController(
+      duration: const Duration(milliseconds: 200),
+      vsync: this,
+    );
+    // 閉じるアニメーション完了時に全体を非表示とするために、再buildをキック
+    _menuAnimation.addStatusListener((AnimationStatus status){
+      if(status == AnimationStatus.dismissed){
+        setState((){});
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _menuAnimation.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context)
+  {
+    //!!!!
+    print(">_ColorPaletteWidget.build() !!!!");
+  
+    return Offstage(
+      // カラーパレットが閉じているときは全体を非表示
+      offstage: (_menuAnimation.status == AnimationStatus.dismissed),
+      // カラーパレットをアニメーション用Widget(Flow)に並べる
+      child: Flow(
+        delegate: ColorPaletteFlowDelegate(
+          menuAnimation: _menuAnimation,
+          numColors: 5),
+        children: [
+          makeColorPalletButton(_penColorTable[0]),
+          makeColorPalletButton(_penColorTable[1]),
+          makeColorPalletButton(_penColorTable[2]),
+          makeColorPalletButton(_penColorTable[3]),
+          makeColorPalletButton(_penColorTable[4]),
+        ],
+      ),
+    );
+  }
+ 
+  // カラーパレットの丸ボタン Widget を作成
+  Widget makeColorPalletButton(Color color)
+  {
+    return TextButton(
+      child: Container(),
+      style: TextButton.styleFrom(
+        backgroundColor: color,
+        shadowColor: Colors.transparent,
+        fixedSize: const Size(60,60),
+        shape: const CircleBorder(side:
+          BorderSide(
+            color: Colors.black,
+            width: 3,
+            style: BorderStyle.solid
+          ),
+        ),
+      ),
+      onPressed: () => widget.onChangeColor(color),
+    );
+  }
+
+  // メニューを開く
+  void expand()
+  {
+    if(_menuAnimation.status == AnimationStatus.dismissed){
+      _menuAnimation.forward();
+      setState((){});
+    }
+  }
+
+  // メニューを閉じる
+  void close()
+  {
+    if(_menuAnimation.status == AnimationStatus.completed){
+      _menuAnimation.reverse();
+    }
+  }
+
+  // メニューが開いているか？
+  bool isExpanded()
+  {
+    return (_menuAnimation.status == AnimationStatus.completed) ||
+           (_menuAnimation.status == AnimationStatus.forward);
+  }
+}
+
+//-----------------------------------------------------------------------------
+// カラーパレットの展開アニメーション
+class ColorPaletteFlowDelegate extends FlowDelegate
+{
+  ColorPaletteFlowDelegate({
+    required Animation<double> menuAnimation,
+    required this.numColors}) :
+    _totalWidth = _baseOffset + (_margin + _paletteSize) * numColors,
+    super(repaint: menuAnimation)
+  {
+    _curveAnimation = CurvedAnimation(
+      parent: menuAnimation,
+      curve: Curves.ease,
+    );
+  }
+ 
+  // 展開アニメーションの時間を制御するやつ
+  late Animation<double> _curveAnimation;
+
+  // カラーパレット数
+  final int numColors;
+
+  // 右端基点のオフセット(機能ボタンのサイズ)
+  static const double _baseOffset = 80;
+  // 全体の高さ(機能ボタンのサイズ)
+  static const double _height = 80;
+  // カラーパレットのサイズ
+  static const double _paletteSize = 60;
+  // カラーパレット間のマージン
+  static const double _margin = 10;
+  // 展開時の全体のサイズ
+  final double _totalWidth;
+
+  // アニメーションが進んで再描画が必要か判定
+  @override
+  bool shouldRepaint(ColorPaletteFlowDelegate oldDelegate)
+  {
+    return _curveAnimation != oldDelegate._curveAnimation;
+  }
+ 
+  // メニュー展開時の最大サイズを返す
+  // (右寄せレイアウトなどのために必要？)
+  @override
+  Size getSize(BoxConstraints constraints)
+  {
+    return Size(_totalWidth, _height);
+  }
+
+  // 移動アニメーションを計算して丸アイコンを描画
+  @override
+  void paintChildren(FlowPaintingContext context)
+  {
+    final double stride = (_paletteSize + _margin);
+    final double offset_y = (_height - _paletteSize) / 2;
+    final double t = _curveAnimation.value;
+    for (int i = 0; i < context.childCount; i++) {
+      final double x = (_totalWidth - _baseOffset) - (stride * (i + 1) * t);
+      context.paintChild(
+        i,
+        transform: Matrix4.translationValues(x, offset_y, 0),
+      );
+    }
   }
 }
