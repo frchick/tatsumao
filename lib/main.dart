@@ -162,8 +162,7 @@ class _MapViewState extends State<MapView>
 
     // 手書き図の初期化
     freehandDrawing = FreehandDrawing(
-      mapController: mainMapController!,
-      appInstKey: appInstKey);
+      mapController: mainMapController!);
     freehandDrawing.setColor(Color.fromARGB(255,0,255,0));
 
     // データベースからもろもろ読み込んで初期状態をセットアップ
@@ -279,7 +278,14 @@ class _MapViewState extends State<MapView>
       return;
     }
 
-    // メンバーデータをデータベースから取得
+    // GPSログをクリア
+    gpsLog.clear();
+    // 汎用マーカーをクリア
+    miscMarkers.clear();
+    // 直前の手書き図を削除
+    freehandDrawing.close();
+  
+    // メンバーの配置データをデータベースから取得
     await initMemberSync(fileUIDPath);
     // メンバーの位置へ地図を移動
     // 直前の地図が表示され続ける時間を短くするために、なるべく早めに
@@ -296,17 +302,14 @@ class _MapViewState extends State<MapView>
     await loadLockEditingFromDB(fileUIDPath, onLockChange:onLockChangeByOther);
   
     // GPSログをクリア、デバイスIDと犬の対応を取得
-    gpsLog.clear();
     await gpsLog.loadDeviceID2DogFromDB(fileUIDPath);
 
     // 汎用マーカーを読み込み
-    miscMarkers.clear();
     miscMarkers.initSync(fileUIDPath);
   
-    // 手書き図の同期をセットアップ
-    _freehandDrawingOnMapKey.currentState?.disableDrawing();
-    freehandDrawing.close();
+    // 手書き図を読み込み
     freehandDrawing.open(fileUIDPath);
+    _freehandDrawingOnMapKey.currentState?.setEditLock(lockEditing);
   }
 
   //----------------------------------------------------------------------------
@@ -353,6 +356,8 @@ class _MapViewState extends State<MapView>
     mainMapDragMarkerPluginOptions.draggable = !lockEditing;
     miscMarkers.getMapLayerOptions().draggable = !lockEditing;
     updateMapView();
+    // 手書き図に編集ロック変更を通知
+    _freehandDrawingOnMapKey.currentState?.setEditLock(lockEditing);
   }
 
   //----------------------------------------------------------------------------
@@ -504,6 +509,9 @@ class _MapViewState extends State<MapView>
     gpsLog.stopAnim();
     // BottomSheet を閉じる
     closeBottomSheet();
+    // 手書きを無効化
+    _freehandDrawingOnMapKey.currentState?.disableDrawing();
+
     // ファイル一覧画面に遷移して、ファイルの切り替え
     Navigator.push(
       context,

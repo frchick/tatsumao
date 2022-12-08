@@ -28,10 +28,8 @@ List<Color> _penColorTable = const [
 class FreehandDrawing
 {
   FreehandDrawing({
-    required MapController mapController,
-    required String appInstKey }) :
-    _mapController = mapController,
-    _appInstKey = appInstKey
+    required MapController mapController }) :
+    _mapController = mapController
   {
   }
 
@@ -60,6 +58,9 @@ class FreehandDrawing
   Color _color = _penColorTable[2];
   void setColor(Color color){ _color = color; }
   Color get color => _color;
+
+  // ピン留めしている図形のリスト(ピン留め順)
+  List<Figure> _pinnedFigures = [];
 
   //---------------------------------------------------------------------------
   // FlutterMap のレイヤー(描画した図形)
@@ -109,8 +110,8 @@ class FreehandDrawing
 
       var polyline = MyPolyline(
         points: _currnetStrokeLatLng!,
-        color: _color,
-        strokeWidth: 4.0,
+        color: _color.withAlpha(Figure.defaultOpacity),
+        strokeWidth: Figure.defaultWidth,
         shouldRepaint: true);
       
       if(_currentStroke.isEmpty) _currentStroke.add(polyline);
@@ -164,6 +165,8 @@ class FreehandDrawing
     if(_addStrokeFigure == figure){
       _addStrokeFigure = null;
     }
+    _pinnedFigures.remove(figure);
+  
     //!!!!
     print(">Remove Figure!!!! ${N} -> ${_figures.length}");
   }
@@ -180,6 +183,48 @@ class FreehandDrawing
     _redrawPolylineStream.sink.add(null);
   }
 
+  // ピン留め
+  void pushPin()
+  {
+    // 作成済みの図形をピン留め(フェードアウトに入っているのは対象外)
+    for(var figure in _figures.values){
+      if(figure.pushPin()){
+        _pinnedFigures.add(figure);
+      }
+    }
+    redraw();
+  }
+
+  // 最後にピン留めした図形を削除
+  void deleteLastPinned()
+  {
+    if(_pinnedFigures.isEmpty) return;
+
+    // データを削除
+    Figure figure = _pinnedFigures.removeLast();
+    _figures.remove(figure.key);
+    // データベース上からも削除
+    figure.removeToDatabase();
+    // 再描画
+    redraw();
+  }
+
+  // 他のユーザーが描いたものも含めて、全てのピン留め図形を削除
+  void deleteAllPinned()
+  {
+    // ピン留めされた図形をデータベースとローカルのMapから削除
+    _figures.removeWhere((key, figure){
+      if(figure.pinned){
+        figure.removeToDatabase();
+      }
+      return figure.pinned;
+    });
+    _pinnedFigures.clear();
+
+    // 再描画
+    redraw();
+  }
+
   //---------------------------------------------------------------------------
   // 他ユーザーとのリアルタイム同期
   DatabaseReference? _databaseRef;
@@ -189,16 +234,24 @@ class FreehandDrawing
   StreamSubscription<DatabaseEvent>? _addListener;
   // 削除イベント
   StreamSubscription<DatabaseEvent>? _removeListener;
+  // 変更イベント
+  StreamSubscription<DatabaseEvent>? _changeListener;
 
   // このアプリケーションインスタンスを一意に識別するキー
   // 手書きの変更通知が、自分自身によるものか、他のユーザーからかを識別
-  late String _appInstKey;
-  String get appInstKey => _appInstKey;
+  // open() のたびに再生成されるので、ファイルごとになる。
+  String appInstKey = "";
 
   //---------------------------------------------------------------------------
   // 配置ファイルを開く
   void open(String uidPath)
   {
+    //!!!!
+    print(">FreehandDrawing.open(${uidPath})");
+
+    // データベースにストロークを書き込んだアプリインスタンスを識別するキーを作成
+    appInstKey = UniqueKey().toString();
+
     // データベースの参照ポイント
     final String dbPath = "assign" + uidPath + "/freehand_drawing";
     _databaseRef = FirebaseDatabase.instance.ref(dbPath);
@@ -212,24 +265,35 @@ class FreehandDrawing
     _removeListener = _databaseRef!.onChildRemoved.listen((event){
       _onStrokeRemoved(event);
     });
+    _changeListener?.cancel();
+    _changeListener = _databaseRef!.onChildChanged.listen((event){
+      _onStrokeChanged(event);
+    });
   }
 
   // 配置ファイルを閉じる
   void close()
   {
+    //!!!!
+    print(">FreehandDrawing.close()");
+
     // 追加削除イベントを閉じる
     _addListener?.cancel();
     _addListener = null;
     _removeListener?.cancel();
     _removeListener = null;
+    _changeListener?.cancel();
+    _changeListener = null;
     // データベースへの参照をクリア
     _databaseRef = null;
 
     // まだ削除されていない図形をクリアして削除
+    // ただしピン留めされた図形はデータベースに残す
     _figures.forEach((key, figure){
-      figure.clear();
+      if(!figure.pinned) figure.clear();
     });
     _figures.clear();
+    _pinnedFigures.clear();
     _addStrokeFigure = null;
     _polylines.clear();
 
@@ -247,23 +311,25 @@ class FreehandDrawing
 
     try {
       Map<String, dynamic> data = event.snapshot.value as Map<String, dynamic>;
-      
+
       // 作成が古すぎるデータが来たら、それは多分異常終了で残っているゴミなので削除する
+      // ただしピン留めされている場合を除く
       final createdTime = DateTime.fromMillisecondsSinceEpoch(data["time"] as int);
       final Duration d = DateTime.now().difference(createdTime);
-      if(10 < d.inSeconds){
+      final bool pinned = data.containsKey("pinned");
+      if((10 < d.inSeconds) && !pinned){
         print(">FreehandDrawing._onStrokeAdded() Remove an old garbage data.");
         event.snapshot.ref.remove();
         return;
       }
 
       // 自分自身が追加した場合は無視
-      if(data["senderId"] == _appInstKey){
+      if(data["senderId"] == appInstKey){
         print(">FreehandDrawing._onStrokeAdded() from myself.");
         return;
       }
 
-      // ポリラインを作成して登録
+      // ポリラインを作成
       MyPolyline? polyline = Figure.makePolyline(data);
       if(polyline == null){
         return;
@@ -278,13 +344,16 @@ class FreehandDrawing
       }else{
         figure = Figure(key:key, parent:this, remote:true);
         _figures[key] = figure;
+        // ピン留めされていたら、そうする。
+        if(pinned) figure.pushPinByRemote();
       }
-      figure.addStroke(polyline);
+      // 図形にストロークを追加
+      figure.addStroke(polyline, ref: event.snapshot.ref);
 
       // 再描画
       redraw();
       //!!!!
-      print(">FreehandDrawing._onStrokeAdded() key:${key}");
+      print(">FreehandDrawing._onStrokeAdded() key:${key} pinned:${pinned}");
     } catch(e) {
       //!!!!
       print(">FreehandDrawing._onStrokeAdded() failed!!!!");
@@ -300,23 +369,49 @@ class FreehandDrawing
     try {
       Map<String, dynamic> data = event.snapshot.value as Map<String, dynamic>;
       
-      // 自分自身が追加した場合は無視
-      if(data["senderId"] == _appInstKey){
-        print(">FreehandDrawing._onStrokeRemoved() from myself.");
-        return;
-      }
+      // 自分自身の削除のイベントかはチェックしない。次の key の有無チェックで安全にスルーできる。
+      final bool myself = (data["senderId"] == appInstKey);
 
-      // フェードアウトさせて消す
+      // 削除
+      // ピン留めされている場合とされていない場合で、先の処理が異なる
       final String key = data["key"] as String;
       final bool contains = _figures.containsKey(key);
       if(contains){
-        _figures[key]!.removeByRemote();
+        final bool change = _figures[key]!.removeByRemote();
+        // 変更があったら再描画
+        if(change) redraw();
       }
       //!!!!
-      print(">FreehandDrawing._onStrokeRemoved() key:${key} contains:${contains?'YES':'NO'}");
+      print(">FreehandDrawing._onStrokeRemoved()"
+            " key:${key} contains:${contains?'YES':'NO'} ${myself? 'from myself.': ''}");
     } catch(e) {
       //!!!!
       print(">FreehandDrawing._onStrokeRemoved() failed!!!!");
+    }
+  }
+
+  // 変更イベント
+  void _onStrokeChanged(DatabaseEvent event)
+  {
+    //!!!!
+    print(">FreehandDrawing._onStrokeChanged()");
+
+    try {
+      Map<String, dynamic> data = event.snapshot.value as Map<String, dynamic>;
+
+      // 指定の図形があるか確認
+      final String key = data["key"] as String;
+      final bool contains = _figures.containsKey(key);
+
+      // ピン留め
+      if(contains && data.containsKey("pinned")){
+        final bool change = _figures[key]!.pushPinByRemote();
+        // 変更があったら再描画
+        if(change) redraw();
+      }
+    } catch(e){
+      //!!!!
+      print(">FreehandDrawing._onStrokeChanged() failed!!!!");
     }
   }
 }
@@ -367,6 +462,12 @@ class Figure
   Timer? _fadeAnimTimer;
   // フェードアウトの透明度(0 - 255)
   int _opacity = 0;
+  // ピン留めされてない場合の透明度
+  static const int defaultOpacity = 192;
+  // ピン留めされていない場合の太さ
+  static const double defaultWidth = 4.0;
+  // ピン留めされている場合の太さ
+  static const double pinnedWidth = 5.0;
 
   // 一塊の図形として連続したストロークと判定する時間
   var _openDuration = const Duration(milliseconds: 1500);
@@ -394,21 +495,26 @@ class Figure
   }
 
   // ストロークを追加
-  bool addStroke(MyPolyline polyline)
+  bool addStroke(MyPolyline polyline, { DatabaseReference? ref=null })
   {
     //!!!!
     print(">addStroke(${_state.toString()})");
 
     // 図形の新規作成(Open/RemoteOpen)か、連続したストロークの追加(WaitStroke)のみ
-    final bool removeByRemote = (_state == FigureState.RemoteOpen);
+    final bool remote = (_state == FigureState.RemoteOpen) ||
+                        (_state == FigureState.RemotePinned);
     final bool ok = (_state == FigureState.Open) ||
                     (_state == FigureState.WaitStroke) || 
-                    removeByRemote;
+                    remote;
     if(!ok) return false;
+
+    // ピン留めされてない場合には半透明
+    polyline.color = polyline.color.withAlpha(_pinned? 255: defaultOpacity);
+    polyline.strokeWidth = (_pinned? pinnedWidth: defaultWidth);
 
     // ストロークを追加
     _polylines.add(polyline);
-    if(!removeByRemote){
+    if(!remote){
       // 連続ストローク判定のタイマーを開始
       print(">${_state.toString()} => FigureState.Open");
       _state = FigureState.Open;
@@ -416,7 +522,12 @@ class Figure
       _openTimer = Timer(_openDuration, _onOpenTimer);
 
       // 他のユーザーへストローク追加を同期
-      sentToDatabase(polyline);
+      _sentToDatabase(polyline);
+    }
+
+    // リモート図形の場合は、ストロークへの参照を登録
+    if(remote && (ref != null)){
+      _polylineRefs.add(ref);
     }
 
     return true;
@@ -432,12 +543,6 @@ class Figure
     // 異常な状態遷移は無視
     if(_state != FigureState.Open) return;
 
-    //!!!!
-/*  _polylines.forEach((polyline){
-      polyline.color = Color.fromARGB(255, 0, 0, 255);
-    });
-    _freehandDrawing.redraw();
-*/
     // この図形を表示する期間のタイマーを開始
     print(">FigureState.Open => FigureState.Close");
     _state = FigureState.Close;
@@ -464,7 +569,7 @@ class Figure
     _state = FigureState.FadeOut;
     _fadeAnimTimer?.cancel();
     _fadeAnimTimer = Timer.periodic(Duration(milliseconds: 125), _onFadeAnimTimer);
-    _opacity = 255;
+    _opacity = defaultOpacity;
 
     // データベース上の図形も削除
     if(!removeByRemote){
@@ -476,7 +581,7 @@ class Figure
   void _onFadeAnimTimer(Timer timer)
   {
     //!!!!
-    print(">_onShowTimer(${_state.toString()})");
+    print(">_onFadeAnimTimer(${_state.toString()})");
 
     // 異常な状態遷移は無視
     if(_state != FigureState.FadeOut) return;
@@ -497,6 +602,41 @@ class Figure
     _freehandDrawing.redraw();
   }
 
+  // ピン留め
+  bool _pinned = false;
+  bool get pinned => _pinned;
+
+  bool pushPin()
+  {
+    // ピン留めできるのは、フェードアウトが始まるまで
+    // すでにピン留めされている場合も処理しない
+    final bool ok = (_state == FigureState.Open) ||
+                    (_state == FigureState.WaitStroke) ||
+                    (_state == FigureState.Close);
+    if(!ok || _pinned) return false;
+    _pinned = true;
+
+    // 即座にピン留め状態に遷移
+    print(">pushPin() ${_state.toString()} => FigureState.Pinned");
+    _state = FigureState.Pinned;
+    // 動いている可能性のあるタイマーは破棄
+    _openTimer?.cancel();
+    _openTimer = null;
+    _showTimer?.cancel();
+    _showTimer = null;
+
+    // すでに含まれているストロークを不透明にする
+    _polylines.forEach((polyline){
+      polyline.color = polyline.color.withAlpha(255);
+      polyline.strokeWidth = pinnedWidth;
+    });
+
+    // 他のユーザーへピン留めを通知
+    _pushPinToDatabase();
+  
+    return true;
+  }
+
   // 内部状態をクリア
   void clear()
   {
@@ -511,7 +651,7 @@ class Figure
 
   //---------------------------------------------------------------------------
   // 他ユーザーとのリアルタイム同期
-  void sentToDatabase(MyPolyline polyline)
+  void _sentToDatabase(MyPolyline polyline)
   {
     // 配置ファイルがオープンされていなければ何もしない
     if(_freehandDrawing.databaseRef == null) return;
@@ -534,6 +674,16 @@ class Figure
     });
   }
 
+  // データベース上の図形をピン留め
+  void _pushPinToDatabase()
+  {
+    _polylineRefs.forEach((ref){
+      ref.update({
+        "pinned": true,
+      });
+    });
+  }
+
   // データベース上のストロークを消す
   void removeToDatabase()
   {
@@ -544,10 +694,39 @@ class Figure
   }
 
   // データベース経由で削除
-  void removeByRemote()
+  bool removeByRemote()
   {
-    // フェードアウトの削除シーケンス開始
-    _onShowTimer();
+    bool redraw = false;
+    if(!_pinned){
+      // ピン留めされていなければ、フェードアウトの削除シーケンス開始
+      _onShowTimer();
+    }else{
+      // ピン留めされていれば、即座に削除
+      _freehandDrawing.removeFigure(this);
+      // 再描画必要
+      redraw = true;
+    }
+    return redraw;
+  }
+
+  // データベース経由でピン留め
+  bool pushPinByRemote()
+  {
+    // すでにピン留めされている場合も処理しない
+    if((_state != FigureState.RemoteOpen) || _pinned) return false;
+    _pinned = true;
+
+    // 即座にピン留め状態に遷移
+    print(">pushPinByRemote() ${_state.toString()} => FigureState.RemotePinned");
+    _state = FigureState.RemotePinned;
+
+    // すでに含まれているストロークを不透明にする
+    _polylines.forEach((polyline){
+      polyline.color = polyline.color.withAlpha(255);
+      polyline.strokeWidth = pinnedWidth;
+    });
+
+    return true;
   }
 
   // 同期データからポリラインを作成
@@ -579,12 +758,15 @@ class Figure
 
 //-----------------------------------------------------------------------------
 enum FigureState {
-  Open,       // 次のストロークの追加可能な期間
-  WaitStroke, // 次のストロークの完了を待っている
-  Close,      // 次のストロークの追加は終了した期間(フェードアウトまでの待ち)
-  FadeOut,    // フェードアウト中
+  Open,         // 次のストロークの追加可能な期間
+  WaitStroke,   // 次のストロークの完了を待っている
+  Close,        // 次のストロークの追加は終了した期間(フェードアウトまでの待ち)
+  FadeOut,      // フェードアウト中
 
-  RemoteOpen, // 他のユーザーが作成したリモート図形として
+  Pinned,       // ピン留めされている
+
+  RemoteOpen,   // 他のユーザーが作成したリモート図形として
+  RemotePinned, // ピン留めされたリモート図形
 }
 
 //-----------------------------------------------------------------------------
@@ -696,7 +878,9 @@ class FreehandDrawingOnMapState extends State<FreehandDrawingOnMap>
 
   // カラーパレットへのアクセスキー
   final _colorPaletteWidgetKey = GlobalKey<_ColorPaletteWidgetState>();
-
+  // サブメニューへのアクセスキー
+  final _subMenuWidgetKey = GlobalKey<_SubMenuWidgetState>();
+  
   @override
   void initState()
   {
@@ -710,56 +894,32 @@ class FreehandDrawingOnMapState extends State<FreehandDrawingOnMap>
 
     return Stack(
       children: [
-        // 展開するカラーパレット
-        Align(
-          // 画面右下に配置
-          alignment: const Alignment(1.0, 1.0),
-          child: FractionalTranslation(
-            translation: const Offset(0, -1),
-            child: _ColorPaletteWidget(
-              key: _colorPaletteWidgetKey,
-              onChangeColor: _onChangeColor),
-          ),
+        // 横に展開するカラーパレット
+        _makeOffset(_ColorPaletteWidget(
+          key: _colorPaletteWidgetKey,
+          onChangeColor: _onChangeColor),
         ),
-
-        // 機能ボタン
-        // 手書き有効/無効ボタン
-        Align(
-          // 画面右下に配置
-          alignment: const Alignment(1.0, 1.0),
-          child: FractionalTranslation(
-            translation: const Offset(0, -1),
-            child: TextButton(
-              child: const Icon(Icons.border_color, size: 50),
-              style: TextButton.styleFrom(
-                foregroundColor: freehandDrawing.color,
-                backgroundColor: _dawingActive? Colors.white: Colors.transparent,
-                shadowColor: Colors.transparent,
-                fixedSize: const Size(80,80),
-                padding: const EdgeInsets.fromLTRB(0,0,0,10),
-                shape: const CircleBorder(),
-              ),
-              // 有効/無効切り替え
-              onPressed: ()
-              {
-                // この setState() は FreehandDrawingOnMap の範囲のみ build を実行
-                // FlutterMap 含む MyHomePage は build されない
-                var colorPalette = _colorPaletteWidgetKey.currentState;
-                if(!(colorPalette?.isExpanded() ?? false)){
-                  setState((){ _dawingActive = !_dawingActive; });
-                }else{
-                  // もしカラーパレットが開いていたら、一旦閉じる
-                  colorPalette?.close();
-                }
-              },
-              // カラーパレットを展開
-              onLongPress: ()
-              {
-                _colorPaletteWidgetKey.currentState?.expand();
-              }
-            ),
-          ),
+        // 上に展開するサブメニュー
+        _makeOffset(_SubMenuWidget(
+          key: _subMenuWidgetKey,
+          onPushPin: _onPushPin,
+          onDeleteLastPinned: _onDeleteLastPinned,
+          onDeleteAllPinned: _onDeleteAllPinned,
+          colorPaletteWidgetKey: _colorPaletteWidgetKey),
         ),
+        // 手書き図の有効/無効切り替えアイコン
+        _makeOffset(TextButton(
+          child: const Icon(Icons.border_color, size: 50),
+          style: TextButton.styleFrom(
+            foregroundColor: Colors.orange.shade900,
+            backgroundColor: _dawingActive? Colors.white: Colors.transparent,
+            shadowColor: Colors.transparent,
+            fixedSize: const Size(80,80),
+            padding: const EdgeInsets.fromLTRB(0,0,0,10),
+            shape: const CircleBorder(),
+          ),
+          onPressed: () => _onTapDrawingIcon(),
+        )),
         
         // 手書きジェスチャー
         if(_dawingActive) GestureDetector(
@@ -781,6 +941,31 @@ class FreehandDrawingOnMapState extends State<FreehandDrawingOnMap>
     );
   }
 
+  // 指定した Widget に対して、画面上でのオフセットのための Widget ツリーを付加する
+  Widget _makeOffset(Widget widget)
+  {
+    // 右下寄せ、下に80ドット(ホームアイコン分)のマージン
+    return Align(
+      alignment: Alignment(1.0, 1.0),
+      child: Transform(
+        transform: Matrix4.translationValues(0, -80, 0),
+        child: widget));
+  }
+
+  // 手書き図有効無効アイコンのタップ
+  void _onTapDrawingIcon()
+  {
+    // 有効無効を切り替え、同時にサブメニューの展開、閉じるを制御
+    _dawingActive = !_dawingActive;
+    if(_dawingActive){
+      _subMenuWidgetKey.currentState?.expand();
+      // 再描画ではなく、ジェスチャー検出の有効無効切り替えのために必要
+      setState((){});
+    }else{
+      disableDrawing();
+    }
+  }
+
   // カラー変更(UIイベントハンドラ)
   void _onChangeColor(Color color)
   {
@@ -789,14 +974,179 @@ class FreehandDrawingOnMapState extends State<FreehandDrawingOnMap>
     _colorPaletteWidgetKey.currentState?.close();
     // カラーを設定し、ペンアイコンの色を変えるために再build
     freehandDrawing.setColor(color);
-    setState((){});
+    _subMenuWidgetKey.currentState?.setState((){});
   }
 
-  // 手書きを無効化
+  // ピン留め変更(UIイベントハンドラ)
+  void _onPushPin()
+  {
+    freehandDrawing.pushPin();
+  }
+
+  // 最後にピン留めした図形を削除(UIイベントハンドラ)
+  void _onDeleteLastPinned()
+  {
+    freehandDrawing.deleteLastPinned();
+  }
+
+  // 全てのピン留め図形を削除(UIイベントハンドラ)
+  void _onDeleteAllPinned()
+  {
+    freehandDrawing.deleteAllPinned();
+  }
+
+  // 手書きを無効化(外部からの制御用関数)
   void disableDrawing()
   {
     _colorPaletteWidgetKey.currentState?.close();
+    _subMenuWidgetKey.currentState?.close();
+    // 再描画ではなく、ジェスチャー検出の有効無効切り替えのために必要
     setState((){ _dawingActive = false; });
+  }
+
+  void setEditLock(bool lockEditing)
+  {
+    // 手書きが有効な場合には、一旦無効化する(サブメニューを閉じる)
+    _subMenuWidgetKey.currentState?.setEditLock(lockEditing);
+    if(_dawingActive){
+      disableDrawing();
+    }
+  }
+}
+
+//-----------------------------------------------------------------------------
+// 手書き図メニュー(上に展開するやつ)
+class _SubMenuWidget extends StatefulWidget
+{
+  const _SubMenuWidget({
+    super.key,
+    required this.onPushPin,
+    required this.onDeleteLastPinned,
+    required this.onDeleteAllPinned,
+    required this.colorPaletteWidgetKey});
+ 
+  final Function onPushPin;
+  final Function onDeleteLastPinned;
+  final Function onDeleteAllPinned;
+  final GlobalKey<_ColorPaletteWidgetState> colorPaletteWidgetKey;
+
+  @override
+  State<_SubMenuWidget> createState() => _SubMenuWidgetState();
+}
+
+class _SubMenuWidgetState
+  extends _ExpandMenuState<_SubMenuWidget>
+{
+  // ボタン押したときのハイライト
+  // MaterialStateProperty だと、素早いクリックで MaterialState.pressed 来ない！！ 
+  List<bool> _hilight = [ false, false ];
+
+  @override
+  Widget build(BuildContext context)
+  {
+    //!!!!
+    print(">_SubMenuWidget.build() _menuAnimation=${_menuAnimation.status} _lockEditing=${_lockEditing} !!!!");
+ 
+    // 閉じたときの遅延代入を処理
+    final bool closed = (_menuAnimation.status == AnimationStatus.dismissed);
+    if((_delayLockEditing != null) && closed){
+      _lockEditing = _delayLockEditing!;
+      _delayLockEditing = null;
+    }
+  
+    return Offstage(
+      // サブメニューが閉じているときは全体を非表示
+      offstage: closed,
+      // サブメニューアイコンをアニメーション用Widget(Flow)に並べる
+      child: Flow(
+        delegate: _ExpandMenuDelegate(
+          menuAnimation: _menuAnimation,
+          direction: Axis.vertical,
+          numItems: (_lockEditing? 1: 3),
+          iconSize: 60,
+          margin: 10),
+        children: [
+          // カラーパレット
+          TextButton(
+            child: const Icon(Icons.palette, size: 50),
+            style: TextButton.styleFrom(
+              foregroundColor: freehandDrawing.color,
+              shadowColor: Colors.transparent,
+              fixedSize: const Size(60,60),
+              padding: const EdgeInsets.fromLTRB(5,5,5,5),
+              shape: const CircleBorder()
+            ),
+            // カラーパレットを展開/閉じる
+            onPressed: () {
+              var state = widget.colorPaletteWidgetKey.currentState;
+              if(state?.isExpanded() ?? false){
+                state?.close();
+              }else{
+                state?.expand();
+              }
+            }
+          ),
+          // ピン留め
+          if(!_lockEditing) TextButton(
+            child: const Icon(Icons.push_pin, size: 50),
+            style: _makeButtonStyle(0),
+            onPressed: () {
+              widget.onPushPin();
+              _flashButton(0);
+            }
+          ),
+          // ピン留めした図形の削除
+          if(!_lockEditing) TextButton(
+            child: const Icon(Icons.backspace, size: 50),
+            style: _makeButtonStyle(1),
+            onPressed: () {
+              widget.onDeleteLastPinned();
+              _flashButton(1);
+            },
+            onLongPress: () {
+              widget.onDeleteAllPinned();
+              _flashButton(1);
+            }
+          ),
+        ],
+      ),
+    );
+  }
+
+  ButtonStyle _makeButtonStyle(int index)
+  {
+    return TextButton.styleFrom(
+      foregroundColor: (_hilight[index]? Colors.orange[400]: Colors.orange[900]),
+      shadowColor: Colors.transparent,
+      fixedSize: const Size(60,60),
+      padding: const EdgeInsets.fromLTRB(5,5,5,5),
+      shape: const CircleBorder());
+  }
+
+  void _flashButton(int index)
+  {
+    setState((){ _hilight[index] = true; });
+    Timer(const Duration(milliseconds: 100), (){
+      setState((){ _hilight[index] = false; });
+    });
+  }
+
+  // 編集ロックか
+  bool _lockEditing = false;
+  bool ?_delayLockEditing;
+  void setEditLock(bool lock)
+  {
+    // 変わらなければ何もしない
+    if(_lockEditing == lock) return;
+  
+    if(_menuAnimation.status == AnimationStatus.dismissed){
+      // メニューが閉じていれば、即座に代入
+      _lockEditing = lock;
+    }else{
+      // メニューが展開していれば、次回閉じたときに遅延代入
+      // メニューの閉じアニメーションの間、直前の表示状態を維持するため
+      _delayLockEditing = lock;
+    }
   }
 }
 
@@ -814,7 +1164,63 @@ class _ColorPaletteWidget extends StatefulWidget
 }
 
 class _ColorPaletteWidgetState
-  extends State<_ColorPaletteWidget>
+  extends _ExpandMenuState<_ColorPaletteWidget>
+{
+  @override
+  Widget build(BuildContext context)
+  {
+    //!!!!
+    print(">_ColorPaletteWidget.build() _menuAnimation=${_menuAnimation.status} !!!!");
+  
+    return Offstage(
+      // カラーパレットが閉じているときは全体を非表示
+      offstage: (_menuAnimation.status == AnimationStatus.dismissed),
+      // カラーパレットをアニメーション用Widget(Flow)に並べる
+      child: Flow(
+        delegate: _ExpandMenuDelegate(
+          menuAnimation: _menuAnimation,
+          direction: Axis.horizontal,
+          crossAxisOffset: 80,
+          numItems: 5,
+          iconSize: 60,
+          margin: 10),
+        children: [
+          _makeColorPalletButton(_penColorTable[0]),
+          _makeColorPalletButton(_penColorTable[1]),
+          _makeColorPalletButton(_penColorTable[2]),
+          _makeColorPalletButton(_penColorTable[3]),
+          _makeColorPalletButton(_penColorTable[4]),
+        ],
+      ),
+    );
+  }
+ 
+  // カラーパレットの丸ボタン Widget を作成
+  Widget _makeColorPalletButton(Color color)
+  {
+    return TextButton(
+      child: Container(),
+      style: TextButton.styleFrom(
+        backgroundColor: color,
+        shadowColor: Colors.transparent,
+        fixedSize: const Size(60,60),
+        shape: const CircleBorder(side:
+          BorderSide(
+            color: Colors.black,
+            width: 3,
+            style: BorderStyle.solid
+          ),
+        ),
+      ),
+      onPressed: () => widget.onChangeColor(color),
+    );
+  }
+}
+
+//-----------------------------------------------------------------------------
+// 開くアイコンメニューの状態クラスの共通部分
+class _ExpandMenuState<T extends StatefulWidget> 
+  extends State<T>
   with    SingleTickerProviderStateMixin
 {
   late AnimationController _menuAnimation;
@@ -846,47 +1252,8 @@ class _ColorPaletteWidgetState
   @override
   Widget build(BuildContext context)
   {
-    //!!!!
-    print(">_ColorPaletteWidget.build() !!!!");
-  
-    return Offstage(
-      // カラーパレットが閉じているときは全体を非表示
-      offstage: (_menuAnimation.status == AnimationStatus.dismissed),
-      // カラーパレットをアニメーション用Widget(Flow)に並べる
-      child: Flow(
-        delegate: ColorPaletteFlowDelegate(
-          menuAnimation: _menuAnimation,
-          numColors: 5),
-        children: [
-          makeColorPalletButton(_penColorTable[0]),
-          makeColorPalletButton(_penColorTable[1]),
-          makeColorPalletButton(_penColorTable[2]),
-          makeColorPalletButton(_penColorTable[3]),
-          makeColorPalletButton(_penColorTable[4]),
-        ],
-      ),
-    );
-  }
- 
-  // カラーパレットの丸ボタン Widget を作成
-  Widget makeColorPalletButton(Color color)
-  {
-    return TextButton(
-      child: Container(),
-      style: TextButton.styleFrom(
-        backgroundColor: color,
-        shadowColor: Colors.transparent,
-        fixedSize: const Size(60,60),
-        shape: const CircleBorder(side:
-          BorderSide(
-            color: Colors.black,
-            width: 3,
-            style: BorderStyle.solid
-          ),
-        ),
-      ),
-      onPressed: () => widget.onChangeColor(color),
-    );
+    // これは派生クラスで上書きする！
+    return Container();
   }
 
   // メニューを開く
@@ -894,6 +1261,7 @@ class _ColorPaletteWidgetState
   {
     if(_menuAnimation.status == AnimationStatus.dismissed){
       _menuAnimation.forward();
+      // 非表示になっているアイコンを表示するために再build必要
       setState((){});
     }
   }
@@ -915,13 +1283,25 @@ class _ColorPaletteWidgetState
 }
 
 //-----------------------------------------------------------------------------
-// カラーパレットの展開アニメーション
-class ColorPaletteFlowDelegate extends FlowDelegate
+// メニューの展開アニメーション
+class _ExpandMenuDelegate extends FlowDelegate
 {
-  ColorPaletteFlowDelegate({
+  _ExpandMenuDelegate({
     required Animation<double> menuAnimation,
-    required this.numColors}) :
-    _totalWidth = _baseOffset + (_margin + _paletteSize) * numColors,
+    required this.direction,
+    required this.numItems,
+    required this.iconSize,
+    required this.margin,
+    this.crossAxisOffset = 0,
+    }) :
+    _totalWidth = 
+      (direction == Axis.horizontal)?
+        _baseOffset + (margin + iconSize) * numItems:
+        _baseOffset + crossAxisOffset,
+    _totalHeight = 
+      (direction == Axis.vertical)?
+        _baseOffset + (margin + iconSize) * numItems:
+        _baseOffset + crossAxisOffset,
     super(repaint: menuAnimation)
   {
     _curveAnimation = CurvedAnimation(
@@ -933,23 +1313,27 @@ class ColorPaletteFlowDelegate extends FlowDelegate
   // 展開アニメーションの時間を制御するやつ
   late Animation<double> _curveAnimation;
 
-  // カラーパレット数
-  final int numColors;
+  // 展開方向(縦/横)
+  final Axis direction;
+
+  // 要素数
+  final int numItems;
 
   // 右端基点のオフセット(機能ボタンのサイズ)
   static const double _baseOffset = 80;
-  // 全体の高さ(機能ボタンのサイズ)
-  static const double _height = 80;
-  // カラーパレットのサイズ
-  static const double _paletteSize = 60;
-  // カラーパレット間のマージン
-  static const double _margin = 10;
+  // 展開方向と直交する方向のオフセット
+  final double crossAxisOffset;
+  // 要素アイコンのサイズ
+  final double iconSize;
+  // 要素アイコン間のマージン
+  final double margin;
   // 展開時の全体のサイズ
   final double _totalWidth;
+  final double _totalHeight;
 
   // アニメーションが進んで再描画が必要か判定
   @override
-  bool shouldRepaint(ColorPaletteFlowDelegate oldDelegate)
+  bool shouldRepaint(_ExpandMenuDelegate oldDelegate)
   {
     return _curveAnimation != oldDelegate._curveAnimation;
   }
@@ -959,22 +1343,32 @@ class ColorPaletteFlowDelegate extends FlowDelegate
   @override
   Size getSize(BoxConstraints constraints)
   {
-    return Size(_totalWidth, _height);
+    return Size(_totalWidth, _totalHeight);
   }
 
-  // 移動アニメーションを計算して丸アイコンを描画
+  // 移動アニメーションを計算してアイコンを描画
   @override
   void paintChildren(FlowPaintingContext context)
   {
-    final double stride = (_paletteSize + _margin);
-    final double offset_y = (_height - _paletteSize) / 2;
+    final double stride = (iconSize + margin);
     final double t = _curveAnimation.value;
-    for (int i = 0; i < context.childCount; i++) {
-      final double x = (_totalWidth - _baseOffset) - (stride * (i + 1) * t);
-      context.paintChild(
-        i,
-        transform: Matrix4.translationValues(x, offset_y, 0),
-      );
+    final double alignmentGap = (_baseOffset - iconSize) / 2;
+    if(direction == Axis.horizontal){
+      // 横展開
+      final double offset_y = _totalHeight - (_baseOffset + crossAxisOffset - alignmentGap);
+      for (int i = 0; i < context.childCount; i++) {
+        final offset_x = (_totalWidth - _baseOffset) - (stride * (i + 1) * t);
+        final mtx = Matrix4.translationValues(offset_x, offset_y, 0);
+        context.paintChild(i, transform: mtx);
+      }
+    }else{
+      // 縦展開
+      final double offset_x = _totalWidth - (_baseOffset + crossAxisOffset - alignmentGap);
+      for (int i = 0; i < context.childCount; i++) {
+        final offset_y = (_totalHeight - _baseOffset) - (stride * (i + 1) * t);
+        final mtx = Matrix4.translationValues(offset_x, offset_y, 0);
+        context.paintChild(i, transform: mtx);
+      }
     }
   }
 }
