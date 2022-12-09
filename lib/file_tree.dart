@@ -49,6 +49,7 @@ class FileItem {
   // ファイル/ディレクトリ名
   String _name;
   // 子階層
+  // ディレクトリの場合、このディレクトリ内のファイル/ディレクトリの一覧
   List<FileItem>? child;
 
   String get name => _name;
@@ -88,6 +89,9 @@ const int _currentDirId = -2;
 const int _invalidUID = -3;
 // 削除不可のデフォルトデータを示すユニークID
 const int _defaultFileUID = 1;
+// 最初に作成されるユーザーファイルのユニークID
+// 初回のファイル/ディレクトリ作成で使われ、以降はこの数値からインクリメントされる
+const int _firstUserFileID = _defaultFileUID + 1;
 
 // リネーム可能か判定
 bool _canRename(int uid)
@@ -124,6 +128,16 @@ FirebaseDatabase database = FirebaseDatabase.instance;
 
 // Firebase RealtimeDataBase の参照パス
 final _fileRootPath = "fileTree2/";
+
+// UIDパスから Firebase RealtimeDataBase の参照パスを取得
+DatabaseReference getDatabaseRef(String uidPath)
+{
+  // ディレクトリの階層構造をDBの階層構造として扱わない！
+  // そのためパスセパレータ'/'を、セパレータではない文字'~'に置き換えて、階層構造を作らせない。
+  // DatabaseReference.get() でのデータ転送量をケチるため。
+  final String databasePath = uidPath.replaceAll("/", "~");
+  return database.ref(_fileRootPath + databasePath);
+}
 
 //----------------------------------------------------------------------------
 // カレント
@@ -269,7 +283,7 @@ Future initFileTree() async
 {
   // データベースにルートディレクトリが記録されていなければ、
   // "デフォルトデータ"と共に登録。
-  final DatabaseReference ref = database.ref(_fileRootPath + "~");
+  final DatabaseReference ref = getDatabaseRef("/");
   final DataSnapshot snapshot = await ref.get();
   var defaultFile = FileItem(uid:_defaultFileUID, name:"デフォルトデータ");
   if(!snapshot.exists){
@@ -277,7 +291,7 @@ Future initFileTree() async
     ref.set(files);
     // ファイル/フォルダのユニークIDを発行するためのパスも作成
     final DatabaseReference refNextUID = database.ref("fileTreeNextUID");
-    refNextUID.set(2);
+    refNextUID.set(_firstUserFileID);
   }
   // ルートディレクトリをデータベースから読み込み
   await moveDir(FileItem(uid:_currentDirId));
@@ -549,8 +563,7 @@ Future deleteFolderRecursive(FileItem folder) async
 
   // データベースから自分自身を削除
   final String path = getCurrentUIDPath();
-  final String databasePath = _fileRootPath + path.replaceAll("/", "~");
-  final DatabaseReference ref = database.ref(databasePath);
+  final DatabaseReference ref = getDatabaseRef(path);
   try { ref.remove(); } catch(e) {}
   print("deleteFolderRecursive(${folder}) delete:${ref.path}");
 
@@ -673,11 +686,7 @@ Future<bool> _moveFullPathDir(String fullUIDPath) async
 // ディレクトリツリーのデータベースを更新
 void updateFileListToDB(String uidPath, List<FileItem> dir)
 {
-  // ディレクトリの階層構造をDBの階層構造として扱わない！
-  // そのためパスセパレータ'/'を、セパレータではない文字'~'に置き換えて、階層構造を作らせない。
-  // DatabaseReference.get() でのデータ転送量をケチるため。
-  final String databasePath = uidPath.replaceAll("/", "~");
-  final DatabaseReference ref = database.ref(_fileRootPath + databasePath);
+  final DatabaseReference ref = getDatabaseRef(uidPath);
   List<Map<String,dynamic>> items = [];
   dir.forEach((item){
     // 「親階層に戻る」は除外
@@ -698,11 +707,7 @@ void updateFileListToDB(String uidPath, List<FileItem> dir)
 // ディレクトリツリーのデータベースから、ディレクトリ内のファイル/ディレクトリを取得
 Future<List<FileItem>> getFileListFromDB(String path) async
 {
-  // ディレクトリの階層構造をDBの階層構造として扱わない！
-  // そのためパスセパレータ'/'を、セパレータではない文字'~'に置き換えて、階層構造を作らせない。
-  // DatabaseReference.get() でのデータ転送量をケチるため。
-  final String databasePath = path.replaceAll("/", "~");
-  final DatabaseReference ref = database.ref(_fileRootPath + databasePath);
+  final DatabaseReference ref = getDatabaseRef(path);
   List<dynamic> items = [];
   try{
     final DataSnapshot snapshot = await ref.get();
