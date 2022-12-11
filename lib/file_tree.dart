@@ -73,14 +73,6 @@ class FileItem {
     return { "uid": uid, "name": _name, "folder": isFolder() };
   }
 
-  // 一致確認
-  bool isSame(final FileItem item)
-  {
-    return (uid == item.uid) &&
-           (_name == item._name) &&
-           ((child != null) == (item.child != null));
-  }
-
   @override
   String toString ()
   {
@@ -603,15 +595,28 @@ void sortDir(List<FileItem> dir)
   });
 }
 
+// 直前の moveDir() が完了するまで、次の処理を破棄するフラグ
+bool _blockingMoveDir = false;
+
+// ディレクトリの移動において、処理の完了待ちをする場合の同期フラグ
+Completer? _completerMoveDir;
+
 // ディレクトリを移動
 // カレントディレクトリから1階層の移動のみ。
 Future<bool> moveDir(FileItem folder) async
 {
   print(">moveDir(${folder.uid}:${folder.name})");
-  bool res = await _moveDir(folder);
 
-  print(">moveDir(${folder.uid}:${folder.name}) ${res} " + getCurrentUIDPath());
-
+  // 直前の _moveDir() が終わってなかったら何もしない
+  bool res = false;
+  if(!_blockingMoveDir){
+    _blockingMoveDir = true;
+    res = await _moveDir(folder);
+    _blockingMoveDir = false;
+    print(">moveDir(${folder.uid}:${folder.name}) ${res} " + getCurrentUIDPath());
+  }else{
+    print(">  Blocking!");
+  }
   return res;
 }
 
@@ -633,27 +638,19 @@ Future<bool> _moveDir(FileItem folder) async
   }
 
   // 移動先ディレクトリの構成をデータベースから取得
+  // 取得完了時のイベント内でデータ更新も行い、Completer 用いて同期処理する
   final String uidPath = getCurrentUIDPath();
-  List<FileItem> currentDir = await getFileListFromDB(uidPath);
-  // ルート以外(より下階層)なら「親階層に戻る」を追加
-  if(1 < _directoryStack.length){
-    currentDir.add(FileItem(uid:_parentDirId));
-  }
-  // 並びをソートする
-  sortDir(currentDir);
-
-  // カレントディレクトリのデータを置き換え
-  _directoryStack.last.child = currentDir;
-
-  // 他のユーザーによる変更通知を設定
-  _currentDirChangeListener?.cancel();
   DatabaseReference ref = getDatabaseRef(uidPath);
+  _completerMoveDir = Completer();
+  _currentDirChangeListener?.cancel();
   _currentDirChangeListener = ref.onValue.listen(_onCurrentDirChange);
+  await _completerMoveDir!.future;
+  _completerMoveDir = null; 
 
   return true;
 }
 
-// カレントディレクトリの変更通知
+// カレントディレクトリの変更通知とデータ更新
 void _onCurrentDirChange(DatabaseEvent event)
 {
   //!!!!
@@ -667,18 +664,22 @@ void _onCurrentDirChange(DatabaseEvent event)
     items = event.snapshot.value as List<dynamic>;
   }catch(e){
   }
+  // 「親階層に戻る」を追加
   List<FileItem> receiveDir = _getFileListFromDB(items);
   if(1 < _directoryStack.length){
     receiveDir.add(FileItem(uid:_parentDirId));
   }
+  // ソートしておく
   sortDir(receiveDir);
-  final bool change = !isSame(receiveDir, getCurrentDir());
-  print("> change=${change}");
-  if(change){
-    // カレントディレクトリのデータを置き換え
-    _directoryStack.last.child = receiveDir;
-    // ファイル一覧画面を表示していたら再描画
-    _onCurrentDirChangedForFilesPage?.call();
+
+  // カレントディレクトリのデータを置き換え
+  _directoryStack.last.child = receiveDir;
+  // ファイル一覧画面を表示していたら再描画
+  _onCurrentDirChangedForFilesPage?.call();
+
+  // 処理の完了を通知
+  if(_completerMoveDir != null){
+    _completerMoveDir!.complete();
   }
 }
 
@@ -792,19 +793,6 @@ List<FileItem> _getFileListFromDB(List<dynamic> items)
     }
   });
   return dir;
-}
-
-// ディレクトリの内容が同じか判定
-bool isSame(List<FileItem> dir0, List<FileItem> dir1)
-{
-  // 除いた要素数を比較
-  if(dir0.length != dir1.length) return false;
-  // 各要素を比較(ソート済みの前提)
-  for(int i = 0; i < dir0.length; i++){
-    if(!dir0[i].isSame(dir1[i])) return false;
-  }
-  // 全て一致していたら true。
-  return true;
 }
 
 //----------------------------------------------------------------------------
@@ -985,9 +973,8 @@ class FilesPageState extends State<FilesPage>
             Navigator.pop(context);
           }else{
             // ディレクトリ移動
-            moveDir(currentDir[index]).then((_){
-              setState((){});
-            });
+            // NOTE: データベース読み込みの完了イベント内で setState() しているのでここでは不要。
+            moveDir(currentDir[index]);
           }
         },
       ),
