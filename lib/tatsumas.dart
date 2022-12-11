@@ -873,6 +873,8 @@ class TatsumasPageState extends State<TatsumasPage>
         if(zoom < zoomInTarget) zoom = zoomInTarget;
         final TatsumaData tatsuma = tatsumas[index];
         mainMapController!.move(tatsuma.pos, zoom);
+        // 他のユーザーによるタツマ変更のコールバックをクリア
+        _onTatsumaChanged = null;
         Navigator.pop(context);
         break;
       }

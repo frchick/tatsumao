@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_database/firebase_database.dart';
@@ -72,6 +73,14 @@ class FileItem {
     return { "uid": uid, "name": _name, "folder": isFolder() };
   }
 
+  // 一致確認
+  bool isSame(final FileItem item)
+  {
+    return (uid == item.uid) &&
+           (_name == item._name) &&
+           ((child != null) == (item.child != null));
+  }
+
   @override
   String toString ()
   {
@@ -109,6 +118,8 @@ bool _canDelete(int uid)
 FileItem _fileRoot = FileItem(uid:_rootDirId, name:"");
 
 // ルートから現在のディレクトリまでのスタック(ファイル一覧画面でのカレント)
+// _directoryStack.last がカレントディレクトリのフォルダで、
+// _directoryStack.last.child がカレントディレクトリのファイル一覧
 List<FileItem> _directoryStack = [ _fileRoot ];
 
 // 現在開いているファイルまでのスタック
@@ -125,6 +136,11 @@ Map<int, String> _uid2name = {
 
 //ファイルツリーの共有(Firebase RealtimeDataBase)
 FirebaseDatabase database = FirebaseDatabase.instance;
+
+// カレントディレクトリの変更通知
+StreamSubscription<DatabaseEvent>? _currentDirChangeListener;
+// カレントディレクトリの変更通知があったときのファイルツリー画面の再描画
+Function? _onCurrentDirChangedForFilesPage;
 
 // Firebase RealtimeDataBase の参照パス
 final _fileRootPath = "fileTree2/";
@@ -617,7 +633,8 @@ Future<bool> _moveDir(FileItem folder) async
   }
 
   // 移動先ディレクトリの構成をデータベースから取得
-  List<FileItem> currentDir = await getFileListFromDB(getCurrentUIDPath());
+  final String uidPath = getCurrentUIDPath();
+  List<FileItem> currentDir = await getFileListFromDB(uidPath);
   // ルート以外(より下階層)なら「親階層に戻る」を追加
   if(1 < _directoryStack.length){
     currentDir.add(FileItem(uid:_parentDirId));
@@ -626,9 +643,43 @@ Future<bool> _moveDir(FileItem folder) async
   sortDir(currentDir);
 
   // カレントディレクトリのデータを置き換え
-  _directoryStack[_directoryStack.length-1].child = currentDir;
+  _directoryStack.last.child = currentDir;
+
+  // 他のユーザーによる変更通知を設定
+  _currentDirChangeListener?.cancel();
+  DatabaseReference ref = getDatabaseRef(uidPath);
+  _currentDirChangeListener = ref.onValue.listen(_onCurrentDirChange);
 
   return true;
+}
+
+// カレントディレクトリの変更通知
+void _onCurrentDirChange(DatabaseEvent event)
+{
+  //!!!!
+  print(">_onCurrentDirChange() shapshot=${event.snapshot.value}");
+
+  // ここでローカルと snaphot に差異があるかチェックし、あったらカレントディレクトリを更新する。
+  // NOTE: もし今開いているファイルが削除された場合には、対応できないので何もしない。
+  // ディレクトリごと削除される可能性もあり、難しい問題で、今は仕様バグで残してある…。
+  List<dynamic> items = [];
+  try{
+    items = event.snapshot.value as List<dynamic>;
+  }catch(e){
+  }
+  List<FileItem> receiveDir = _getFileListFromDB(items);
+  if(1 < _directoryStack.length){
+    receiveDir.add(FileItem(uid:_parentDirId));
+  }
+  sortDir(receiveDir);
+  final bool change = !isSame(receiveDir, getCurrentDir());
+  print("> change=${change}");
+  if(change){
+    // カレントディレクトリのデータを置き換え
+    _directoryStack.last.child = receiveDir;
+    // ファイル一覧画面を表示していたら再描画
+    _onCurrentDirChangedForFilesPage?.call();
+  }
 }
 
 // 絶対パスで指定されたディレクトリへ移動
@@ -718,6 +769,12 @@ Future<List<FileItem>> getFileListFromDB(String path) async
   }
 
   // ディレクトリのファイル/ディレクトリ一覧を構築
+  return _getFileListFromDB(items);
+}
+
+List<FileItem> _getFileListFromDB(List<dynamic> items)
+{
+  // ディレクトリのファイル/ディレクトリ一覧を構築
   List<FileItem> dir = [];
   items.forEach((item){
     // データベースから取得したユニークIDと名前でファイル/ディレクトリを作成
@@ -734,8 +791,20 @@ Future<List<FileItem>> getFileListFromDB(String path) async
       dir.add(FileItem(uid:uid, name:name, child:child));
     }
   });
-
   return dir;
+}
+
+// ディレクトリの内容が同じか判定
+bool isSame(List<FileItem> dir0, List<FileItem> dir1)
+{
+  // 除いた要素数を比較
+  if(dir0.length != dir1.length) return false;
+  // 各要素を比較(ソート済みの前提)
+  for(int i = 0; i < dir0.length; i++){
+    if(!dir0[i].isSame(dir1[i])) return false;
+  }
+  // 全て一致していたら true。
+  return true;
 }
 
 //----------------------------------------------------------------------------
@@ -791,40 +860,52 @@ class FilesPageState extends State<FilesPage>
 
     final List<FileItem> currentDir = getCurrentDir();
 
-    return Scaffold(
-      appBar: _responsiveAppBar.makeAppBar(
-        context,
-        titleLine: [
-          Text(
-            getCurrentPath(),
-            textScaleFactor: (narrowWidth? 0.8: null),
-          ),
-        ],
-        actionsLine: [
-          // (左)フォルダ作成ボタン
-          if(!widget.readOnlyMode) IconButton(
-            icon: Icon(Icons.create_new_folder),
-            onPressed:() async {
-              createNewFolderSub(context);
-            },
-          ),
-          // (右)ファイル作成ボタン
-          if(!widget.readOnlyMode) IconButton(
-            icon: Icon(Icons.note_add),
-            onPressed:() async {
-              createNewFileSub(context);
-            },
-          ),
-        ],
-        setState: setState,
+    // 他のユーザーによるカレントディレクトリ変更のコールバックを設定
+    _onCurrentDirChangedForFilesPage = (){ setState((){}); };
+
+    return WillPopScope(
+      // ページ閉じる際の処理
+      onWillPop: (){
+        // 他のユーザーによる変更のコールバックをクリア
+        _onCurrentDirChangedForFilesPage = null;
+        Navigator.pop(context);
+        return Future.value(false);
+      },
+      child: Scaffold(
+        appBar: _responsiveAppBar.makeAppBar(
+          context,
+          titleLine: [
+            Text(
+              getCurrentPath(),
+              textScaleFactor: (narrowWidth? 0.8: null),
+            ),
+          ],
+          actionsLine: [
+            // (左)フォルダ作成ボタン
+            if(!widget.readOnlyMode) IconButton(
+              icon: Icon(Icons.create_new_folder),
+              onPressed:() async {
+                createNewFolderSub(context);
+              },
+            ),
+            // (右)ファイル作成ボタン
+            if(!widget.readOnlyMode) IconButton(
+              icon: Icon(Icons.note_add),
+              onPressed:() async {
+                createNewFileSub(context);
+              },
+            ),
+          ],
+          setState: setState,
+        ),
+        // カレントディレクトリのファイル/ディレクトリを表示
+        body: ListView.builder(
+          itemCount: currentDir.length,
+          itemBuilder: (context, index){
+            return _menuItem(context, index);
+          }
+        ),        
       ),
-      // カレントディレクトリのファイル/ディレクトリを表示
-      body: ListView.builder(
-        itemCount: currentDir.length,
-        itemBuilder: (context, index){
-          return _menuItem(context, index);
-        }
-      ),        
     );
   }
 
@@ -897,6 +978,8 @@ class FilesPageState extends State<FilesPage>
         // タップでファイルを切り替え
         onTap: () {
           if(currentDir[index].isFile()){
+            // 他のユーザーによる変更のコールバックをクリア
+            _onCurrentDirChangedForFilesPage = null;
             // ファイルを切り替える
             widget.onSelectFile(thisUIDPath);
             Navigator.pop(context);
@@ -969,6 +1052,8 @@ class FilesPageState extends State<FilesPage>
     // 作成
     var res = await createNewFile(name);
     if(res.res){
+      // 他のユーザーによる変更のコールバックをクリア
+      _onCurrentDirChangedForFilesPage = null;
       // 作成が成功したら、切り替えてマップに戻る
       widget.onSelectFile(res.uidPath);
       Navigator.pop(context);
