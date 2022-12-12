@@ -146,10 +146,6 @@ class _MapViewState extends State<MapView>
   {
     super.initState();
 
-    // 地図コントローラを作成
-    // このさきで初回の build が走った後から使えるようになる
-    mainMapController = MapController();
-
     // メンバーデータからマーカー配列を作成
     // メンバーは組み込みデータなのでデータベースからの読み込みはない
     createMemberMarkers();
@@ -161,8 +157,7 @@ class _MapViewState extends State<MapView>
     miscMarkers.initialize();
 
     // 手書き図の初期化
-    freehandDrawing = FreehandDrawing(
-      mapController: mainMapController!);
+    freehandDrawing = FreehandDrawing();
     freehandDrawing.setColor(Color.fromARGB(255,0,255,0));
 
     // データベースからもろもろ読み込んで初期状態をセットアップ
@@ -612,6 +607,14 @@ class _MapViewState extends State<MapView>
   // メインの地図ビュー構築
   Widget makeAppBody(BuildContext context)
   {
+    // 地図コントローラを作成
+    // NOTE: これを initState() やグローバル変数での初期化に移動しないこと！
+    // NOTE: インスタンスがあっても初回 build 以降でないと使用できず、内部 assert を引き起こすため。
+    if(mainMapController == null){
+      mainMapController = MapController();
+      freehandDrawing.setMapController(mainMapController!);
+    }
+
     // マップ上のメンバーマーカーの作成オプション
     // TODO: MapOption への値の代入を、適切な位置に移動したい
     mainMapDragMarkerPluginOptions = MyDragMarkerPluginOptions(

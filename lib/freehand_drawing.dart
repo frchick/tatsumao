@@ -27,14 +27,6 @@ List<Color> _penColorTable = const [
 // 手書き図の実装
 class FreehandDrawing
 {
-  FreehandDrawing({
-    required MapController mapController }) :
-    _mapController = mapController
-  {
-  }
-
-  final MapController _mapController;
-
   // 図形のリスト
   Map<String, Figure> _figures = {};
 
@@ -79,11 +71,21 @@ class FreehandDrawing
       rebuild: _redrawStrokeStream.stream);
   }
 
+  // 画面上の手書きストロークを緯度経度に変換するために参照
+  MapController ?_mapController;
+
+  void setMapController(MapController controller)
+  {
+    _mapController = controller;
+  }
+
   // ストローク開始
   void onStrokeStart(Offset pt)
   {
+    if(_mapController == null) return;
+  
     if(_currnetStrokeLatLng == null){
-      final point = _mapController.pointToLatLng(CustomPoint(pt.dx, pt.dy));
+      final point = _mapController!.pointToLatLng(CustomPoint(pt.dx, pt.dy));
       _currnetStrokePoints = [ pt ];
       _currnetStrokeLatLng = [ point! ];
 
@@ -103,8 +105,10 @@ class FreehandDrawing
   // ストロークの継続
   void onStrokeUpdate(Offset pt)
   {
+    if(_mapController == null) return;
+
     if(_currnetStrokeLatLng != null){
-      final point = _mapController.pointToLatLng(CustomPoint(pt.dx, pt.dy));
+      final point = _mapController!.pointToLatLng(CustomPoint(pt.dx, pt.dy));
       _currnetStrokePoints!.add(pt);
       _currnetStrokeLatLng!.add(point!);
 
@@ -123,6 +127,8 @@ class FreehandDrawing
   // ストロークの完了
   void onStrokeEnd()
   {
+    if(_mapController == null) return;
+
     if(_currnetStrokeLatLng != null){
       // リダクションをかける
       List<Offset> pts = reducePolyline(_currnetStrokePoints!);
@@ -132,7 +138,7 @@ class FreehandDrawing
       // LatLng に変換し直してポリラインを作成
       List<LatLng> latlngs = [];
       pts.forEach((pt){
-        final latlng = _mapController.pointToLatLng(CustomPoint(pt.dx, pt.dy));
+        final latlng = _mapController!.pointToLatLng(CustomPoint(pt.dx, pt.dy));
         latlngs.add(latlng!);
       });
       var polyline = MyPolyline(

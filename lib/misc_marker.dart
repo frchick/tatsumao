@@ -246,15 +246,17 @@ class MiscMarkers
       // 他のユーザーからの通知、もしくはファイルオープン時の初期化ならば、マーカーリストを構築
       _markers.clear();
       _mapOption.markers.clear();
-      final List<dynamic> markers = data["markers"] as List<dynamic>;
-      markers.forEach((data){
-        var map = data as Map<String,dynamic>;
-        var marker = MiscMarker(position:LatLng(0,0));
-        bool ok = marker.fromMapData(map);
-        if(ok){
-          addMarker(marker);
-        }
-      });
+      if(data.containsKey("markers")){
+        final List<dynamic> markers = data["markers"] as List<dynamic>;
+        markers.forEach((data){
+          var map = data as Map<String,dynamic>;
+          var marker = MiscMarker(position:LatLng(0,0));
+          bool ok = marker.fromMapData(map);
+          if(ok){
+            addMarker(marker);
+          }
+        });
+      }
     } catch(e) {
       //!!!!
       print("> ... Exception !");
