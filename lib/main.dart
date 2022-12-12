@@ -360,6 +360,8 @@ class _MapViewState extends State<MapView>
   @override
   Widget build(BuildContext context)
   {
+    print(">MapView.build() _initializingApp=${_initializingApp}");
+
     if(_initializingApp){
       // 初期化中
       return Scaffold(
@@ -678,6 +680,9 @@ class _MapViewState extends State<MapView>
                   rebuild: gpsLog.reDrawStream,
                   polylineCulling: false,
                 ),
+                // 手書き図形レイヤー
+                // NOTE: 各マーカーより上に持っていくと、図形があるときにドラッグできなくなる！？
+                freehandDrawing.getFiguresLayerOptions(),
                 // タツママーカー
                 MarkerLayerOptions(
                   markers: tatsumaMarkers,
@@ -695,8 +700,6 @@ class _MapViewState extends State<MapView>
                   // NOTE: usePxCache=trueだと、ストリーム経由の再描画で位置が変わらない
                   usePxCache: false,
                 ),
-                // 手書き図形レイヤー
-                freehandDrawing.getFiguresLayerOptions(),
                 // 手書きの今引いている最中のライン
                 freehandDrawing.getCurrentStrokeLayerOptions(),
               ],
