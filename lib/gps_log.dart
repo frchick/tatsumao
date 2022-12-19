@@ -45,8 +45,7 @@ final Map<String, GPSDeviceParam> _deviceParams = {
   "予備1": GPSDeviceParam(
     name:"予備1",
     color:const Color.fromARGB(255,128,128,128),
-    iconImagePath: "assets/dog_icon/003.png"),
-
+    iconImagePath: "assets/dog_icon/999.png"),
 };
 
 // GPS端末IDと犬の対応(最新のデフォルト値)
