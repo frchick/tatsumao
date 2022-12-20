@@ -45,8 +45,15 @@ final Map<String, GPSDeviceParam> _deviceParams = {
   "予備1": GPSDeviceParam(
     name:"予備1",
     color:const Color.fromARGB(255,128,128,128),
-    iconImagePath: "assets/dog_icon/999.png"),
+    iconImagePath: "assets/dog_icon/998.png"),
+  "未定義": _undefDeviceParam,
 };
+// 未定義のGPS端末のパラメータ
+final _undefDeviceParam = GPSDeviceParam(
+  name:"未定義",
+  color:const Color.fromARGB(255,128,128,128),
+  iconImagePath: "assets/dog_icon/999.png"
+);
 
 // GPS端末IDと犬の対応(最新のデフォルト値)
 final Map<int, String> _defaultDeviceID2Dogs = {
@@ -64,10 +71,13 @@ GPSLog gpsLog = GPSLog();
 
 class GPSLog
 {
+  // デバイスIDと、デバイスのルートデータ
   Map<int, _Route> routes = {};
+
+  // マップ上に表示する Polyline データ配列
   List<MyPolyline> _mapLines = [];
 
-  // マップ上の犬マーカー配列
+  // マップ上に表示する犬マーカー配列
   List<Marker> _dogMarkers = [];
 
   // 子機のデバイスIDと犬の対応
@@ -330,18 +340,12 @@ class GPSLog
       if(0 <= i){
         deviceId = int.tryParse(name.substring(i + 3)) ?? 0;
       }
-      String? dogName;
-      if(0 <= deviceId){
-        dogName = _deviceID2Dogs[deviceId];
-      }
-      GPSDeviceParam? deviceParam;
-      if(dogName != null){
-        deviceParam = _deviceParams[dogName];
-      }
-      print("name=${name}, deviceId=${deviceId}, dogName=${dogName}, deviceParam=${deviceParam?.name}");
+      String dogName = _deviceID2Dogs[deviceId] ?? "未定義";
+      GPSDeviceParam deviceParam = _deviceParams[dogName] ?? _undefDeviceParam;
+      print("name=${name}, deviceId=${deviceId}, dogName=${dogName}, deviceParam=${deviceParam.name}");
 
       // 登録されているデバイスのログのみを読み込み
-      if(deviceParam != null){
+      if(deviceParam.name != "未定義"){
         _Route newRoute = _Route();
         bool res = newRoute.readFromGPX(rte_, deviceId, deviceParam);
         if(res){
