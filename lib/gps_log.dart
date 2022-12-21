@@ -82,6 +82,8 @@ class GPSLog
 
   // 子機のデバイスIDと犬の対応
   Map<int,String> _deviceID2Dogs = {};
+  Map<int,String> get deviceID2Dogs => _deviceID2Dogs;
+  
   // デバイスIDと犬の対応が更新されたか？
   bool _modifyDeviceID2Dogs = false;
 
@@ -89,6 +91,21 @@ class GPSLog
   String? _openedUIDPath;
   // 他のデータへの参照か？
   bool _isReferenceLink = false;
+
+  //----------------------------------------------------------------------------
+  // ログの登録のあるデバイスID一覧を取得
+  List<int> getLoggedIDs()
+  {
+    List<int> ids = [];
+    routes.forEach((id, route){ ids.add(id); });
+    return ids;
+  }
+
+  // デバイスIDから名前を取得
+  String getID2Name(int id)
+  {
+    return _deviceID2Dogs[id] ?? "未定義";
+  }
 
   //----------------------------------------------------------------------------
   // 開始時間
@@ -340,7 +357,7 @@ class GPSLog
       if(0 <= i){
         deviceId = int.tryParse(name.substring(i + 3)) ?? 0;
       }
-      String dogName = _deviceID2Dogs[deviceId] ?? "未定義";
+      String dogName = getID2Name(deviceId);
       GPSDeviceParam deviceParam = _deviceParams[dogName] ?? _undefDeviceParam;
       print("name=${name}, deviceId=${deviceId}, dogName=${dogName}, deviceParam=${deviceParam.name}");
 
@@ -388,6 +405,12 @@ class GPSLog
     gpx += '</gpx>\n';
 
     return gpx;
+  }
+
+  // 子機のデバイスIDと犬の対応を設定
+  void setDeviceID2Dogs(Map<int,String> deviceID2Dogs)
+  {
+
   }
 
   //----------------------------------------------------------------------------
@@ -1016,7 +1039,9 @@ void showGPSLogPopupMenu(BuildContext context)
       makePopupMenuItem(
         3, "アニメーション", Icons.play_circle),
       makePopupMenuItem(
-        4, "キルマーカー", Icons.pin_drop, enabled:!lockEditing),
+        4, "ログ/子機編集", Icons.pets, enabled:!lockEditing),
+      makePopupMenuItem(
+        5, "キルマーカー", Icons.pin_drop, enabled:!lockEditing),
     ],
   ).then((value) async {
     switch(value ?? -1){
@@ -1038,7 +1063,11 @@ void showGPSLogPopupMenu(BuildContext context)
       showAnimationBottomSheet(context);
       break;
     
-    case 4: // キルマーカー
+    case 4: // 編集
+      _showDogIDDialog(context);
+      break;
+
+    case 5: // キルマーカー
       addKillMarkerFunc(context);
       break;
     }
@@ -1452,4 +1481,83 @@ void showAnimationBottomSheet(BuildContext context)
     gpsLog.bottomSheetSetState = null;
     bottomSheetController = null;
   });
+}
+
+//----------------------------------------------------------------------------
+//----------------------------------------------------------------------------
+// 子機IDダイアログ
+class _DogIDDialog extends StatefulWidget
+{
+  _DogIDDialog();
+
+  @override
+  _DogIDDialogState createState() => _DogIDDialogState();
+}
+
+class _DogIDDialogState extends State<_DogIDDialog>
+{
+  @override
+  Widget build(BuildContext context)
+  {
+    List<Container> dogs = [];
+    List<int> loggedIDs = gpsLog.getLoggedIDs();
+    loggedIDs.forEach((id){
+      String dogName = gpsLog.getID2Name(id);
+      GPSDeviceParam param = _deviceParams[dogName] ?? _undefDeviceParam;
+      dogs.add(Container(
+        height: 55,
+        width: 250,
+        child: ListTile(
+          leading: Image.asset(param.iconImagePath),
+          title: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(dogName),
+              Text(" ID:" + id.toString().padLeft(4, '0')),
+            ]),
+          trailing: const Icon(Icons.delete),
+          onTap: (){
+          },
+        ),
+      ));
+    });
+    if(dogs.isEmpty){
+      dogs.add(Container(
+        height: 55,
+        width: 250,
+        child: ListTile(
+          title: Text("(ログ登録なし)"),
+          onTap: (){},
+        ),
+      ));
+    }
+  
+    // ダイアログ表示
+    return WillPopScope(
+      // ページの戻り値
+      onWillPop: (){
+        // 変更があるかを返す
+//!!!!        final bool changeFilter = (widget._areaFilterBits0 != areaFilterBits); 
+        Navigator.of(context).pop(false);
+        return Future.value(false);
+      },
+      child: SimpleDialog(
+        // ヘッダ部
+        title: Text("ログ/子機編集"),
+        // 犬一覧
+        children: dogs,
+      )
+    );
+  }
+}
+
+Future<bool?> _showDogIDDialog(BuildContext context)
+{
+  return showDialog<bool>(
+    context: context,
+    useRootNavigator: true,
+    builder: (context){
+      return _DogIDDialog();
+    },
+  );
 }
