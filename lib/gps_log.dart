@@ -410,7 +410,15 @@ class GPSLog
   // 子機のデバイスIDと犬の対応を設定
   void setDeviceID2Dogs(Map<int,String> deviceID2Dogs)
   {
+    //!!!! TODO
+  }
 
+  // ログを削除
+  void deleteLog(int id)
+  {
+    if(routes.containsKey(id)){
+      routes.remove(id);
+    }
   }
 
   //----------------------------------------------------------------------------
@@ -1515,7 +1523,13 @@ class _DogIDDialogState extends State<_DogIDDialog>
               Text(dogName),
               Text(" ID:" + id.toString().padLeft(4, '0')),
             ]),
-          trailing: const Icon(Icons.delete),
+          // 削除ボタン
+          trailing: IconButton(
+            icon: const Icon(Icons.delete),
+            onPressed: (){
+              onDeleteButton(context, id, dogName);
+            },
+          ),
           onTap: (){
           },
         ),
@@ -1548,6 +1562,31 @@ class _DogIDDialogState extends State<_DogIDDialog>
         children: dogs,
       )
     );
+  }
+
+  // ログの削除ボタン
+  void onDeleteButton(BuildContext context, int id, String name)
+  {
+    String text = "ID:" + id.toString().padLeft(4, '0')
+      + " " + name + "のログを削除します。";
+    showOkCancelDialog(context, title:"ログの削除", text:text).then((res) async {
+      if(res ?? false){
+        // デバイスIDを指定してログを削除
+        gpsLog.deleteLog(id);
+
+        // マップ上のログを再描画
+        gpsLog.makePolyLines();
+        gpsLog.makeDogMarkers();
+        gpsLog.redraw();
+        // ダイアログを再描画
+        setState((){});
+
+        // クラウドストレージにアップロード
+        final filePath = getOpenedFileUIDPath();
+        final String gpsLogPath = await gpsLog.getReferencePath(filePath);
+        gpsLog.uploadToCloudStorage(gpsLogPath);
+      }
+    });
   }
 }
 
