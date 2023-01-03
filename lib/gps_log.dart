@@ -72,7 +72,7 @@ GPSLog gpsLog = GPSLog();
 class GPSLog
 {
   // デバイスIDと、デバイスのルートデータ
-  Map<int, _Route> routes = {};
+  Map<int, _Route> _routes = {};
 
   // マップ上に表示する Polyline データ配列
   List<MyPolyline> _mapLines = [];
@@ -97,7 +97,7 @@ class GPSLog
   List<int> getLoggedIDs()
   {
     List<int> ids = [];
-    routes.forEach((id, route){ ids.add(id); });
+    _routes.forEach((id, route){ ids.add(id); });
     return ids;
   }
 
@@ -107,16 +107,19 @@ class GPSLog
     return _deviceID2Dogs[id] ?? "未定義";
   }
 
+  // ログが空か調べる
+  bool get isEmpty => _routes.isEmpty;
+
   //----------------------------------------------------------------------------
   // 開始時間
   DateTime _startTime = _dummyStartTime;
   DateTime get startTime => _startTime;
   DateTime _getStartTime()
   {
-    if(routes.isEmpty) return _dummyStartTime;
+    if(_routes.isEmpty) return _dummyStartTime;
 
     var t = DateTime(2100); // 適当な遠い未来の時間
-    routes.forEach((id, route){
+    _routes.forEach((id, route){
       if(route.startTime.isBefore(t)){
         t = route.startTime;
       }
@@ -129,10 +132,10 @@ class GPSLog
   DateTime get endTime => _endTime;
   DateTime _getEndTime()
   {
-    if(routes.isEmpty) return _dummyEndTime;
+    if(_routes.isEmpty) return _dummyEndTime;
 
     var t = DateTime(2000); // 適当な過去の時間
-    routes.forEach((id, route){
+    _routes.forEach((id, route){
       if(t.isBefore(route.endTime)){
         t = route.endTime;
       }
@@ -266,7 +269,7 @@ class GPSLog
     _endTime = _trimEndTime = _dummyEndTime;
     _currentTime = _trimStartTime;
 
-    routes.clear();
+    _routes.clear();
     _mapLines.clear();
     _dogMarkers.clear();
     _deviceID2Dogs = {..._defaultDeviceID2Dogs};
@@ -366,28 +369,27 @@ class GPSLog
         _Route newRoute = _Route();
         bool res = newRoute.readFromGPX(rte_, deviceId, deviceParam);
         if(res){
-          if(!routes.containsKey(deviceId)){
+          if(!_routes.containsKey(deviceId)){
             // 新しいログを追加
-            routes[deviceId] = newRoute;
+            _routes[deviceId] = newRoute;
           }else{
             // 既にあるログと結合
-            routes[deviceId]!.merge(newRoute);
+            _routes[deviceId]!.merge(newRoute);
           }
           addCount++;
         }
       }
     });
-    bool res = (0 < addCount);
 
     // トリム時間を新しい範囲に合わせる(トリムの設定がない場合のみ)
-    if(res){
+    if(0 < addCount){
       _startTime = _getStartTime();
       _endTime = _getEndTime();
       if(!changeTrimSrart) _trimStartTime = _startTime;
       if(!changeTrimEnd)  _trimEndTime = _endTime;
     }
     
-    return res;
+    return true;
   }
 
   // GPXへ変換
@@ -397,7 +399,7 @@ class GPSLog
     String gpx = '<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1">\n';
 
     // デバイス毎
-    routes.forEach((id, route){
+    _routes.forEach((id, route){
       gpx += route.exportGPX();
     });
 
@@ -416,8 +418,14 @@ class GPSLog
   // ログを削除
   void deleteLog(int id)
   {
-    if(routes.containsKey(id)){
-      routes.remove(id);
+    // 指定されたデバイスIDのルートを削除
+    if(_routes.containsKey(id)){
+      _routes.remove(id);
+    }
+    // 空になったらクラウドストレージ上のファイルを削除
+    if(_routes.isEmpty && ((_openedUIDPath ?? "") != "")){
+      deleteFromCloudStorage(_openedUIDPath!);
+      clear();
     }
   }
 
@@ -437,7 +445,7 @@ class GPSLog
   Future<bool> uploadToCloudStorage(String path) async
   {
     //!!!!
-    print("uploadToCloudStorage(${path})");
+    print(">uploadToCloudStorage(${path})");
 
     // ストレージ上のファイルパスを参照
     final gpxRef = _getRef(path);
@@ -516,6 +524,9 @@ class GPSLog
   // クラウドストレージから削除
   static void deleteFromCloudStorage(String path)
   {
+    //!!!!
+    print(">deleteFromCloudStorage(${path})");
+
     // ストレージ上のファイルパスを参照
     final gpxRef = _getRef(path);
     try {
@@ -676,7 +687,7 @@ class GPSLog
   {
     _mapLines.clear();
     if(showLogLine){
-      routes.forEach((id, route){
+      _routes.forEach((id, route){
         _mapLines.add(route.makePolyLine(_trimStartTime, _trimEndTime));
       });
     }
@@ -689,7 +700,7 @@ class GPSLog
   {
     _dogMarkers.clear();
     if(showLogLine){
-      routes.forEach((id, route){
+      _routes.forEach((id, route){
         var marker = route.makeDogMarker(_currentTime);
         if(marker != null){
           _dogMarkers.add(marker);
@@ -1582,9 +1593,11 @@ class _DogIDDialogState extends State<_DogIDDialog>
         setState((){});
 
         // クラウドストレージにアップロード
-        final filePath = getOpenedFileUIDPath();
-        final String gpsLogPath = await gpsLog.getReferencePath(filePath);
-        gpsLog.uploadToCloudStorage(gpsLogPath);
+        if(!gpsLog.isEmpty){
+          final filePath = getOpenedFileUIDPath();
+          final String gpsLogPath = await gpsLog.getReferencePath(filePath);
+          gpsLog.uploadToCloudStorage(gpsLogPath);
+        }
       }
     });
   }
