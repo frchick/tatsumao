@@ -143,6 +143,12 @@ class GPSLog
     return t;
   }
 
+  // デバイスIDからログの開始時間を取得
+  DateTime getStartTimeByID2(int id)
+  {
+    return _routes[id]?.startTime ?? _dummyStartTime;
+  }
+
   //----------------------------------------------------------------------------
   // トリミング開始時間
   DateTime _trimStartTime = _dummyStartTime;
@@ -324,7 +330,7 @@ class GPSLog
     Map<String,dynamic> data = {};
     try {
       _deviceID2Dogs.forEach((key, value){
-        final String k = key.toString().padLeft(4, '0');
+        final String k = _fourDigits(key);
         data[k] = value;
       });
       ref.update(data);
@@ -1328,7 +1334,13 @@ void showTrimmingBottomSheet(BuildContext context)
   });
 }
 
-String _twoDigits(int n) {
+String _fourDigits(int n)
+{
+  return n.toString().padLeft(4, '0');
+}
+
+String _twoDigits(int n)
+{
   if (n >= 10) return "${n}";
   return "0${n}";
 }
@@ -1519,20 +1531,22 @@ class _DogIDDialogState extends State<_DogIDDialog>
   Widget build(BuildContext context)
   {
     List<Container> dogs = [];
-    List<int> loggedIDs = gpsLog.getLoggedIDs();
+    final List<int> loggedIDs = gpsLog.getLoggedIDs();
+    final DateFormat dateFormat = DateFormat(" yyyy-MM-dd");
     loggedIDs.forEach((id){
-      String dogName = gpsLog.getID2Name(id);
-      GPSDeviceParam param = _deviceParams[dogName] ?? _undefDeviceParam;
+      final String dogName = gpsLog.getID2Name(id);
+      final DateTime time = gpsLog.getStartTimeByID2(id);
+      final GPSDeviceParam param = _deviceParams[dogName] ?? _undefDeviceParam;
       dogs.add(Container(
         height: 55,
-        width: 250,
+        width: 320,
         child: ListTile(
           leading: Image.asset(param.iconImagePath),
           title: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(dogName),
-              Text(" ID:" + id.toString().padLeft(4, '0')),
+              Text(" ID:" + _fourDigits(id) + dateFormat.format(time)),
             ]),
           // 削除ボタン
           trailing: IconButton(
@@ -1549,7 +1563,7 @@ class _DogIDDialogState extends State<_DogIDDialog>
     if(dogs.isEmpty){
       dogs.add(Container(
         height: 55,
-        width: 250,
+        width: 320,
         child: ListTile(
           title: Text("(ログ登録なし)"),
           onTap: (){},
@@ -1578,8 +1592,7 @@ class _DogIDDialogState extends State<_DogIDDialog>
   // ログの削除ボタン
   void onDeleteButton(BuildContext context, int id, String name)
   {
-    String text = "ID:" + id.toString().padLeft(4, '0')
-      + " " + name + "のログを削除します。";
+    String text = "ID:" + _fourDigits(id) + " " + name + "のログを削除します。";
     showOkCancelDialog(context, title:"ログの削除", text:text).then((res) async {
       if(res ?? false){
         // デバイスIDを指定してログを削除
