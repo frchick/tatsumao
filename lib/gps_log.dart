@@ -1143,9 +1143,8 @@ void loadGPSLogFunc(BuildContext context) async
       gpsLog.makeDogMarkers();
       gpsLog.redraw();
     });
-    // ファイルにGPSログがあることをマーク
-    FileItem? file = getOpenedFile();
-    file?.gpsLog = true;
+    // 開いているファイルのGPSログの有無フラグを更新
+    setOpenedFileGPSLogFlag(true);
     return;
   }
 
@@ -1156,11 +1155,10 @@ void loadGPSLogFunc(BuildContext context) async
     gpsLog.makeDogMarkers();
     gpsLog.redraw();
     showTextBallonMessage("GPSログの読み込み成功");
-    // ファイルにGPSログがあることをマーク
-    FileItem? file = getOpenedFile();
-    file?.gpsLog = true;
     // 裏でクラウドストレージへのアップロードを実行
     gpsLog.uploadToCloudStorage(gpsLogPath);
+    // 開いているファイルのGPSログの有無フラグを更新
+    setOpenedFileGPSLogFlag(true);
   }else{
     showTextBallonMessage("GPSログの読み込み失敗");
   }
@@ -1640,6 +1638,10 @@ class _DogIDDialogState extends State<_DogIDDialog>
           final filePath = getOpenedFileUIDPath();
           final String gpsLogPath = await gpsLog.getReferencePath(filePath);
           gpsLog.uploadToCloudStorage(gpsLogPath);
+        }
+        // クラウドストレージからログが削除されたら、GPSログの有無フラグを更新
+        if(gpsLog.isEmpty){
+          setOpenedFileGPSLogFlag(false);
         }
       }
     });

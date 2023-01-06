@@ -117,9 +117,6 @@ FileItem _fileRoot = FileItem(uid:_rootDirId, name:"");
 // _directoryStack.last.child がカレントディレクトリのファイル一覧
 List<FileItem> _directoryStack = [ _fileRoot ];
 
-// 現在開いているファイル
-FileItem? _openedFile;
-
 // 現在開いているファイルまでのスタック
 List<int> _openedUIDPathStack = [ _rootDirId ];
 
@@ -228,13 +225,8 @@ String convertUIDPath2NamePath(String uidPath)
 // 現在開かれているファイル名を取得
 String getOpenedFileName()
 {
-  return _openedFile?.name ?? "";
-}
-
-// 現在開かれているファイルを取得
-FileItem? getOpenedFile()
-{
-  return _openedFile;
+  String name = _uid2name[_openedUIDPathStack.last] ?? "";
+  return name;
 }
 
 // 開いたファイルへのUIDフルパスを設定
@@ -259,19 +251,19 @@ bool _setOpenedFileUIDPath(String uidPath)
 
   // 指定されたファイルがカレントディレクトリになければエラー
   List<FileItem> currentDir = getCurrentDir();
-  _openedFile = null;
+  FileItem? openedFile;
   currentDir.forEach((item){
     if(item.isFile() && (item.uid == fileUID)){
-      _openedFile = item;
+      openedFile = item;
       return;
     }
   });
-  if(_openedFile == null) return false;
+  if(openedFile == null) return false;
 
   // OK
   _openedUIDPathStack.clear();
   _directoryStack.forEach((item){ _openedUIDPathStack.add(item.uid); });
-  _openedUIDPathStack.add(_openedFile!.uid);
+  _openedUIDPathStack.add(openedFile!.uid);
 
   return true;
 }
@@ -705,6 +697,20 @@ void _onCurrentDirChange(DatabaseEvent event, String uidPath) async
   _onCurrentDirChangedForFilesPage?.call();
 }
 
+// 現在開いているファイルのGPSログの有無フラグを変更
+void setOpenedFileGPSLogFlag(bool gpsLog)
+{
+  // カレントディレクトリに開いているファイルがあれば、フラグをセットする
+  // カレントディレクトリが開いているファイルと別の位置なら、moveDir() でセットされる
+  List<FileItem> files = getCurrentDir();
+  files.forEach((file){
+    if(file.uid == _openedUIDPathStack.last){
+      file.gpsLog = gpsLog;
+      return;
+    }
+  });
+}
+
 // 絶対パスで指定されたディレクトリへ移動
 Future<bool> moveFullPathDir(String fullUIDPath) async
 {
@@ -871,9 +877,6 @@ class FilesPageState extends State<FilesPage>
   @override
   Widget build(BuildContext context)
   {
-    //!!!!
-    print("FilePage.build() --------------------------");
-
     // 幅が狭ければ、文字を小さくする
     var screenSize = MediaQuery.of(context).size;
     final bool narrowWidth = (screenSize.width < 640);
@@ -965,9 +968,6 @@ class FilesPageState extends State<FilesPage>
         icon = Icons.folder;
       }
     }
-
-    //!!!!
-    print("FilePage._menuItem(${index}) file.gpsLog=${file.gpsLog} ---------------");
 
     // 現在開いているファイルとその途中のフォルダは強調表示する。
     // 削除も禁止
