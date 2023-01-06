@@ -444,6 +444,13 @@ class GPSLog
     return FirebaseStorage.instance.ref().child(storagePath);
   }
 
+  static Reference _getDirRef(String path)
+  {
+    if(path[0] == "/") path = path.substring(1);
+    final String storagePath = path;
+    return FirebaseStorage.instance.ref().child(storagePath);
+  }
+
   // 取得しているデータの更新日時
   DateTime? _thisUpdateTime;
 
@@ -562,6 +569,21 @@ class GPSLog
     // クラウドとローカルの両方にデータがあれば、比較
     // クラウドのほうが新しければ true を返す
     return (_thisUpdateTime!.compareTo(cloudUpdateTime!) < 0);
+  }
+
+  // クラウドストレージから、ディレクトリにあるファイルの一覧を取得
+  Future<List<String>> getFileList(String path) async
+  {
+    //!!!!
+    print(">getFileList(${path})");
+
+    final dirRef = _getDirRef(path);
+    final list = await dirRef.listAll();
+    List<String> fileList = [];
+    list.items.forEach((var item){
+      fileList.add(item.name);
+    });
+    return fileList;
   }
 
   //----------------------------------------------------------------------------
@@ -1150,6 +1172,9 @@ void linkGPSLogFunc(BuildContext context) async
   Navigator.push(
     context,
     MaterialPageRoute(builder: (context) => FilesPage(
+      referGPSLogMode: true,  // GPSログ参照モード
+      readOnlyMode: true,
+
       onSelectFile: (refUIDPath) async {
         //!!!!
         print("linkGPSLogFunc.onSelectFile(${refUIDPath})");
@@ -1172,7 +1197,6 @@ void linkGPSLogFunc(BuildContext context) async
         });
       },
       onChangeState: (){},
-      readOnlyMode: true,
     ))
   );
 }

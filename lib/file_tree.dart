@@ -49,6 +49,9 @@ class FileItem {
   final int uid;
   // ファイル/ディレクトリ名
   String _name;
+  // GPSログがあるか
+  bool gpsLog = false;
+
   // 子階層
   // ディレクトリの場合、このディレクトリ内のファイル/ディレクトリの一覧
   List<FileItem>? child;
@@ -639,13 +642,28 @@ Future<bool> _moveDir(FileItem folder) async
 
   // 移動先ディレクトリの構成をデータベースから取得
   // 取得完了時のイベント内でデータ更新も行い、Completer 用いて同期処理する
+  // 並行して、GPSログファイルの一覧をクラウドストレージから取得する
   final String uidPath = getCurrentUIDPath();
   DatabaseReference ref = getDatabaseRef(uidPath);
+  Future<List<String>> getGpsFileListFuture = gpsLog.getFileList(uidPath);
   _completerMoveDir = Completer();
   _currentDirChangeListener?.cancel();
   _currentDirChangeListener = ref.onValue.listen(_onCurrentDirChange);
   await _completerMoveDir!.future;
   _completerMoveDir = null; 
+
+  // ファイルに対応するGPSログがあるかどうかをチェック
+  final gpsFileList = await getGpsFileListFuture;
+  List<FileItem> files = getCurrentDir();
+  files.forEach((var file){
+    if(file.isFile()){
+      final String gpxFileName = file.uid.toString() + ".gpx";
+      file.gpsLog = gpsFileList.contains(gpxFileName);
+    }
+  });
+
+  // ファイル一覧画面を表示していたら再描画
+  _onCurrentDirChangedForFilesPage?.call();
 
   return true;
 }
@@ -674,13 +692,9 @@ void _onCurrentDirChange(DatabaseEvent event)
 
   // カレントディレクトリのデータを置き換え
   _directoryStack.last.child = receiveDir;
-  // ファイル一覧画面を表示していたら再描画
-  _onCurrentDirChangedForFilesPage?.call();
 
   // 処理の完了を通知
-  if(_completerMoveDir != null){
-    _completerMoveDir!.complete();
-  }
+  _completerMoveDir?.complete();
 }
 
 // 絶対パスで指定されたディレクトリへ移動
@@ -805,6 +819,7 @@ class FilesPage extends StatefulWidget
     required this.onSelectFile,
     required this.onChangeState,
     this.readOnlyMode = false,
+    this.referGPSLogMode = false,
   }){}
 
   // ファイル選択決定時のコールバック
@@ -815,6 +830,9 @@ class FilesPage extends StatefulWidget
 
   // 読み取り専用モード(作成や削除、リネームはできない)
   final bool readOnlyMode;
+
+  // GPSファイル参照モード
+  final bool referGPSLogMode;
 
   @override
   FilesPageState createState() => FilesPageState();
@@ -827,6 +845,9 @@ class FilesPageState extends State<FilesPage>
   );
   TextStyle _textStyleBold = const TextStyle(
     color:Colors.black, fontSize:18.0, fontWeight:FontWeight.bold
+  );
+  TextStyle _textStyleDisable = const TextStyle(
+    color:Color(0xFFBDBDBD)/*Colors.grey[400]*/, fontSize:18.0
   );
   Border _borderStyle = const Border(
     bottom: BorderSide(width:1.0, color:Colors.grey)
@@ -906,6 +927,7 @@ class FilesPageState extends State<FilesPage>
     IconData icon;
     late String name;
     bool goParentDir;
+    bool enable = true;
     if((1 < stackDepth) && (index == 0)){
       //「上階層に戻る」
       goParentDir = true;
@@ -915,7 +937,21 @@ class FilesPageState extends State<FilesPage>
       // ファイルかフォルダ
       goParentDir = false;
       name = file.name;
-      icon = (file.child == null)? Icons.description: Icons.folder;
+      if(file.isFile()){
+        if(!widget.referGPSLogMode){
+          icon = Icons.description;
+        }else{
+          // GPSログ参照モードでは、GPSログの有無
+          if(file.gpsLog){
+            icon = Icons.timeline;
+          }else{
+            icon = Icons.horizontal_rule; // 意味のない無難なアイコン
+            enable = false; // 選択不可
+          }
+        }
+      }else{
+        icon = Icons.folder;
+      }
     }
 
     // 現在開いているファイルとその途中のフォルダは強調表示する。
@@ -944,11 +980,15 @@ class FilesPageState extends State<FilesPage>
       child:ListTile(
         // (左側)ファイル/フォルダーアイコン
         leading: Icon(icon),
-        iconColor: (isOpenedFile? Colors.black: null),
+        iconColor: (isOpenedFile?
+          Colors.black:
+          (enable? null: Colors.grey[400])),
 
         // ファイル名
         title: Text(name,
-          style: (isOpenedFile? _textStyleBold: _textStyle),
+          style: (isOpenedFile?
+            _textStyleBold:
+            (enable? _textStyle: _textStyleDisable)),
         ),
 
         // (右側)メニューボタン
@@ -966,11 +1006,13 @@ class FilesPageState extends State<FilesPage>
         // タップでファイルを切り替え
         onTap: () {
           if(currentDir[index].isFile()){
-            // 他のユーザーによる変更のコールバックをクリア
-            _onCurrentDirChangedForFilesPage = null;
-            // ファイルを切り替える
-            widget.onSelectFile(thisUIDPath);
-            Navigator.pop(context);
+            if(enable){
+              // 他のユーザーによる変更のコールバックをクリア
+              _onCurrentDirChangedForFilesPage = null;
+              // ファイルを切り替える
+              widget.onSelectFile(thisUIDPath);
+              Navigator.pop(context);
+            }
           }else{
             // ディレクトリ移動
             // NOTE: データベース読み込みの完了イベント内で setState() しているのでここでは不要。
