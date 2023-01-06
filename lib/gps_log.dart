@@ -1143,6 +1143,9 @@ void loadGPSLogFunc(BuildContext context) async
       gpsLog.makeDogMarkers();
       gpsLog.redraw();
     });
+    // ファイルにGPSログがあることをマーク
+    FileItem? file = getOpenedFile();
+    file?.gpsLog = true;
     return;
   }
 
@@ -1153,6 +1156,9 @@ void loadGPSLogFunc(BuildContext context) async
     gpsLog.makeDogMarkers();
     gpsLog.redraw();
     showTextBallonMessage("GPSログの読み込み成功");
+    // ファイルにGPSログがあることをマーク
+    FileItem? file = getOpenedFile();
+    file?.gpsLog = true;
     // 裏でクラウドストレージへのアップロードを実行
     gpsLog.uploadToCloudStorage(gpsLogPath);
   }else{

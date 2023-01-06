@@ -293,7 +293,7 @@ void copyAssignToClipboard(BuildContext context)
   });
 
   // 先頭はファイル名と人数
-  text  = getCurrentFileName() + "\n";
+  text  = getOpenedFileName() + "\n";
   text += "参加: ${count}人\n";
   text += assignText;
 

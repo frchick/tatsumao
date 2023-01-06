@@ -117,6 +117,9 @@ FileItem _fileRoot = FileItem(uid:_rootDirId, name:"");
 // _directoryStack.last.child がカレントディレクトリのファイル一覧
 List<FileItem> _directoryStack = [ _fileRoot ];
 
+// 現在開いているファイル
+FileItem? _openedFile;
+
 // 現在開いているファイルまでのスタック
 List<int> _openedUIDPathStack = [ _rootDirId ];
 
@@ -223,10 +226,15 @@ String convertUIDPath2NamePath(String uidPath)
 }
 
 // 現在開かれているファイル名を取得
-String getCurrentFileName()
+String getOpenedFileName()
 {
-  String name = _uid2name[_openedUIDPathStack.last] ?? "";
-  return name;
+  return _openedFile?.name ?? "";
+}
+
+// 現在開かれているファイルを取得
+FileItem? getOpenedFile()
+{
+  return _openedFile;
 }
 
 // 開いたファイルへのUIDフルパスを設定
@@ -251,19 +259,19 @@ bool _setOpenedFileUIDPath(String uidPath)
 
   // 指定されたファイルがカレントディレクトリになければエラー
   List<FileItem> currentDir = getCurrentDir();
-  FileItem? openFile;
+  _openedFile = null;
   currentDir.forEach((item){
     if(item.isFile() && (item.uid == fileUID)){
-      openFile = item;
+      _openedFile = item;
       return;
     }
   });
-  if(openFile == null) return false;
+  if(_openedFile == null) return false;
 
   // OK
   _openedUIDPathStack.clear();
   _directoryStack.forEach((item){ _openedUIDPathStack.add(item.uid); });
-  _openedUIDPathStack.add(openFile!.uid);
+  _openedUIDPathStack.add(_openedFile!.uid);
 
   return true;
 }
@@ -642,39 +650,26 @@ Future<bool> _moveDir(FileItem folder) async
 
   // 移動先ディレクトリの構成をデータベースから取得
   // 取得完了時のイベント内でデータ更新も行い、Completer 用いて同期処理する
-  // 並行して、GPSログファイルの一覧をクラウドストレージから取得する
   final String uidPath = getCurrentUIDPath();
   DatabaseReference ref = getDatabaseRef(uidPath);
-  Future<List<String>> getGpsFileListFuture = gpsLog.getFileList(uidPath);
   _completerMoveDir = Completer();
   _currentDirChangeListener?.cancel();
-  _currentDirChangeListener = ref.onValue.listen(_onCurrentDirChange);
+  _currentDirChangeListener = ref.onValue.listen((DatabaseEvent event){
+    _onCurrentDirChange(event, uidPath);
+  });
   await _completerMoveDir!.future;
   _completerMoveDir = null; 
-
-  // ファイルに対応するGPSログがあるかどうかをチェック
-  final gpsFileList = await getGpsFileListFuture;
-  List<FileItem> files = getCurrentDir();
-  files.forEach((var file){
-    if(file.isFile()){
-      final String gpxFileName = file.uid.toString() + ".gpx";
-      file.gpsLog = gpsFileList.contains(gpxFileName);
-    }
-  });
-
-  // ファイル一覧画面を表示していたら再描画
-  _onCurrentDirChangedForFilesPage?.call();
 
   return true;
 }
 
 // カレントディレクトリの変更通知とデータ更新
-void _onCurrentDirChange(DatabaseEvent event)
+void _onCurrentDirChange(DatabaseEvent event, String uidPath) async
 {
   //!!!!
-  print(">_onCurrentDirChange() shapshot=${event.snapshot.value}");
+  print(">_onCurrentDirChange(${uidPath}) shapshot=${event.snapshot.value}");
 
-  // ここでローカルと snaphot に差異があるかチェックし、あったらカレントディレクトリを更新する。
+  // ここでカレントディレクトリを更新する。
   // NOTE: もし今開いているファイルが削除された場合には、対応できないので何もしない。
   // ディレクトリごと削除される可能性もあり、難しい問題で、今は仕様バグで残してある…。
   List<dynamic> items = [];
@@ -690,11 +685,24 @@ void _onCurrentDirChange(DatabaseEvent event)
   // ソートしておく
   sortDir(receiveDir);
 
+  // GPSログファイルの一覧をクラウドストレージから取得する
+  // ファイルに対応するGPSログがあるかどうかをチェック
+  final gpsFileList = await gpsLog.getFileList(uidPath);
+  receiveDir.forEach((var file){
+    if(file.isFile()){
+      final String gpxFileName = file.uid.toString() + ".gpx";
+      file.gpsLog = gpsFileList.contains(gpxFileName);
+    }
+  });
+
   // カレントディレクトリのデータを置き換え
   _directoryStack.last.child = receiveDir;
 
   // 処理の完了を通知
   _completerMoveDir?.complete();
+
+  // ファイル一覧画面を表示していたら再描画
+  _onCurrentDirChangedForFilesPage?.call();
 }
 
 // 絶対パスで指定されたディレクトリへ移動
@@ -750,7 +758,7 @@ Future<bool> _moveFullPathDir(String fullUIDPath) async
 }
 
 // ディレクトリツリーのデータベースを更新
-void updateFileListToDB(String uidPath, List<FileItem> dir)
+void updateFileListToDB(String uidPath, final List<FileItem> dir)
 {
   final DatabaseReference ref = getDatabaseRef(uidPath);
   List<Map<String,dynamic>> items = [];
@@ -863,6 +871,9 @@ class FilesPageState extends State<FilesPage>
   @override
   Widget build(BuildContext context)
   {
+    //!!!!
+    print("FilePage.build() --------------------------");
+
     // 幅が狭ければ、文字を小さくする
     var screenSize = MediaQuery.of(context).size;
     final bool narrowWidth = (screenSize.width < 640);
@@ -919,7 +930,8 @@ class FilesPageState extends State<FilesPage>
   }
 
   // ファイル一覧アイテムの作成
-  Widget _menuItem(BuildContext context, int index) {
+  Widget _menuItem(BuildContext context, int index)
+  {
     // アイコンを選択
     final int stackDepth = _directoryStack.length;
     final List<FileItem> currentDir = getCurrentDir();
@@ -953,6 +965,9 @@ class FilesPageState extends State<FilesPage>
         icon = Icons.folder;
       }
     }
+
+    //!!!!
+    print("FilePage._menuItem(${index}) file.gpsLog=${file.gpsLog} ---------------");
 
     // 現在開いているファイルとその途中のフォルダは強調表示する。
     // 削除も禁止
