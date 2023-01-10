@@ -29,6 +29,7 @@ import 'password.dart';
 import 'misc_marker.dart';
 import 'responsiveAppBar.dart';
 import 'freehand_drawing.dart';
+import 'distance_circle_layer.dart';
 import 'globals.dart';
 
 //----------------------------------------------------------------------------
@@ -655,6 +656,7 @@ class _MapViewState extends State<MapView>
                 allowPanningOnScrollingParent: false,
                 interactiveFlags: InteractiveFlag.all & ~InteractiveFlag.rotate,
                 plugins: [
+                  DistanceCircleLayerPlugin(),
                   MyDragMarkerPlugin(),
                   MyPolylineLayerPlugin(),
                 ],
@@ -674,6 +676,8 @@ class _MapViewState extends State<MapView>
                   urlTemplate: "https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png",
                   opacity: 0.64
                 ),
+                // 距離同心円
+                DistanceCircleLayerOptions(mapController: mainMapController!),
                 // GPSログのライン
                 MyPolylineLayerOptions(
                   polylines: gpsLog.makePolyLines(),
