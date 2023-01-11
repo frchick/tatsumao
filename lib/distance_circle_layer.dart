@@ -1,3 +1,4 @@
+import 'dart:async';   // Stream使った再描画
 import 'dart:math';
 import 'dart:ui' as ui;
 
@@ -12,12 +13,26 @@ class DistanceCircleLayerOptions extends LayerOptions
 {
   DistanceCircleLayerOptions({
     Key? key,
-    Stream<void>? rebuild,
+    required StreamController<void> stream,
     required this.mapController
-  }) : super(key: key, rebuild: rebuild)
+  }) :
+    _stream = stream,
+    super(key: key, rebuild: stream.stream)
   {}
 
   final MapController mapController;
+  
+  // 表示/非表示
+  bool show = true;
+
+  //----------------------------------------------------------------------------
+  // 再描画用の Stream
+  late StreamController<void> _stream;
+  // 再描画
+  void redraw()
+  {
+    _stream.sink.add(null);
+  }
 }
 
 // flutter_map のプラグインとしてレイヤーを実装
@@ -47,7 +62,7 @@ class DistanceCircleLayerPlugin implements MapPlugin
       builder: (BuildContext context, _)
       {
         Widget painter = CustomPaint(
-            painter: DistanceCirclePainter(opts.mapController),
+            painter: DistanceCirclePainter(opts:opts),
             size: size,
             willChange: true);
 
@@ -59,30 +74,35 @@ class DistanceCircleLayerPlugin implements MapPlugin
 
 class DistanceCirclePainter extends CustomPainter
 {
-  DistanceCirclePainter(this._map);
+  DistanceCirclePainter({ required this.opts });
 
-  final MapController _map;
+  final DistanceCircleLayerOptions opts;
 
   @override
   void paint(Canvas canvas, Size size)
   {
+    // 非表示なら何もしない
+    if(!opts.show) return;
+
     // 表示しているマップの範囲(距離)を計算
-    // (縦横の長い方基準)
+    // (縦横の長い方+10%マージン基準)
     final double halfWidth = size.width / 2;
     final double halfHeight = size.height / 2;
     late double screenWidth;
     late LatLng? pos0, pos1;
     final bool heightFit = (size.width <= size.height);
+    final MapController map = opts.mapController;
+    const double margin = 1.1;
     if(heightFit){
       // 高さフィット
-      screenWidth = size.height;
-      pos0 = _map.pointToLatLng(CustomPoint(halfWidth, 0));
-      pos1 = _map.pointToLatLng(CustomPoint(halfWidth, size.height));
+      screenWidth = margin * size.height;
+      pos0 = map.pointToLatLng(CustomPoint(halfWidth, 0));
+      pos1 = map.pointToLatLng(CustomPoint(halfWidth, screenWidth));
     }else{
       // 幅フィット
-      screenWidth = size.width;
-      pos0 = _map.pointToLatLng(CustomPoint(0, halfHeight));
-      pos1 = _map.pointToLatLng(CustomPoint(size.width, halfHeight));
+      screenWidth = margin * size.width;
+      pos0 = map.pointToLatLng(CustomPoint(0, halfHeight));
+      pos1 = map.pointToLatLng(CustomPoint(screenWidth, halfHeight));
     }
     final screenDist = calculateDistance(pos0, pos1);
 
@@ -146,13 +166,6 @@ class DistanceCirclePainter extends CustomPainter
     textPainter.paint(canvas, pos + Offset(4, 2));
   }
 
-  //NOTE: これが true を返さないと、StreamBuilder が走っても再描画されないことがある。
-  @override
-  bool shouldRepaint(DistanceCirclePainter oldDelegate)
-  {
-    return false;
-  }
-
   // 緯度経度で表される2地点間の距離を計算
   double calculateDistance(LatLng? pos1, LatLng? pos2)
   {
@@ -190,5 +203,12 @@ class DistanceCirclePainter extends CustomPainter
       selectR = r;
     }
     return selectR;
+  }
+
+  //NOTE: これが true を返さないと、StreamBuilder が走っても再描画されないことがある。
+  @override
+  bool shouldRepaint(DistanceCirclePainter oldDelegate)
+  {
+    return true;
   }
 }

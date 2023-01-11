@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'mydragmarker.dart';   // マップ上のメンバーマーカー
+import 'distance_circle_layer.dart';
 
 //----------------------------------------------------------------------------
 // 地図関連
@@ -37,6 +38,8 @@ bool lockEditing = false;
 // マーカーのドラッグによる変更通知が、自分自身によるものか、他のユーザーからかを識別
 final String appInstKey = UniqueKey().toString();
 
+// 地図上の距離サークル
+DistanceCircleLayerOptions? distanceCircle;
 
 //----------------------------------------------------------------------------
 // 画面サイズ関連

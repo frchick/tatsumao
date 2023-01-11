@@ -19,6 +19,7 @@ import 'gps_log.dart';  // GPSログの表示/非表示
 import 'onoff_icon_button.dart';
 import 'file_tree.dart';
 import 'text_ballon_widget.dart';
+import 'distance_circle_layer.dart';
 import 'globals.dart';
 
 //----------------------------------------------------------------------------
@@ -1173,10 +1174,9 @@ class AreaFilterDialogState  extends State<AreaFilterDialog>
       ));
     };
 
-    // メンバーマーカーとGPSログの表示スイッチ
+    // メンバーマーカーの表示スイッチ
     List<bool> _memberMarkerSizeFlag = [ false, false, false ];
     _memberMarkerSizeFlag[memberMarkerSizeSelector] = true;
-    List<bool> _showGPSLogFlag = [ gpsLog.showLogLine ];
 
     // ダイアログタイトル
     var titleText = widget.showMapDrawOptions? "表示/非表示設定": "エリアフィルター";
@@ -1203,7 +1203,7 @@ class AreaFilterDialogState  extends State<AreaFilterDialog>
             ),
             const SizedBox(height: 20),
 
-            // [2段目]メンバーマーカーサイズ/非表示、GPSログ表示/非表示スイッチ
+            // [2段目]メンバーマーカーサイズ/非表示、GPSログ＆距離サークル表示/非表示スイッチ
             if(widget.showMapDrawOptions) Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
@@ -1231,13 +1231,26 @@ class AreaFilterDialogState  extends State<AreaFilterDialog>
                   children: [
                     const Icon(Icons.timeline, size:30),
                   ],
-                  isSelected: _showGPSLogFlag,
+                  isSelected: [ gpsLog.showLogLine ],
                   onPressed: (index) {
                     setState(() {
                       gpsLog.showLogLine = !gpsLog.showLogLine;
                       gpsLog.makePolyLines();
                       gpsLog.makeDogMarkers();
                       gpsLog.redraw();
+                    });
+                  },
+                ),
+                // 距離サークル表示/非表示スイッチ
+                ToggleButtons(
+                  children: [
+                    const Icon(Icons.radar, size:30),
+                  ],
+                  isSelected: [ distanceCircle!.show ],
+                  onPressed: (index) {
+                    setState((){
+                      distanceCircle!.show = !distanceCircle!.show;
+                      distanceCircle!.redraw();
                     });
                   },
                 )

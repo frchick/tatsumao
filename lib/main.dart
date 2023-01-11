@@ -467,7 +467,7 @@ class _MapViewState extends State<MapView>
       ),
       // エリアフィルター
       IconButton(
-        icon: const Icon(Icons.filter_alt),
+        icon: const Icon(Icons.visibility),
         onPressed:() {
           areaIconFunc(context);
         },
@@ -617,7 +617,13 @@ class _MapViewState extends State<MapView>
       mainMapController = MapController();
       freehandDrawing.setMapController(mainMapController!);
     }
-
+    // 距離サークルを作成
+    if(distanceCircle == null){
+      distanceCircle = DistanceCircleLayerOptions(
+        stream: StreamController<void>.broadcast(),
+        mapController: mainMapController!);
+    }
+  
     // マップ上のメンバーマーカーの作成オプション
     // TODO: MapOption への値の代入を、適切な位置に移動したい
     mainMapDragMarkerPluginOptions = MyDragMarkerPluginOptions(
@@ -677,7 +683,7 @@ class _MapViewState extends State<MapView>
                   opacity: 0.64
                 ),
                 // 距離同心円
-                DistanceCircleLayerOptions(mapController: mainMapController!),
+                distanceCircle!,
                 // GPSログのライン
                 MyPolylineLayerOptions(
                   polylines: gpsLog.makePolyLines(),
