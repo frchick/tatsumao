@@ -761,6 +761,7 @@ void tapOnMap(BuildContext context, TapPosition tapPos)
           // データベースに同期
           updateTatsumaToDB(index);
         }
+        updateMapView();
       }
     });
   }        
