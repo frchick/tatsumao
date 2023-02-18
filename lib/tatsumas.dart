@@ -50,7 +50,7 @@ class TatsumaData {
   bool visible;
   // エリア(ビット和)
   int areaBits;
-  // もとの表示順
+  // データベース上での番号(表示ソートの影響を受けない)
   int originalIndex;
 
   // 可視判定
@@ -76,12 +76,14 @@ List<TatsumaData> tatsumas = [];
 const List<String> _areaNames = [
   "暗闇沢", "ホンダメ", "苅野", "笹原林道",
   "桧山", "858", "金太郎L", "小土肥",
-  "", "", "", "",
+  "", "", "", "(未設定)",
 ];
 
 // エリア表示フィルターのビット和
 int areaFilterBits = _areaFullBits;
 final int _areaFullBits = (1 << _areaNames.length) - 1;
+// エリア未設定を表すビット和
+final int _undefAreaBits = 0x0800;
 
 // ソートされているか
 bool _isListSorted = false;
@@ -393,6 +395,7 @@ Map<String,int>? readTatsumaFromGPX(String fileContent)
   // タツマを読み取り
   List<TatsumaData> newTatsumas = [];
   final Iterable<XmlElement> wpts = gpx.findAllElements("wpt");
+  int index = 0;
   wpts.forEach((wpt){
     final String? lat = wpt.getAttribute("lat");
     final String? lon = wpt.getAttribute("lon");
@@ -403,18 +406,19 @@ Map<String,int>? readTatsumaFromGPX(String fileContent)
         name.text,
         true,
         0,
-        0));
+        index));
+      index++;
     }
   });
 
-  // タツマデータをマージ
-  final int mergeCount = mergeTatsumas(newTatsumas);
+  // タツマの属性をコピー
+  var res = copyTatsumaAttribute(newTatsumas);
 
-  // 読みこんだ数と、マージで取り込んだ数を返す
-  return {
-    "readCount": newTatsumas.length,
-    "mergeCount": mergeCount,
-  };
+  // 読み込んだタツマデータに置き換え
+  tatsumas = newTatsumas;
+
+  // 追加された数、削除された数を返す
+  return res;
 }
 
 //----------------------------------------------------------------------------
@@ -436,35 +440,29 @@ void deleteTatsuma(int index)
 }
 
 //----------------------------------------------------------------------------
-// タツマデータをマージ
-int mergeTatsumas(List<TatsumaData> newTatsumas)
+// タツマ属性データをコピー
+Map<String,int> copyTatsumaAttribute(List<TatsumaData> newTatsumas)
 {
-  // 既存のタツマは名前のみを上書き。(名前の変更に対応)
-  // 新しい座標のタツマは取り込む。
-  // 結果として、本ツール上で設定したと表示/非表示フラグとエリアは維持される。
-  final int numTatsumas = tatsumas.length;
-  int addCount = 0;
-  int index = numTatsumas;
+  int copyCount = 0;
   newTatsumas.forEach((newTatsuma){
-    bool existed = false;
-    for(int i = 0; i < numTatsumas; i++){
+    newTatsuma.areaBits = _undefAreaBits;
+    for(int i = 0; i < tatsumas.length; i++){
+      // 同じタツマかどうかの判定は、座標の一致のみとする。
       if(newTatsuma.pos == tatsumas[i].pos){
-        tatsumas[i].name = newTatsuma.name;
-        existed = true;
+        // 表示フラグ、エリアビットをコピー
+        // (名前はGPXから読み込んだものが優先される)
+        newTatsuma.visible = tatsumas[i].visible;
+        newTatsuma.areaBits = tatsumas[i].areaBits;
+        copyCount++;
         break;
       }
     }
-    if(!existed){
-      newTatsuma.originalIndex = index;
-      tatsumas.add(newTatsuma);
-      _tatsumaOrderArray.add(index);
-      addCount++;
-      index++;
-    }
   });
 
-  // マージで追加したタツマ数を返す
-  return addCount;
+  return {
+    "addCount":(newTatsumas.length - copyCount),
+    "removeCount":(tatsumas.length - copyCount)
+  };
 }
 
 //----------------------------------------------------------------------------
@@ -900,27 +898,25 @@ class TatsumasPageState extends State<TatsumasPage>
     // XMLパース
     final Map<String,int>? res = readTatsumaFromGPX(fileContent);
     if(res == null) return false;
-    final int readCount = res["readCount"] ?? 0;
-    final int mergeCount = res["mergeCount"] ?? 0;
+    final int addCount = res["addCount"] ?? 0;
+    final int removeCount = res["removeCount"] ?? 0;
 
     // メッセージを表示
     final String message =
-      "${readCount}個の座標を読み込み、${mergeCount}個を追加しました。";
+      "${addCount}個を追加し、${removeCount}個を削除しました。";
     showDialog(
       context: context,
       builder: (_){ return AlertDialog(content: Text(message)); });
 
-    // タツマをデータベースへ保存して再描画(追加があれば)
-    final bool addTatsuma = (0 < mergeCount);
-    if(addTatsuma){
-      saveAllTatsumasToDB();
-      setState((){
-        changeFlag = true;
-        updateTatsumaMarkers();
-      });
-    }
+    // タツマをデータベースへ保存して再描画
+    saveAllTatsumasToDB();
+    setState((){
+      changeFlag = true;
+      updateTatsumaMarkers();
+    });
 
-    return addTatsuma;
+    final bool changed = (0 < addCount) || (0 < removeCount);
+    return changed;
   }
 }
 
