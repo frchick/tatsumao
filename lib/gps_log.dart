@@ -46,6 +46,16 @@ final Map<String, GPSDeviceParam> _deviceParams = {
     name:"予備1",
     color:const Color.fromARGB(255,128,128,128),
     iconImagePath: "assets/dog_icon/998.png"),
+
+  "パパっち": GPSDeviceParam(
+    name:"パパっち",
+    color:const Color.fromARGB(255,0,192,0),
+    iconImagePath: "assets/member_icon/002.png"),
+  "ママっち": GPSDeviceParam(
+    name:"ママっち",
+    color:const Color.fromARGB(255,0,0,240),
+    iconImagePath: "assets/member_icon/000.png"),
+
   "未定義": _undefDeviceParam,
 };
 // 未定義のGPS端末のパラメータ
@@ -62,6 +72,9 @@ final Map<int, String> _defaultDeviceID2Dogs = {
   4739: "アオ",
   4737: "ロト",
   5218: "予備1",
+
+  3993: "パパっち",
+  4367: "ママっち",
 };
 
 //----------------------------------------------------------------------------
