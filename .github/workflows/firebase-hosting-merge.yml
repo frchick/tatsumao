@@ -10,13 +10,12 @@ jobs:
   build_and_deploy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-
-      - uses: subosito/flutter-action@v1
+      - uses: actions/checkout@v3
+      - uses: subosito/flutter-action@v2
         with:
-          channel: 'stable' # or: 'beta', 'dev' or 'master'
+          flutter-version: '3.7.7'
+          channel: 'stable'
       - run: flutter pub get
-      #- run: flutter test --platform chrome
 
       - run: flutter build web
       - uses: FirebaseExtended/action-hosting-deploy@v0
