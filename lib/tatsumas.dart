@@ -12,7 +12,7 @@ import 'dart:async';    // for StreamSubscription<>
 
 import 'package:xml/xml.dart';  // GPXの読み込み
 import 'mydragmarker.dart';
-import 'my_list_tile.dart';
+//!!!! import 'my_list_tile.dart';
 
 import 'members.dart';  // メンバーマーカーのサイズ
 import 'gps_log.dart';  // GPSログの表示/非表示
@@ -812,7 +812,8 @@ class TatsumasPageState extends State<TatsumasPage>
         ),
       ),
       // 表示/非表示アイコンとタツマ名
-      child:MyListTile(
+//!!!!      child:MyListTile(
+        child:ListTile(
         // (左側)表示非表示アイコンボタン
         leading: IconButton(
           icon: icon,
@@ -843,9 +844,11 @@ class TatsumasPageState extends State<TatsumasPage>
         ),
 
         // 長押しでポップアップメニュー
+/*!!!!
         onLongPress: (TapDownDetails details){
           showPopupMenu(context, index, details.globalPosition);
         }
+*/
       ),
     );
   }

@@ -5,10 +5,10 @@
 ## flutterバージョン
 
 > flutter --version
-Flutter 3.7.7 • channel stable • https://github.com/flutter/flutter.git
-Framework • revision 2ad6cd72c0 (8 months ago) • 2023-03-08 09:41:59 -0800
-Engine • revision 1837b5be5f
-Tools • Dart 2.19.4 • DevTools 2.20.1
+Flutter 3.13.9 • channel stable • https://github.com/flutter/flutter.git
+Framework • revision d211f42860 (4 days ago) • 2023-10-25 13:42:25 -0700
+Engine • revision 0545f8705d
+Tools • Dart 3.1.5 • DevTools 2.25.0
 
 ## ローカルChromeでのデバッグ実行
 
@@ -17,3 +17,9 @@ Tools • Dart 2.19.4 • DevTools 2.20.1
 ## ビルドゴミの定期的な削除
 
 "C:\Users\nag\AppData\Local\Temp"
+
+## デプロイ
+
+GitHub Actionでビルドされて、以下のURLでデプロイ。
+https://tatsumao-976e2.web.app/
+
