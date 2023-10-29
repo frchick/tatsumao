@@ -178,7 +178,17 @@ class HomeIconWidget extends StatelessWidget
                   // タップして名前表示
                   onTap: (){
                     // ポップアップメッセージ
-                    showTextBallonMessage(name);
+                    String showName = name;
+                    if (name == "パパっち") {
+                      gNagModeCount++;
+                      if (4 <= gNagModeCount) {
+                        gNagMode = true;
+                        showName = "永谷専用モード";
+                      }
+                    } else {
+                      gNagModeCount = 0;
+                    }
+                    showTextBallonMessage(showName);
                   }
                 )
               ));

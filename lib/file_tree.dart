@@ -811,6 +811,10 @@ List<FileItem> _getFileListFromDB(List<dynamic> items)
     try { uid = item["uid"] as int; } catch(e){}
     String name = "";
     try { name = item["name"] as String; } catch(e){}
+    // 永谷専用は、永谷専用モードのみ
+    if((name == "永谷専用") && !gNagMode){
+      uid = _invalidUID;
+    }
     if((uid != _invalidUID) && (name != "")){
       // ディレクトリの場合は子階層を付ける
       List<FileItem>? child;

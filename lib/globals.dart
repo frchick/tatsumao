@@ -89,3 +89,10 @@ PopupMenuItem<int> makePopupMenuItem(
     height: (kMinInteractiveDimension * 0.8),
   );
 }
+
+//----------------------------------------------------------------------------
+// 特殊
+
+// 永谷専用モード
+bool gNagMode = false;
+int gNagModeCount = 0;
