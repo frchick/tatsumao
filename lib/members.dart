@@ -54,6 +54,12 @@ List<Member> members = [
   Member(name:"石井さん", iconPath:"assets/member_icon/029.png", pos:LatLng(35.302880, 139.05500)),
   Member(name:"半田さん", iconPath:"assets/member_icon/030.png", pos:LatLng(35.302880, 139.05500)),
   Member(name:"カズ君", iconPath:"assets/member_icon/031.png", pos:LatLng(35.302880, 139.05500)),
+  Member(name:"渡辺さん", iconPath:"assets/member_icon/032.png", pos: LatLng(35.302880, 139.05500)),
+  Member(name:"原田さん", iconPath:"assets/member_icon/033.png", pos: LatLng(35.302880, 139.05500)),
+  Member(name:"田中さん", iconPath:"assets/member_icon/034.png", pos: LatLng(35.302880, 139.05500)),
+  Member(name:"脇島さん", iconPath:"assets/member_icon/035.png", pos: LatLng(35.302880, 139.05500)),
+  Member(name:"加藤(隆)さん", iconPath:"assets/member_icon/036.png", pos: LatLng(35.302880, 139.05500)),
+  Member(name:"鈴木さん", iconPath:"assets/member_icon/037.png", pos: LatLng(35.302880, 139.05500)),
 
   Member(name:"見学A", iconPath:"assets/member_icon/100.png", pos:LatLng(35.302880, 139.05500)),
   Member(name:"見学B", iconPath:"assets/member_icon/101.png", pos:LatLng(35.302880, 139.05500)),

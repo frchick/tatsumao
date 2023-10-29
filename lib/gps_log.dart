@@ -34,6 +34,10 @@ final Map<String, GPSDeviceParam> _deviceParams = {
     name: "ロト",
     color:const Color.fromARGB(255,128,0,255),
     iconImagePath: "assets/dog_icon/002.png"),
+  "トノ": GPSDeviceParam(
+    name: "トノ",
+    color: const Color.fromARGB(255, 142, 85, 62),
+    iconImagePath: "assets/dog_icon/004.png"),
   "ガロ": GPSDeviceParam(
     name: "ガロ",
     color:const Color.fromARGB(255,255,106,0),
