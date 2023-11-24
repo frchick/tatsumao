@@ -1,0 +1,223 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="Geographica - http://geographica.biz/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://www.topografix.com/GPX/1/1" xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd" xmlns:kashmir3d="http://www.kashmir3d.com/namespace/kashmir3d" xmlns:geographica="http://geographica.biz/namespace/geographica">
+  <wpt lat="34.713790" lon="138.862042" iswarning="0">
+    <ele>235.000000</ele>
+    <time>2023-04-08T23:59:08Z</time>
+    <name>🏠森の家</name>
+    <cmt></cmt>
+    <extensions>
+    <kashmir3d:ident></kashmir3d:ident>
+    <kashmir3d:icon>901001</kashmir3d:icon>
+    <geographica:icon>12</geographica:icon>
+    </extensions>
+  </wpt>
+  <wpt lat="34.715084" lon="138.858889" iswarning="0">
+    <ele>215.000000</ele>
+    <time>2023-07-16T02:24:54Z</time>
+    <name>鉄塔7</name>
+    <cmt></cmt>
+    <extensions>
+    <kashmir3d:ident></kashmir3d:ident>
+    <kashmir3d:icon>901001</kashmir3d:icon>
+    <geographica:icon>1</geographica:icon>
+    </extensions>
+  </wpt>
+  <wpt lat="34.714896" lon="138.854621" iswarning="0">
+    <ele>260.000000</ele>
+    <time>2023-06-26T02:08:30Z</time>
+    <name>鉱山事務所</name>
+    <cmt></cmt>
+    <extensions>
+    <kashmir3d:ident></kashmir3d:ident>
+    <kashmir3d:icon>901001</kashmir3d:icon>
+    <geographica:icon>0</geographica:icon>
+    </extensions>
+  </wpt>
+  <wpt lat="34.714732" lon="138.851150" iswarning="0">
+    <ele>417.000000</ele>
+    <time>2023-05-02T01:48:16Z</time>
+    <name>一本鉄塔</name>
+    <cmt></cmt>
+    <extensions>
+    <kashmir3d:ident></kashmir3d:ident>
+    <kashmir3d:icon>901001</kashmir3d:icon>
+    <geographica:icon>0</geographica:icon>
+    </extensions>
+  </wpt>
+  <wpt lat="34.713653" lon="138.848996" iswarning="0">
+    <ele>461.000000</ele>
+    <time>2023-05-02T01:38:23Z</time>
+    <name>二本鉄塔</name>
+    <cmt></cmt>
+    <extensions>
+    <kashmir3d:ident></kashmir3d:ident>
+    <kashmir3d:icon>901001</kashmir3d:icon>
+    <geographica:icon>0</geographica:icon>
+    </extensions>
+  </wpt>
+  <wpt lat="34.712574" lon="138.861676" iswarning="0">
+    <ele>253.100000</ele>
+    <time>2023-09-11T03:16:48Z</time>
+    <name>銀座</name>
+    <cmt></cmt>
+    <extensions>
+    <kashmir3d:ident></kashmir3d:ident>
+    <kashmir3d:icon>901001</kashmir3d:icon>
+    <geographica:icon>0</geographica:icon>
+    </extensions>
+  </wpt>
+  <wpt lat="34.712351" lon="138.849422" iswarning="0">
+    <ele>443.000000</ele>
+    <time>2023-02-22T01:54:27Z</time>
+    <name>交差点</name>
+    <cmt></cmt>
+    <extensions>
+    <kashmir3d:ident></kashmir3d:ident>
+    <kashmir3d:icon>901001</kashmir3d:icon>
+    <geographica:icon>0</geographica:icon>
+    </extensions>
+  </wpt>
+  <wpt lat="34.709554" lon="138.865995" iswarning="0">
+    <ele>360.000000</ele>
+    <time>2023-11-11T12:05:28Z</time>
+    <name>16番ホール</name>
+    <cmt></cmt>
+    <extensions>
+    <kashmir3d:ident></kashmir3d:ident>
+    <kashmir3d:icon>901001</kashmir3d:icon>
+    <geographica:icon>0</geographica:icon>
+    </extensions>
+  </wpt>
+  <wpt lat="34.712756" lon="138.867421" iswarning="0">
+    <ele>332.000000</ele>
+    <time>2023-11-11T04:51:06Z</time>
+    <name>鉄塔</name>
+    <cmt></cmt>
+    <extensions>
+    <kashmir3d:ident></kashmir3d:ident>
+    <kashmir3d:icon>901001</kashmir3d:icon>
+    <geographica:icon>0</geographica:icon>
+    </extensions>
+  </wpt>
+  <wpt lat="34.716338" lon="138.866407" iswarning="0">
+    <ele>242.000000</ele>
+    <time>2023-11-11T12:04:41Z</time>
+    <name>鉄階段</name>
+    <cmt></cmt>
+    <extensions>
+    <kashmir3d:ident></kashmir3d:ident>
+    <kashmir3d:icon>901001</kashmir3d:icon>
+    <geographica:icon>0</geographica:icon>
+    </extensions>
+  </wpt>
+  <wpt lat="34.718428" lon="138.864191" iswarning="0">
+    <ele>169.000000</ele>
+    <time>2023-11-10T22:24:03Z</time>
+    <name>火の用心</name>
+    <cmt></cmt>
+    <extensions>
+    <kashmir3d:ident></kashmir3d:ident>
+    <kashmir3d:icon>901001</kashmir3d:icon>
+    <geographica:icon>0</geographica:icon>
+    </extensions>
+  </wpt>
+  <wpt lat="34.717256" lon="138.863565" iswarning="0">
+    <ele>177.000000</ele>
+    <time>2023-11-02T22:18:21Z</time>
+    <name>くり畑</name>
+    <cmt></cmt>
+    <extensions>
+    <kashmir3d:ident></kashmir3d:ident>
+    <kashmir3d:icon>901001</kashmir3d:icon>
+    <geographica:icon>0</geographica:icon>
+    </extensions>
+  </wpt>
+  <wpt lat="34.712985" lon="138.863076" iswarning="0">
+    <ele>275.300000</ele>
+    <time>2023-09-11T03:38:31Z</time>
+    <name>12tタンク</name>
+    <cmt></cmt>
+    <extensions>
+    <kashmir3d:ident></kashmir3d:ident>
+    <kashmir3d:icon>901001</kashmir3d:icon>
+    <geographica:icon>0</geographica:icon>
+    </extensions>
+  </wpt>
+  <wpt lat="34.711166" lon="138.863147" iswarning="0">
+    <ele>295.800000</ele>
+    <time>2023-11-11T02:30:50Z</time>
+    <name>取水口</name>
+    <cmt></cmt>
+    <extensions>
+    <kashmir3d:ident></kashmir3d:ident>
+    <kashmir3d:icon>901001</kashmir3d:icon>
+    <geographica:icon>0</geographica:icon>
+    </extensions>
+  </wpt>
+  <wpt lat="34.712015" lon="138.861756" iswarning="0">
+    <ele>263.400000</ele>
+    <time>2023-09-11T03:19:41Z</time>
+    <name>ポンプ小屋</name>
+    <cmt></cmt>
+    <extensions>
+    <kashmir3d:ident></kashmir3d:ident>
+    <kashmir3d:icon>901001</kashmir3d:icon>
+    <geographica:icon>0</geographica:icon>
+    </extensions>
+  </wpt>
+  <wpt lat="34.715117" lon="138.861488" iswarning="0">
+    <ele>203.300000</ele>
+    <time>2023-11-15T11:47:49Z</time>
+    <name>ハイヴィレッジ入口</name>
+    <cmt></cmt>
+    <extensions>
+    <kashmir3d:ident></kashmir3d:ident>
+    <kashmir3d:icon>901001</kashmir3d:icon>
+    <geographica:icon>0</geographica:icon>
+    </extensions>
+  </wpt>
+  <wpt lat="34.714945" lon="138.859662" iswarning="0">
+    <ele>201.700000</ele>
+    <time>2023-11-02T07:41:53Z</time>
+    <name>ヨガ広場</name>
+    <cmt></cmt>
+    <extensions>
+    <kashmir3d:ident></kashmir3d:ident>
+    <kashmir3d:icon>901001</kashmir3d:icon>
+    <geographica:icon>0</geographica:icon>
+    </extensions>
+  </wpt>
+  <wpt lat="34.714784" lon="138.857510" iswarning="0">
+    <ele>253.500000</ele>
+    <time>2023-11-02T07:37:43Z</time>
+    <name>貯水槽</name>
+    <cmt></cmt>
+    <extensions>
+    <kashmir3d:ident></kashmir3d:ident>
+    <kashmir3d:icon>901001</kashmir3d:icon>
+    <geographica:icon>0</geographica:icon>
+    </extensions>
+  </wpt>
+  <wpt lat="34.726987" lon="138.870285" iswarning="0">
+    <ele>151.000000</ele>
+    <time>2023-11-02T23:45:35Z</time>
+    <name>トラックP</name>
+    <cmt></cmt>
+    <extensions>
+    <kashmir3d:ident></kashmir3d:ident>
+    <kashmir3d:icon>901001</kashmir3d:icon>
+    <geographica:icon>0</geographica:icon>
+    </extensions>
+  </wpt>
+  <wpt lat="34.722826" lon="138.865729" iswarning="0">
+    <ele>197.000000</ele>
+    <time>2023-11-15T11:44:46Z</time>
+    <name>馬の背渡り</name>
+    <cmt></cmt>
+    <extensions>
+    <kashmir3d:ident></kashmir3d:ident>
+    <kashmir3d:icon>901001</kashmir3d:icon>
+    <geographica:icon>0</geographica:icon>
+    </extensions>
+  </wpt>
+</gpx>
