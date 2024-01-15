@@ -803,10 +803,10 @@ class TatsumasPageState extends State<TatsumasPage>
             }else{
               // 変更
               setState((){
-                tatsuma.name     = res["name"] as String;
-                tatsuma.visible  = res["visible"] as bool;
-                tatsuma.areaBits = res["areaBits"] as int;
-                tatsuma.auxPoint = res["auxPoint"] as bool;
+                tatsuma.name     = res["name"];
+                tatsuma.visible  = res["visible"];
+                tatsuma.areaBits = res["areaBits"];
+                tatsuma.auxPoint = res["auxPoint"];
               });
               // データベースに同期
               updateTatsumaToDB(index);

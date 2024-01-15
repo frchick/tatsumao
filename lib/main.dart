@@ -754,10 +754,10 @@ void tapOnMap(BuildContext context, TapPosition tapPos)
           saveAllTatsumasToDB();
         }else{
           // タツマデータに変更を反映
-          tatsuma.name     = res["name"] as String;
-          tatsuma.visible  = res["visible"] as bool;
-          tatsuma.areaBits = res["areaBits"] as int;
-          tatsuma.auxPoint = res["auxPoint"] as bool;
+          tatsuma.name     = res["name"];
+          tatsuma.visible  = res["visible"];
+          tatsuma.areaBits = res["areaBits"];
+          tatsuma.auxPoint = res["auxPoint"];
           updateTatsumaMarkers();
           // データベースに同期
           updateTatsumaToDB(index);
