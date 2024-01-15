@@ -31,6 +31,7 @@ class TatsumaData {
     this.name,
     this.visible,
     this.areaBits,
+    this.auxPoint,
     this.originalIndex,
   );
   // 空のタツマデータ
@@ -39,6 +40,7 @@ class TatsumaData {
     name = "",
     visible = false,
     areaBits = 0,
+    auxPoint = false,
     originalIndex = -1
   {}
 
@@ -50,6 +52,8 @@ class TatsumaData {
   bool visible;
   // エリア(ビット和)
   int areaBits;
+  // 「補助地点」
+  bool auxPoint;
   // データベース上での番号(表示ソートの影響を受けない)
   int originalIndex;
 
@@ -119,6 +123,10 @@ final Image _tatsumaIcon = Image.asset(
 
 final Image _tatsumaIconGray = Image.asset(
   "assets/misc/tatsu_pos_icon_gray.png",
+  width: 32, height: 32);
+
+final Image _tatsumaIconGreen =
+  Image.asset("assets/misc/tatsu_pos_icon_green.png",
   width: 32, height: 32);
 
 //----------------------------------------------------------------------------
@@ -215,6 +223,7 @@ void saveAllTatsumasToDB()
       "latitude": tatsuma.pos.latitude,
       "longitude": tatsuma.pos.longitude,
       "visible": tatsuma.visible,
+      "auxPoint": tatsuma.auxPoint,
       "areaBits": tatsuma.areaBits,
     });
   });
@@ -235,6 +244,7 @@ void updateTatsumaToDB(int index)
     "latitude": tatsuma.pos.latitude,
     "longitude": tatsuma.pos.longitude,
     "visible": tatsuma.visible,
+    "auxPoint": tatsuma.auxPoint,
     "areaBits": tatsuma.areaBits,
   };
 
@@ -276,6 +286,7 @@ Future loadTatsumaFromDB() async
       /*name:*/ t["name"] as String,
       /*visible:*/ t["visible"] as bool,
       /*areaBits:*/ t["areaBits"] as int,
+      /*auxPoint:*/ t["auxPoint"] as bool,
       /*originalIndex*/ index));
     index++;
   });
@@ -318,6 +329,7 @@ void _onTatsumaChangedFromDB(DatabaseEvent event)
   tatsuma.name = data["name"] as String;
   tatsuma.visible = data["visible"] as bool;
   tatsuma.areaBits = data["areaBits"] as int;
+  tatsuma.auxPoint = data["auxPoint"] as bool;
   tatsuma.pos.latitude = data["latitude"] as double;
   tatsuma.pos.longitude = data["longitude"] as double;
 
@@ -349,6 +361,7 @@ void _onTatsumaAddedFromDB(DatabaseEvent event)
     /*name:*/ t["name"] as String,
     /*visible:*/ t["visible"] as bool,
     /*areaBits:*/ t["areaBits"] as int,
+    /*auxPoint:*/ t["auxPoint"] as bool,
     /*originalIndex*/ index);
   if(index < tatsumas.length){
     // すでに確保済みの配列に代入
@@ -405,8 +418,9 @@ Map<String,int>? readTatsumaFromGPX(String fileContent)
       newTatsumas.add(TatsumaData(
         LatLng(double.parse(lat), double.parse(lon)),
         name.text,
-        true,
-        0,
+        true,     // visible
+        0,        // areaBits
+        false,    // auxPoint
         index));
       index++;
     }
@@ -454,6 +468,7 @@ Map<String,int> copyTatsumaAttribute(List<TatsumaData> newTatsumas)
         // (名前はGPXから読み込んだものが優先される)
         newTatsuma.visible = tatsumas[i].visible;
         newTatsuma.areaBits = tatsumas[i].areaBits;
+        newTatsuma.auxPoint = tatsumas[i].auxPoint;
         copyCount++;
         break;
       }
@@ -549,49 +564,55 @@ void updateTatsumaMarkers()
 {
   // テキストスタイル
   final TextStyle textStyle = const TextStyle(fontWeight: FontWeight.bold);
-  final TextStyle textStyleGray = const TextStyle(color: Color(0xFF616161)/*grey[700]*/);
+  final TextStyle textStyleGray = const TextStyle(color: Color(0xFF616161) /*grey[700]*/);
 
   // タツマデータからマーカー配列を作成
   // 非表示グレーマーカーが、可視のマーカーの下になるように描画順を制御
   tatsumaMarkers.clear();
-  List<Marker> markers2 = [];
+  List<Marker> visibleMarkers = [];
+  List<Marker> auxMarkers = [];
   tatsumas.forEach((tatsuma) {
-    // スイッチONで非表示アイコンをグレー表示
-    if(showFilteredIcon && !tatsuma.isVisible()){
-      tatsumaMarkers.add(Marker(
+    // タツマ(オレンジ)、主要地点(グリーン)、非表示を表示(グレー)毎にマーカーを作り分け
+    Image? icon;
+    TextStyle ts = textStyle;
+    List<Marker> list = visibleMarkers;
+    if (tatsuma.isVisible()) {
+      if(!tatsuma.auxPoint) {
+        // 表示状態のアイコン
+        icon = _tatsumaIcon;
+      }else{
+        // 補助地点アイコン
+        icon = _tatsumaIconGreen;
+        list = auxMarkers;
+      }
+    } else if (showFilteredIcon) {
+      // 非表示グレーマーカー
+      icon = _tatsumaIconGray;
+      ts = textStyleGray;
+      list = tatsumaMarkers;
+    }
+    // マーカーを作成
+    if (icon != null) {
+      list.add(Marker(
         point: tatsuma.pos,
         width: 200.0,
         height: 64.0,
         anchorPos: AnchorPos.exactly(Anchor(100, 48)),
         builder: (ctx) => Column(
+          // アイコンを中央寄せにするために、上部にダミーの空テキスト(マシな方法ないか？)
           children: [
-            // アイコンを中央寄せにするために、上部にダミーの空テキスト(マシな方法ないか？)
             // 十字アイコン
-            _tatsumaIconGray,
+            icon!,
             // タツマ名
-            Text(tatsuma.name, style: textStyleGray),
+            Text(tatsuma.name, style: ts),
           ],
           mainAxisAlignment: MainAxisAlignment.start,
-        )
-      ));
-    }else if(tatsuma.isVisible()){
-      // 表示状態のアイコン
-      markers2.add(Marker(
-        point: tatsuma.pos,
-        width: 200.0,
-        height: 64.0,
-        anchorPos: AnchorPos.exactly(Anchor(100, 48)),
-        builder: (ctx) => Column(
-          children: [
-            _tatsumaIcon,
-            Text(tatsuma.name, style: textStyle),
-          ],
-          mainAxisAlignment: MainAxisAlignment.start,
-        )
-      ));
+        )));
     }
   });
-  tatsumaMarkers.addAll(markers2);
+  // グレー > 表示状態の順
+  tatsumaMarkers.addAll(auxMarkers);
+  tatsumaMarkers.addAll(visibleMarkers);
 }
 
 //----------------------------------------------------------------------------
@@ -785,6 +806,7 @@ class TatsumasPageState extends State<TatsumasPage>
                 tatsuma.name     = res["name"] as String;
                 tatsuma.visible  = res["visible"] as bool;
                 tatsuma.areaBits = res["areaBits"] as int;
+                tatsuma.auxPoint = res["auxPoint"] as bool;
               });
               // データベースに同期
               updateTatsumaToDB(index);
@@ -934,6 +956,7 @@ class TatsumaDialog extends StatefulWidget
     required this.name,
     required this.visible,
     required this.areaBits,
+    required this.auxPoint,
   }){}
 
   // 名前
@@ -942,6 +965,8 @@ class TatsumaDialog extends StatefulWidget
   bool visible;
   // エリアビット
   int  areaBits;
+  // 補助地点フラグ
+  bool auxPoint;
 
   @override
   State createState() => _TatsumaDialogDialogState();
@@ -966,6 +991,8 @@ class _TatsumaDialogDialogState extends State<TatsumaDialog>
   {
     final Icon visibilityIcon =
       widget.visible? const Icon(Icons.visibility): const Icon(Icons.visibility_off);
+    final Icon auxPointIcon =
+      widget.auxPoint ? const Icon(Icons.landscape): const Icon(Icons.landscape_outlined);
 
     return AlertDialog(
       title: Row(
@@ -1001,6 +1028,17 @@ class _TatsumaDialogDialogState extends State<TatsumaDialog>
               ),
               const SizedBox(width: 10),
 
+              // 補助地点アイコンボタン
+              IconButton(
+                icon: auxPointIcon,
+                onPressed: (){
+                  setState((){
+                    widget.auxPoint = !widget.auxPoint;
+                  });
+                },                
+              ),
+              const SizedBox(width: 10),
+
               // 名前エディットボックス
               Expanded(
                 child: TextField(
@@ -1030,7 +1068,8 @@ class _TatsumaDialogDialogState extends State<TatsumaDialog>
             Navigator.pop<Map<String,dynamic>>(context, {
               "name": _dateTextController.text,
               "visible": widget.visible,
-              "areaBits": widget.areaBits });
+              "areaBits": widget.areaBits,
+              "auxPoint": widget.auxPoint });
           },
         ),
       ],
@@ -1090,7 +1129,8 @@ Future<Map<String,dynamic>?>
       return TatsumaDialog(
         name: tatsuma.name,
         visible: tatsuma.visible,
-        areaBits: tatsuma.areaBits);
+        areaBits: tatsuma.areaBits,
+        auxPoint: tatsuma.auxPoint);
     },
   );
 }
