@@ -989,10 +989,16 @@ class _TatsumaDialogDialogState extends State<TatsumaDialog>
   @override
   Widget build(BuildContext context)
   {
+    // 表示/非表示アイコンと色
     final Icon visibilityIcon =
-      widget.visible? const Icon(Icons.visibility): const Icon(Icons.visibility_off);
+      widget.visible?
+        const Icon(Icons.visibility):
+        const Icon(Icons.visibility_off, color:Colors.grey);
+    // 補助地点アイコンと色
     final Icon auxPointIcon =
-      widget.auxPoint ? const Icon(Icons.landscape): const Icon(Icons.landscape_outlined);
+      widget.auxPoint ?
+        const Icon(Icons.landscape, color:Color(0xFF4CFF00)):
+        const Icon(Icons.landscape_outlined, color:Colors.grey);
 
     return AlertDialog(
       title: Row(
