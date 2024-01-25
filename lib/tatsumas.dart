@@ -80,7 +80,7 @@ List<TatsumaData> tatsumas = [];
 // NOTE: TatsumaData.areaBits のビットと対応しているので、後から順番を変えられない。
 const List<String> _areaNames = [
   "暗闇沢", "ホンダメ", "苅野", "笹原林道",
-  "桧山", "858", "金太郎L", "小土肥(静)",
+  "桧山", "858", "金太郎L", "最乗寺",
   "裏山(静)", "中尾沢", "", "(未設定)",
 ];
 
