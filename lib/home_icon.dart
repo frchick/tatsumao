@@ -106,7 +106,7 @@ class HomeIconWidget extends StatelessWidget
           },
         ),
 
-        // 参加してないメンバーの人数
+        // 参加しているメンバーの人数
         Container(
           decoration: BoxDecoration(
             shape: BoxShape.circle,
@@ -121,12 +121,12 @@ class HomeIconWidget extends StatelessWidget
             stream: HomeIconWidget._stream.stream,
             builder: (BuildContext context, AsyncSnapshot snapShot)
             {
-              // 参加していないメンバーの人数を数える
-              int numAbsenter = 0;
+              // 参加しているメンバーの人数を数える
+              int numParticipants = 0;
               members.forEach((member){
-                if(!member.attended && !member.withdrawals) numAbsenter++;
+                if(member.attended && !member.withdrawals) numParticipants++;
               });
-              return Text("${numAbsenter}",
+              return Text("${numParticipants}",
                 style: const TextStyle(fontSize:12, color:Colors.white));
             }
           ),
