@@ -60,7 +60,8 @@ List<Member> members = [
   Member(name:"脇島さん", iconPath:"assets/member_icon/035.png", pos: LatLng(35.302880, 139.05500)),
   Member(name:"加藤(隆)さん", iconPath:"assets/member_icon/036.png", pos: LatLng(35.302880, 139.05500)),
   Member(name:"鈴木さん", iconPath:"assets/member_icon/037.png", pos: LatLng(35.302880, 139.05500)),
-  Member(name:"小野木さん", iconPath:"assets/member_icon/038.png", pos: LatLng(35.302880, 139.05500)),
+  Member(name:"キヨシさん", iconPath:"assets/member_icon/038.png", pos: LatLng(35.302880, 139.05500)),
+  Member(name:"山根さん", iconPath:"assets/member_icon/039.png", pos: LatLng(35.302880, 139.05500)),
 
   Member(name:"見学A", iconPath:"assets/member_icon/100.png", pos:LatLng(35.302880, 139.05500)),
   Member(name:"見学B", iconPath:"assets/member_icon/101.png", pos:LatLng(35.302880, 139.05500)),

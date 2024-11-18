@@ -20,6 +20,9 @@ Tools • Dart 3.1.5 • DevTools 2.25.0
 
 ## デプロイ
 
-GitHub Actionでビルドされて、以下のURLでデプロイ。
+GitHub Actionでビルドされて、以下のURLでデプロイ。(Google Firebase Hosting)
 https://tatsumao-976e2.web.app/
 
+## Google Firebase
+
+frchick.00@gmail.com
