@@ -46,6 +46,10 @@ final Map<String, GPSDeviceParam> _deviceParams = {
     name:"アオ",
     color:const Color.fromARGB(255,255,216,0),
     iconImagePath: "assets/dog_icon/003.png"),
+  "ルウ": GPSDeviceParam(
+    name:"ルウ",
+    color:Color.fromARGB(255, 0, 255, 200),
+    iconImagePath: "assets/dog_icon/005.png"),
   "予備1": GPSDeviceParam(
     name:"予備1",
     color:const Color.fromARGB(255,128,128,128),
@@ -76,6 +80,8 @@ final Map<int, String> _defaultDeviceID2Dogs = {
   1674: "ムロ",
   4539: "ガロ",
   4737: "トノ",
+  5674: "ルウ",
+  5675: "ルウ",
 
   4739: "アオ",
   5218: "予備1",
