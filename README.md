@@ -34,3 +34,4 @@ https://tatsumao-976e2.web.app/
 ## Google Firebase
 
 frchick.00@gmail.com
+ノートPCの606、全部小文字。

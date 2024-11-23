@@ -30,6 +30,7 @@ import 'misc_marker.dart';
 import 'responsiveAppBar.dart';
 import 'freehand_drawing.dart';
 import 'distance_circle_layer.dart';
+import 'area_data.dart';
 import 'globals.dart';
 
 //----------------------------------------------------------------------------
@@ -681,6 +682,11 @@ class _MapViewState extends State<MapView>
                 TileLayerOptions(
                   urlTemplate: "https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png",
                   opacity: 0.64
+                ),
+                // ポリゴン(禁猟区)
+                PolygonLayerOptions(
+                  polygons: areaData.makePolygons(),
+                  polygonCulling: true,
                 ),
                 // 距離同心円
                 distanceCircle!,

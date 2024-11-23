@@ -281,9 +281,15 @@ Future loadTatsumaFromDB() async
     }catch(e){
       return;
     }
+
+    // 禁猟区マークは読み込まない
+    // (レッドゾーンの表示に対応したので。)
+    var name = t["name"] as String;
+    if(name.contains("禁猟区")) return;
+
     tatsumas.add(TatsumaData(
       /*pos:*/ LatLng(t["latitude"] as double, t["longitude"] as double),
-      /*name:*/ t["name"] as String,
+      /*name:*/ name,
       /*visible:*/ t["visible"] as bool,
       /*areaBits:*/ t["areaBits"] as int,
       /*auxPoint:*/ t["auxPoint"] as bool,
