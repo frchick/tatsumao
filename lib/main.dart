@@ -32,6 +32,7 @@ import 'freehand_drawing.dart';
 import 'distance_circle_layer.dart';
 import 'area_data.dart';
 import 'globals.dart';
+import 'area_filter_dialog.dart';
 
 //----------------------------------------------------------------------------
 // グローバル変数
@@ -566,7 +567,7 @@ class _MapViewState extends State<MapView>
   // エリアアイコンタップしてエリアフィルターダイアログに遷移
   void areaIconFunc(BuildContext context)
   {
-    showAreaFilter(context, showMapDrawOptions:true).then((bool? res)
+    showAreaFilterDialog(context).then((bool? res)
     {
       if(res ?? false){
         // タツママーカーを再描画

@@ -78,7 +78,7 @@ List<TatsumaData> tatsumas = [];
 // 猟場のエリア名
 // NOTE: 設定ボタン表示の都合で、4の倍数個で定義
 // NOTE: TatsumaData.areaBits のビットと対応しているので、後から順番を変えられない。
-const List<String> _areaNames = [
+const List<String> areaNames = [
   "暗闇沢", "ホンダメ", "苅野", "笹原林道",
   "桧山", "858", "金太郎L", "最乗寺",
   "裏山(静)", "中尾沢", "", "(未設定)",
@@ -86,7 +86,7 @@ const List<String> _areaNames = [
 
 // エリア表示フィルターのビット和
 int areaFilterBits = _areaFullBits;
-final int _areaFullBits = (1 << _areaNames.length) - 1;
+final int _areaFullBits = (1 << areaNames.length) - 1;
 // エリア未設定を表すビット和
 final int _undefAreaBits = 0x0800;
 
@@ -529,10 +529,10 @@ List<String> areaFilterToStrings()
 
   // 可視なエリア名を配列で返す
   List<String> res = [];
-  for(int i = 0; i < _areaNames.length; i++){
+  for(int i = 0; i < areaNames.length; i++){
     final int maskBit = (1 << i);
     if((areaFilterBits & maskBit) != 0){
-      res.add(_areaNames[i]);
+      res.add(areaNames[i]);
     }
   }
   return res;
@@ -555,7 +555,7 @@ int stringsToAreaFilter(List<String>? areas)
   // 文字列に含まれるエリアを可視に
   areaFilterBits = 0;
   areas.forEach((name){
-    final int index = _areaNames.indexOf(name);
+    final int index = areaNames.indexOf(name);
     if(0 <= index){
       areaFilterBits |= (1 << index);
     }
@@ -668,14 +668,14 @@ class TatsumasPageState extends State<TatsumasPage>
       );
       final TextStyle hideTexStyle = const TextStyle(color: Colors.grey);
 
-      for(int i = 0; i < _areaNames.length; i++){
+      for(int i = 0; i < areaNames.length; i++){
         // 表示のエリアラベル
         _areaTags.add(Container(
           margin: const EdgeInsets.only(right: 5),
           padding: const EdgeInsets.symmetric(vertical:2, horizontal:8),
           decoration: visibleBoxDec,
           child: Text(
-            _areaNames[i],
+            areaNames[i],
             textScaleFactor:0.9,
             style: visibleTexStyle
           ),
@@ -686,7 +686,7 @@ class TatsumasPageState extends State<TatsumasPage>
           padding: const EdgeInsets.symmetric(vertical:2, horizontal:8),
           decoration: hideBoxDec,
           child: Text(
-            _areaNames[i],
+            areaNames[i],
             textScaleFactor:0.9,
             style: hideTexStyle
           ),
@@ -1062,9 +1062,9 @@ class _TatsumaDialogDialogState extends State<TatsumaDialog>
           ),
 
           // エリアON/OFFボタン
-          const SizedBox(height: 10), makeAreaButtonRow(0, 4, _areaNames),
-          const SizedBox(height: 5),  makeAreaButtonRow(4, 4, _areaNames),
-          const SizedBox(height: 5),  makeAreaButtonRow(8, 4, _areaNames),
+          const SizedBox(height: 10), makeAreaButtonRow(0, 4, areaNames),
+          const SizedBox(height: 5),  makeAreaButtonRow(4, 4, areaNames),
+          const SizedBox(height: 5),  makeAreaButtonRow(8, 4, areaNames),
         ]
       ),
       actions: [
@@ -1188,7 +1188,7 @@ class AreaFilterDialogState  extends State<AreaFilterDialog>
   
     // エリアごとのリスト項目を作成
     List<Container> areas = [];
-    for(int i = 0; i < _areaNames.length; i++){
+    for(int i = 0; i < areaNames.length; i++){
       final int maskBit = (1 << i);
       final bool visible = (areaFilterBits & maskBit) != 0;
 
@@ -1205,7 +1205,7 @@ class AreaFilterDialogState  extends State<AreaFilterDialog>
             children: [
               Container(
                 child: Text(
-                  _areaNames[i],
+                  areaNames[i],
                   style: (visible? visibleTexStyle: hideTexStyle),
                 ),
                 decoration: (visible? visibleBoxDec: hideBoxDec),
