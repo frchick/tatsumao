@@ -216,11 +216,10 @@ class _MapViewState extends State<MapView>
     }
 
     // パスワードチェック
-    // "910k"
-    const String passwordHash = "6992f4030e10ae944ed6a5691daa19ae";
     bool authenOk = false;
     do{
-      authenOk = await askAndCheckPassword(context, "パスワード", passwordHash, "key");
+      authenOk = await askAndCheckPassword(
+        context, "パスワード", startAppPasswordHash, startAppPasswordKey);
       // ハズレ
       if(!authenOk){
         showTextBallonMessage("ハズレ...");
@@ -586,9 +585,8 @@ class _MapViewState extends State<MapView>
   void lockEditingFunc(BuildContext context, bool lock) async
   {
     // ロック操作にはパスワードが必要
-    // "musicstart"
-    const String passwordHash = "4f754d60f1497e9ebfd0b55ce6ef35b4";
-    bool authenOk = await askAndCheckPassword(context, "編集ロックパスワード", passwordHash, "lockEditingKey");
+    bool authenOk = await askAndCheckPassword(context,
+      "編集ロックパスワード", lockEditingPasswordHash, lockEditingPasswordKey);
     // ハズレ
     if(!authenOk){
       showTextBallonMessage("ハズレ...");

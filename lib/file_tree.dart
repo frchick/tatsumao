@@ -12,6 +12,7 @@ import 'tatsumas.dart';
 import 'gps_log.dart';
 import 'responsiveAppBar.dart';
 import 'globals.dart';
+import 'password.dart';
 
 //----------------------------------------------------------------------------
 //----------------------------------------------------------------------------
@@ -1059,7 +1060,17 @@ class FilesPageState extends State<FilesPage>
         makePopupMenuItem(1, "削除", Icons.delete,
           enabled: enableDelete && _canDelete(item.uid)),
       ],
-    ).then((value) {
+    ).then((value) async {
+      // ファイル操作にはパスワードが必要
+      bool authenOk = await askAndCheckPassword(context,
+        "ファイル操作パスワード", lockEditingPasswordHash, lockEditingPasswordKey);
+      // ハズレ
+      if(!authenOk){
+        showTextBallonMessage("ハズレ...");
+        await new Future.delayed(new Duration(seconds: 2));
+        return;
+      }
+
       switch(value ?? -1){
       case 0:
         // リネーム

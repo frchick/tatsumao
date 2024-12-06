@@ -91,6 +91,16 @@ PopupMenuItem<int> makePopupMenuItem(
 }
 
 //----------------------------------------------------------------------------
+// パスワード、ロック
+
+const String startAppPasswordKey = "key";
+const String startAppPasswordHash = "6992f4030e10ae944ed6a5691daa19ae"; // "910k"
+
+const String lockEditingPasswordKey = "lockEditingKey";
+const String lockEditingPasswordHash = "4f754d60f1497e9ebfd0b55ce6ef35b4"; // "musicstart"
+
+
+//----------------------------------------------------------------------------
 // 特殊
 
 // 永谷専用モード
