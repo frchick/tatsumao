@@ -567,7 +567,9 @@ class _MapViewState extends State<MapView>
   // エリアアイコンタップしてエリアフィルターダイアログに遷移
   void areaIconFunc(BuildContext context)
   {
-    showAreaFilterDialog(context).then((bool? res)
+    showAreaFilterDialog(context,
+      title:"表示/非表示設定", showOptions:true, alignLeft:true)
+      .then((bool? res)
     {
       if(res ?? false){
         // タツママーカーを再描画

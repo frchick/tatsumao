@@ -13,6 +13,11 @@ final int _areaFullBits = (1 << areaNames.length) - 1;
 
 class AreaFilterDialog extends StatefulWidget
 {
+  final String title;
+  final bool showOptions;
+
+  AreaFilterDialog(this.title, this.showOptions);
+
   @override
   AreaFilterDialogState createState() => AreaFilterDialogState();
 }
@@ -94,12 +99,12 @@ class AreaFilterDialogState extends State<AreaFilterDialog>
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // [1段目]タイトル
-              Text("表示/非表示設定",
+              Text(widget.title,
                 style: Theme.of(context).textTheme.titleLarge),
               const SizedBox(height: 10),
               
               // [2段目]メンバーマーカーサイズ/非表示、GPSログ＆距離サークル表示/非表示スイッチ
-              Row(
+              if(widget.showOptions) Row(
                 children: [
                   // メンバーマーカーサイズ/非表示スイッチ
                   ToggleButtons(
@@ -176,7 +181,7 @@ class AreaFilterDialogState extends State<AreaFilterDialog>
                     ],
                   ),
                   // (右寄せ)グレー表示スイッチ
-                  Row(
+                  if(widget.showOptions) Row(
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [
                       Text("グレー表示", style: Theme.of(context).textTheme.titleMedium),
@@ -219,7 +224,8 @@ class AreaFilterDialogState extends State<AreaFilterDialog>
 }
 
 // ダイアログを開く
-Future<bool?> showAreaFilterDialog(BuildContext context)
+Future<bool?> showAreaFilterDialog(BuildContext context,
+  { required String title, required bool showOptions, bool alignLeft=false })
 {
   // 表示前のエリアフィルターのフラグ(変更の有無を確認する用)
   final int areaFilterBits0 = areaFilterBits;
@@ -232,8 +238,10 @@ Future<bool?> showAreaFilterDialog(BuildContext context)
 
   // 横長画面の場合には、ダイアログを左側に寄せる
   AlignmentGeometry dialogAlignment = 
-    (screenSize.height < screenSize.width)? Alignment.topLeft: Alignment.center;
-    
+    (alignLeft && (screenSize.height < screenSize.width))?
+    Alignment.topLeft:
+    Alignment.center;
+
   // ダイアログ表示
   return showMyBasicDialog<bool>(
     context: context,
@@ -249,7 +257,7 @@ Future<bool?> showAreaFilterDialog(BuildContext context)
       return Future.value(changeFilter);
     },
     builder: (context) {
-      return AreaFilterDialog();
+      return AreaFilterDialog(title, showOptions);
     },
   );
 }
