@@ -175,6 +175,8 @@ class AreaFilterDialogState extends State<AreaFilterDialog>
                               areaFilterBits = 0;
                             }
                           });
+                          updateTatsumaMarkers();
+                          updateMapView();
                         },
                       ),
                       Text("一括", style: Theme.of(context).textTheme.titleMedium),
