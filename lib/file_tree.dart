@@ -1067,7 +1067,6 @@ class FilesPageState extends State<FilesPage>
       // ハズレ
       if(!authenOk){
         showTextBallonMessage("ハズレ...");
-        await new Future.delayed(new Duration(seconds: 2));
         return;
       }
 

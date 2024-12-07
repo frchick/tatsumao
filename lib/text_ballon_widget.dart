@@ -1,77 +1,63 @@
 import 'package:flutter/material.dart';
-import 'dart:async';
+import 'globals.dart';
 
-final _textBallonStream = StreamController<String?>.broadcast();
+OverlayEntry? _overlayEntry;
 
 //-----------------------------------------------------------------------------
 // ポップアップメッセージの表示
-void showTextBallonMessage(String message)
+void showTextBallonMessage(String message, { BuildContext? context })
 {
-  _textBallonStream.sink.add(message);
+  // 呼び出し元から BuildContext が渡されていない場合は、グローバルから参照
+  context ??= appScaffoldKey.currentContext;
+  if(context == null){
+    return;
+  }
+
+  // 直前のオーバーレイを消去
+  resetTextBallonMessage();
+
+  // 画面中央に表示されるテキスト・ポップアップメッセージ
+  _overlayEntry = OverlayEntry(
+    builder: (cntx) => Align(  // AlignとRowで中央に表示
+      alignment: Alignment.center,
+      child: Row(                 // このRowがないと、なぜかテキストが全画面サイズに…
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [ 
+          MyFadeOut(              // 消えるときのフェードアウトアニメーション
+            child: Container(     // テキスト背景のボックス
+              padding: const EdgeInsets.fromLTRB(25, 8, 25, 8),
+              decoration: BoxDecoration(
+                color: Colors.black,
+                borderRadius: BorderRadius.circular(5),
+              ),
+              child:Text(
+                message,
+                style:TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.grey.shade200,
+                  decoration: TextDecoration.none,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ),
+        ]),
+    ),
+  );
+  
+  // オーバーレイ表示を開始
+  // 上の MyFadeOut でフェードアウトし、それが完了したら remove() される。
+  Overlay.of(context).insert(_overlayEntry!);
 }
 
 //-----------------------------------------------------------------------------
-// ポップアップメッセージの表示を抑制
+// ポップアップメッセージを消去
 void resetTextBallonMessage()
 {
-  // NOTE: 画面の再構築に伴う TextBallonWidget.build() の呼び出しで、直前のメッセージが
-  // NOTE: 繰り返し表示されることを抑止するため、ストリーム内のデータをクリアする。
-  _textBallonStream.sink.add(null);
-}
-
-//---------------------------------------------------------------------------
-//---------------------------------------------------------------------------
-class TextBallonWidget extends StatefulWidget
-{
-  TextBallonWidget({
-    super.key,
-  }){}
-
-     @override
-  _TextBallonWidgetState createState() => _TextBallonWidgetState();
-}
-
-class _TextBallonWidgetState extends State<TextBallonWidget>
-{
-  @override
-  Widget build(BuildContext context)
-  {
-    return StreamBuilder(
-      // 指定したstreamにデータが流れてくると再描画される
-      stream: _textBallonStream.stream,
-      builder: (BuildContext context, AsyncSnapshot<String?> snapShot)
-      {
-        return _makeBallonWidget(snapShot.data);
-      }
-    );
-  }
-
-  Widget _makeBallonWidget(String? text)
-  {
-    // メッセージが空の場合には何も表示しない。
-    if(text == null){
-      return Container();
-    }
-
-    // フェードアウトメッセージを表示
-    return MyFadeOut(
-      child: Container(
-        padding: EdgeInsets.fromLTRB(25, 8, 25, 8),
-        decoration: BoxDecoration(
-          color: Colors.black,
-          borderRadius: BorderRadius.circular(5),
-        ),
-        child: Text(
-          text,
-          style:TextStyle(
-            fontWeight: FontWeight.bold,
-            color: Colors.grey.shade200,
-          ),
-          textScaleFactor: 1.25,
-          textAlign: TextAlign.center,
-        ),
-      ),
-    );
+  if(_overlayEntry != null){
+    _overlayEntry!.remove();
+    _overlayEntry = null;
   }
 }
 
@@ -81,11 +67,6 @@ class _TextBallonWidgetState extends State<TextBallonWidget>
 class MyFadeOut extends StatefulWidget {
   final Widget child;
   
-  // アニメーションの再生が終わったかのフラグ
-  // Widget側のメンバーは、インスタンスを作り直すごとにリセットされる。
-  // State側のメンバーは、インスタンスが作り直されても永続する？
-  bool _completed = false;
-
   MyFadeOut({
     required this.child,
   }){}
@@ -101,8 +82,11 @@ class _MyFadeOutState extends State<MyFadeOut>
   late Animation<double> _reverse;
   late Animation<double> _animation;
 
+  // すでに表示が開始されているか
+  bool _started = false;
+
   @override
-  initState()
+  void initState()
   {
     super.initState();
     // 1.5秒のアニメーション
@@ -114,14 +98,11 @@ class _MyFadeOutState extends State<MyFadeOut>
     // フェードアウトを遅延させる
     _animation = CurvedAnimation(
       parent: _reverse,
-      curve: Interval(0.0, 0.25, curve: Curves.easeIn),
+      curve: const Interval(0.0, 0.25, curve: Curves.easeIn),
     );
     // アニメーション終了時に非表示
     _controller.addStatusListener((status) {
       if (status == AnimationStatus.completed) {
-        setState(() {
-          widget._completed = true;
-        });
         resetTextBallonMessage();
       }
     });
@@ -136,14 +117,13 @@ class _MyFadeOutState extends State<MyFadeOut>
   @override
   Widget build(BuildContext context) {
     // アニメーション開始
-    // アニメーション終了後の更新では、当然アニメーションの開始はしない。
-    if(!widget._completed){
+    if(!_started){
+      _started = true;
       _controller.forward(from: 0.0);
     }
   
     // アニメーションが終了していたら、Widgetを非表示にする。
     return Visibility(
-      visible: !widget._completed,
       child: FadeTransition(opacity: _animation, child: widget.child));
   }
 }

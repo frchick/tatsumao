@@ -222,8 +222,8 @@ class _MapViewState extends State<MapView>
         context, "パスワード", startAppPasswordHash, startAppPasswordKey);
       // ハズレ
       if(!authenOk){
-        showTextBallonMessage("ハズレ...");
-        await new Future.delayed(new Duration(seconds: 2));
+        showTextBallonMessage("ハズレ...", context: context);
+        await Future.delayed(const Duration(seconds: 2));
       }
     }while(!authenOk);
 
@@ -371,17 +371,8 @@ class _MapViewState extends State<MapView>
           title: Text("TatsumaO"),
         ),
         body: Container(
-          child: Stack(
-            children: [
-              Center(
-                child: Text("初期化中...", textScaleFactor:2.0),
-              ),
-              // ポップアップメッセージ
-              Align(
-                alignment: Alignment(0.0, 0.0),
-                child: TextBallonWidget(),
-              ),
-            ]
+          child: Center(
+            child: Text("初期化中...", textScaleFactor:2.0),
           ),
         ),
       );
@@ -727,12 +718,6 @@ class _MapViewState extends State<MapView>
 
             // 手書き図
             FreehandDrawingOnMap(key:_freehandDrawingOnMapKey),
-
-            // ポップアップメッセージ
-            Align(
-              alignment: Alignment(0.0, 0.0),
-              child: TextBallonWidget(),
-            ),
           ]
         ),
       ),
