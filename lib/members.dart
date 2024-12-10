@@ -3,7 +3,6 @@ import 'dart:math'; // min,max
 
 import 'package:flutter/material.dart';
 import 'package:latlong2/latlong.dart';
-import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_map/plugin_api.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/services.dart';   // for クリップボード
@@ -14,61 +13,71 @@ import 'text_multiline_dialog.dart';
 import 'tatsumas.dart';
 import 'home_icon.dart';
 import 'file_tree.dart';
+import 'myfs_image.dart';
 import 'globals.dart';
-
 
 //----------------------------------------------------------------------------
 //----------------------------------------------------------------------------
 // 外部参照されるグローバル変数
 
+// 適当な初期位置
+final _defaultPos = LatLng(35.302880, 139.05100);
+
+// メンバーアイコンのパス
+const String _iconPath = "assets/member_icon/";
+
+// メンバーアイコンの読み込み中に表示するアイコン
+// こちらはWEBアプリの assets から読み込み。(Cloud Storage ではない)
+final Image _loadingIcon = Image.asset(_iconPath + 'loading.png', width:64, height:72);
+
 // この配列の並び順が配置データと関連しているので、順番を変えないこと！
 // TODO: メンバー一覧 BottomSheet でのメンバーアイコンの並び順を変えられるようにする。
 List<Member> members = [
-  Member(name:"ママっち", iconPath:"assets/member_icon/000.png", pos:LatLng(35.302880, 139.05100), attended: true),
-  Member(name:"パパっち", iconPath:"assets/member_icon/002.png", pos:LatLng(35.302880, 139.05200), attended: true),
-  Member(name:"高桑さん", iconPath:"assets/member_icon/006.png", pos:LatLng(35.302880, 139.05300), attended: true),
-  Member(name:"今村さん", iconPath:"assets/member_icon/007.png", pos:LatLng(35.302880, 139.05400), attended: true),
-  Member(name:"しゅうちゃん", iconPath:"assets/member_icon/004.png", pos:LatLng(35.302880, 139.05200), withdrawals:true),
-  Member(name:"まなみさん", iconPath:"assets/member_icon/008.png", pos:LatLng(35.302880, 139.05200), withdrawals:true),
-  Member(name:"がんちゃん", iconPath:"assets/member_icon/011.png", pos:LatLng(35.302880, 139.05200)),
-  Member(name:"ガマさん", iconPath:"assets/member_icon/005.png", pos:LatLng(35.302880, 139.05200)),
-  Member(name:"たかちん", iconPath:"assets/member_icon/009.png", pos:LatLng(35.302880, 139.05200)),
-  Member(name:"加藤さん", iconPath:"assets/member_icon/010.png", pos:LatLng(35.302880, 139.05500), attended: true),
-  Member(name:"長さん", iconPath:"assets/member_icon/012.png", pos:LatLng(35.302880, 139.05500)),
-  Member(name:"望月さん", iconPath:"assets/member_icon/013.png", pos:LatLng(35.302880, 139.05500)),
-  Member(name:"青池さん", iconPath:"assets/member_icon/014.png", pos:LatLng(35.302880, 139.05500)),
-  Member(name:"田野倉さん", iconPath:"assets/member_icon/015.png", pos:LatLng(35.302880, 139.05500)),
-  Member(name:"諸さん", iconPath:"assets/member_icon/016.png", pos:LatLng(35.302880, 139.05500)),
-  Member(name:"ばったちゃん", iconPath:"assets/member_icon/017.png", pos:LatLng(35.302880, 139.05500)),
-  Member(name:"あいちゃん", iconPath:"assets/member_icon/018.png", pos:LatLng(35.302880, 139.05500)),
-  Member(name:"安達さん", iconPath:"assets/member_icon/019.png", pos:LatLng(35.302880, 139.05500)),
-  Member(name:"友爺", iconPath:"assets/member_icon/020.png", pos:LatLng(35.302880, 139.05500)),
-  Member(name:"矢崎さん", iconPath:"assets/member_icon/021.png", pos:LatLng(35.302880, 139.05500)),
-  Member(name:"秋田さん", iconPath:"assets/member_icon/022.png", pos:LatLng(35.302880, 139.05500)),
-  Member(name:"やまP", iconPath:"assets/member_icon/023.png", pos:LatLng(35.302880, 139.05500)),
-  Member(name:"梅澤さん", iconPath:"assets/member_icon/024.png", pos:LatLng(35.302880, 139.05500)),
-  Member(name:"マッスー", iconPath:"assets/member_icon/025.png", pos:LatLng(35.302880, 139.05500), withdrawals:true),
-  Member(name:"福島さん", iconPath:"assets/member_icon/026.png", pos:LatLng(35.302880, 139.05500)),
-  Member(name:"池田さん", iconPath:"assets/member_icon/027.png", pos:LatLng(35.302880, 139.05500)),
-  Member(name:"山口さん", iconPath:"assets/member_icon/028.png", pos:LatLng(35.302880, 139.05500)),
-  Member(name:"石井さん", iconPath:"assets/member_icon/029.png", pos:LatLng(35.302880, 139.05500)),
-  Member(name:"半田さん", iconPath:"assets/member_icon/030.png", pos:LatLng(35.302880, 139.05500), withdrawals:true),
-  Member(name:"カズ君", iconPath:"assets/member_icon/031.png", pos:LatLng(35.302880, 139.05500)),
-  Member(name:"渡辺さん", iconPath:"assets/member_icon/032.png", pos: LatLng(35.302880, 139.05500)),
-  Member(name:"原田さん", iconPath:"assets/member_icon/033.png", pos: LatLng(35.302880, 139.05500)),
-  Member(name:"田中さん", iconPath:"assets/member_icon/034.png", pos: LatLng(35.302880, 139.05500)),
-  Member(name:"脇島さん", iconPath:"assets/member_icon/035.png", pos: LatLng(35.302880, 139.05500)),
-  Member(name:"加藤(隆)さん", iconPath:"assets/member_icon/036.png", pos: LatLng(35.302880, 139.05500)),
-  Member(name:"鈴木さん", iconPath:"assets/member_icon/037.png", pos: LatLng(35.302880, 139.05500)),
-  Member(name:"キヨシさん", iconPath:"assets/member_icon/038.png", pos: LatLng(35.302880, 139.05500)),
-  Member(name:"山根さん", iconPath:"assets/member_icon/039.png", pos: LatLng(35.302880, 139.05500)),
+  Member(name:"ママっち", iconFile:"000.png", pos:_defaultPos, attended: true),
+  Member(name:"パパっち", iconFile:"002.png", pos:_defaultPos, attended: true),
+  Member(name:"高桑さん", iconFile:"006.png", pos:_defaultPos, attended: true),
+  Member(name:"今村さん", iconFile:"007.png", pos:_defaultPos, attended: true),
+  Member(name:"しゅうちゃん", iconFile:"004.png", pos:_defaultPos, withdrawals:true),
+  Member(name:"まなみさん", iconFile:"008.png", pos:_defaultPos, withdrawals:true),
+  Member(name:"がんちゃん", iconFile:"011.png", pos:_defaultPos),
+  Member(name:"ガマさん", iconFile:"005.png", pos:_defaultPos),
+  Member(name:"たかちん", iconFile:"009.png", pos:_defaultPos),
+  Member(name:"加藤さん", iconFile:"010.png", pos:_defaultPos, attended: true),
+  Member(name:"長さん", iconFile:"012.png", pos:_defaultPos),
+  Member(name:"望月さん", iconFile:"013.png", pos:_defaultPos),
+  Member(name:"青池さん", iconFile:"014.png", pos:_defaultPos),
+  Member(name:"田野倉さん", iconFile:"015.png", pos:_defaultPos),
+  Member(name:"諸さん", iconFile:"016.png", pos:_defaultPos),
+  Member(name:"ばったちゃん", iconFile:"017.png", pos:_defaultPos),
+  Member(name:"あいちゃん", iconFile:"018.png", pos:_defaultPos),
+  Member(name:"安達さん", iconFile:"019.png", pos:_defaultPos),
+  Member(name:"友爺", iconFile:"020.png", pos:_defaultPos),
+  Member(name:"矢崎さん", iconFile:"021.png", pos:_defaultPos),
+  Member(name:"秋田さん", iconFile:"022.png", pos:_defaultPos),
+  Member(name:"やまP", iconFile:"023.png", pos:_defaultPos),
+  Member(name:"梅澤さん", iconFile:"024.png", pos:_defaultPos),
+  Member(name:"マッスー", iconFile:"025.png", pos:_defaultPos, withdrawals:true),
+  Member(name:"福島さん", iconFile:"026.png", pos:_defaultPos),
+  Member(name:"池田さん", iconFile:"027.png", pos:_defaultPos),
+  Member(name:"山口さん", iconFile:"028.png", pos:_defaultPos),
+  Member(name:"石井さん", iconFile:"029.png", pos:_defaultPos),
+  Member(name:"半田さん", iconFile:"030.png", pos:_defaultPos, withdrawals:true),
+  Member(name:"カズ君", iconFile:"031.png", pos:_defaultPos),
+  Member(name:"渡辺さん", iconFile:"032.png", pos:_defaultPos),
+  Member(name:"原田さん", iconFile:"033.png", pos:_defaultPos),
+  Member(name:"田中さん", iconFile:"034.png", pos:_defaultPos),
+  Member(name:"脇島さん", iconFile:"035.png", pos:_defaultPos),
+  Member(name:"加藤(隆)さん", iconFile:"036.png", pos:_defaultPos),
+  Member(name:"鈴木さん", iconFile:"037.png", pos:_defaultPos),
+  Member(name:"キヨシさん", iconFile:"038.png", pos:_defaultPos),
+  Member(name:"山根さん", iconFile:"039.png", pos:_defaultPos),
 
-  Member(name:"見学A", iconPath:"assets/member_icon/100.png", pos:LatLng(35.302880, 139.05500)),
-  Member(name:"見学B", iconPath:"assets/member_icon/101.png", pos:LatLng(35.302880, 139.05500)),
-  Member(name:"見学C", iconPath:"assets/member_icon/102.png", pos:LatLng(35.302880, 139.05500)),
+  Member(name:"見学A", iconFile:"100.png", pos:_defaultPos),
+  Member(name:"見学B", iconFile:"101.png", pos:_defaultPos),
+  Member(name:"見学C", iconFile:"102.png", pos:_defaultPos),
 
-  Member(name:"娘っち", iconPath:"assets/member_icon/001.png", pos:LatLng(35.302880, 139.05200)),
-  Member(name:"りんたろー", iconPath:"assets/member_icon/003.png", pos:LatLng(35.302880, 139.05200)),
+  Member(name:"娘っち", iconFile:"001.png", pos:_defaultPos),
+  Member(name:"りんたろー", iconFile:"003.png", pos:_defaultPos),
 ];
 
 // メンバーのマーカー配列
@@ -91,7 +100,7 @@ bool isShowMemberMarker()
 class Member {
   Member({
     required this.name,
-    required this.iconPath,
+    required this.iconFile,
     required this.pos,
     this.attended = false,
     this.withdrawals = false,
@@ -99,7 +108,7 @@ class Member {
   // 名前
   String name;
   // ドラッグマーカーのアイコンの画像ファイル
-  String iconPath;
+  String iconFile;
   // 配置座標
   LatLng pos;
   // 参加しているか？(マップ上に配置されているか？)
@@ -109,7 +118,9 @@ class Member {
   // 起動直後のデータベース変更通知を受け取ったか
   bool firstSyncEvent = true;
   // ドラッグマーカーのアイコン
-  Image? icon0;
+  Widget? icon0;
+  // ドラッグマーカーのアイコンのキー
+  final Key iconKey = GlobalKey();
 }
 
 //---------------------------------------------------------------------------
@@ -364,7 +375,7 @@ class MyDragMarker2 extends MyDragMarker
   void onDragStartFunc(DragStartDetails details, LatLng point, int index)
   {
     // ドラッグ中の連続同期のためのタイマーをスタート
-    Timer.periodic(Duration(milliseconds: 500), (Timer timer){
+    Timer.periodic(const Duration(milliseconds: 500), (Timer timer){
       _draggingTimer = timer;
       // 直前に同期した座標から動いていたら変更を通知
       if(_lastDraggingPoiny != members[index].pos){
@@ -438,8 +449,8 @@ class MyDragMarker2 extends MyDragMarker
 void createMemberMarkers()
 {
   // サイズを決定
-  final widthTable = const [ 64.0, 42.0 ];
-  final heightTable = const [ 72.0, 48.0 ];
+  const widthTable = [ 64.0, 42.0 ];
+  const heightTable = [ 72.0, 48.0 ];
   final width  = widthTable[min(memberMarkerSizeSelector, 1)];
   final height = heightTable[min(memberMarkerSizeSelector, 1)];
 
@@ -448,9 +459,8 @@ void createMemberMarkers()
   int memberIndex = 0;
   members.forEach((member) {
     // アイコンを読み込んでおく
-    if(member.icon0 == null){
-      member.icon0 = Image.asset(member.iconPath, width:64, height:72);
-    }
+    member.icon0 ??= MyFSImage(
+      _iconPath + member.iconFile, loadingIcon:_loadingIcon, key:member.iconKey);
     // マーカーを作成
     memberMarkers.add(
       MyDragMarker2(

@@ -96,12 +96,12 @@ class MyDragMarkerWidget extends StatefulWidget
 
 class _MyDragMarkerWidgetState extends State<MyDragMarkerWidget>
 {
-  CustomPoint pixelPosition = const CustomPoint(0.0, 0.0);
+  CustomPoint pixelPosition = CustomPoint(0.0, 0.0);
   late LatLng dragPosStart;
   late LatLng markerPointStart;
   late LatLng oldDragPosition;
   bool isDragging = false;
-  Offset lastLocalOffset = Offset(0.0, 0.0);
+  Offset lastLocalOffset = const Offset(0.0, 0.0);
 
   static Timer? autoDragTimer;
 
