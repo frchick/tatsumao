@@ -30,55 +30,11 @@ const String _iconPath = "assets/member_icon/";
 // こちらはWEBアプリの assets から読み込み。(Cloud Storage ではない)
 final Image _loadingIcon = Image.asset(_iconPath + 'loading.png', width:64, height:72);
 
+// メンバー一覧データ
+// loadMembersListFromDB() で firebase realtime database から読み込まれる。
 // この配列の並び順が配置データと関連しているので、順番を変えないこと！
 // TODO: メンバー一覧 BottomSheet でのメンバーアイコンの並び順を変えられるようにする。
-List<Member> members = [
-  Member(name:"ママっち", iconFile:"000.png", pos:_defaultPos, attended: true),
-  Member(name:"パパっち", iconFile:"002.png", pos:_defaultPos, attended: true),
-  Member(name:"高桑さん", iconFile:"006.png", pos:_defaultPos, attended: true),
-  Member(name:"今村さん", iconFile:"007.png", pos:_defaultPos, attended: true),
-  Member(name:"しゅうちゃん", iconFile:"004.png", pos:_defaultPos, withdrawals:true),
-  Member(name:"まなみさん", iconFile:"008.png", pos:_defaultPos, withdrawals:true),
-  Member(name:"がんちゃん", iconFile:"011.png", pos:_defaultPos),
-  Member(name:"ガマさん", iconFile:"005.png", pos:_defaultPos),
-  Member(name:"たかちん", iconFile:"009.png", pos:_defaultPos),
-  Member(name:"加藤さん", iconFile:"010.png", pos:_defaultPos, attended: true),
-  Member(name:"長さん", iconFile:"012.png", pos:_defaultPos),
-  Member(name:"望月さん", iconFile:"013.png", pos:_defaultPos),
-  Member(name:"青池さん", iconFile:"014.png", pos:_defaultPos),
-  Member(name:"田野倉さん", iconFile:"015.png", pos:_defaultPos),
-  Member(name:"諸さん", iconFile:"016.png", pos:_defaultPos),
-  Member(name:"ばったちゃん", iconFile:"017.png", pos:_defaultPos),
-  Member(name:"あいちゃん", iconFile:"018.png", pos:_defaultPos),
-  Member(name:"安達さん", iconFile:"019.png", pos:_defaultPos),
-  Member(name:"友爺", iconFile:"020.png", pos:_defaultPos),
-  Member(name:"矢崎さん", iconFile:"021.png", pos:_defaultPos),
-  Member(name:"秋田さん", iconFile:"022.png", pos:_defaultPos),
-  Member(name:"やまP", iconFile:"023.png", pos:_defaultPos),
-  Member(name:"梅澤さん", iconFile:"024.png", pos:_defaultPos),
-  Member(name:"マッスー", iconFile:"025.png", pos:_defaultPos, withdrawals:true),
-  Member(name:"福島さん", iconFile:"026.png", pos:_defaultPos),
-  Member(name:"池田さん", iconFile:"027.png", pos:_defaultPos),
-  Member(name:"山口さん", iconFile:"028.png", pos:_defaultPos),
-  Member(name:"石井さん", iconFile:"029.png", pos:_defaultPos),
-  Member(name:"半田さん", iconFile:"030.png", pos:_defaultPos, withdrawals:true),
-  Member(name:"カズ君", iconFile:"031.png", pos:_defaultPos),
-  Member(name:"渡辺さん", iconFile:"032.png", pos:_defaultPos),
-  Member(name:"原田さん", iconFile:"033.png", pos:_defaultPos),
-  Member(name:"田中さん", iconFile:"034.png", pos:_defaultPos),
-  Member(name:"脇島さん", iconFile:"035.png", pos:_defaultPos),
-  Member(name:"加藤(隆)さん", iconFile:"036.png", pos:_defaultPos),
-  Member(name:"鈴木さん", iconFile:"037.png", pos:_defaultPos),
-  Member(name:"キヨシさん", iconFile:"038.png", pos:_defaultPos),
-  Member(name:"山根さん", iconFile:"039.png", pos:_defaultPos),
-
-  Member(name:"見学A", iconFile:"100.png", pos:_defaultPos),
-  Member(name:"見学B", iconFile:"101.png", pos:_defaultPos),
-  Member(name:"見学C", iconFile:"102.png", pos:_defaultPos),
-
-  Member(name:"娘っち", iconFile:"001.png", pos:_defaultPos),
-  Member(name:"りんたろー", iconFile:"003.png", pos:_defaultPos),
-];
+List<Member> members = [];
 
 // メンバーのマーカー配列
 // 出動していないメンバー分もすべて作成。表示/非表示を設定しておく。
@@ -133,6 +89,30 @@ String _assignPath = "";
 
 // 現在のデータベース変更通知のリスナー
 List<StreamSubscription<DatabaseEvent>> _membersListener = [];
+
+// メンバー一覧データをデータベースから取得
+Future loadMembersListFromDB() async
+{
+  print(">loadMembersListFromDB()");
+
+  // キーの存在をチェックして、あればメンバー一覧を読み込む
+  final DatabaseReference ref = FirebaseDatabase.instance.ref("members");
+  DatabaseEvent event = await ref.once();
+  DataSnapshot snapshot = event.snapshot;
+
+  members.clear();
+  if (snapshot.exists) {
+    final data = snapshot.value as List<dynamic>;
+    data.forEach((m){
+      bool withdrawals = m.containsKey("withdrawals") ? m["withdrawals"] as bool : false;
+      members.add(Member(
+        name: m["name"] as String,
+        iconFile: m["icon"] as String,
+        pos: _defaultPos,
+        withdrawals: withdrawals));
+    });
+  }
+}
 
 //---------------------------------------------------------------------------
 // 初期化

@@ -149,10 +149,6 @@ class _MapViewState extends State<MapView>
   {
     super.initState();
 
-    // メンバーデータからマーカー配列を作成
-    // メンバーは組み込みデータなのでデータベースからの読み込みはない
-    createMemberMarkers();
-
     // 家アイコン作成
     homeIconWidget = HomeIconWidget();
 
@@ -164,12 +160,19 @@ class _MapViewState extends State<MapView>
     freehandDrawing.setColor(Color.fromARGB(255,0,255,0));
 
     // データベースからもろもろ読み込んで初期状態をセットアップ
+    // 非同期処理。完了したら _initializingApp = false にして再描画が呼ばれる。
     initStateSub();
   }
 
   // 初期化(読み込み関連)
   Future initStateSub() async
   {
+    // メンバーデータをデータベースから取得
+    await loadMembersListFromDB();
+  
+    // メンバーデータからマーカー配列を作成
+    createMemberMarkers();
+
     // 初期状態で開くファイルパスを取得
     final String fullURL = Uri.decodeFull(Uri.base.toString());
     final int pi = fullURL.indexOf("?open=");
@@ -227,33 +230,13 @@ class _MapViewState extends State<MapView>
       }
     }while(!authenOk);
 
-    // iOS版 Safari の謎クラッシュ対策
-    // WebRenderer を CanvasKit 固定にするとクラッシュしないみたいなので、一旦無効化。
-    // index.html で window.flutterWebRenderer = "canvaskit"; により指定。
-/*
-    final bool iOS = 
-      (defaultTargetPlatform == TargetPlatform.iOS) ||
-      (defaultTargetPlatform == TargetPlatform.macOS);
-*/
-    final bool iOS = false;
-    if(iOS){
-      // MapView を半分の幅で作成、表示して、しばらくしてから全画面にする
-      // 原因不明で、超対処療法。この対処法も偶然見つけたダケ。
-      await new Future.delayed(new Duration(seconds: 1));
-      // 再描画
-      setState((){ _initializingApp = false; });
-
-      await new Future.delayed(new Duration(seconds: 2));
-      setState((){ _mapViewWidthRate = 1; });
-    }else{
-      // 他のプラットフォームでは即座に表示開始
-      await new Future.delayed(new Duration(seconds: 1));
-      // 再描画
-      setState((){
-        _initializingApp = false;
-        _mapViewWidthRate = 1;
-      });
-    }
+    // 一瞬待って表示開始
+    await Future.delayed(new Duration(milliseconds: 500));
+    setState((){
+      // 初期化完了フラグをセット
+      _initializingApp = false;
+      _mapViewWidthRate = 1;
+    });
   }
 
   //----------------------------------------------------------------------------
