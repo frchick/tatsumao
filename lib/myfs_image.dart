@@ -1,16 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:http/http.dart' as http;
-import 'package:mutex/mutex.dart';
+import 'firebase_options.dart';
 
 //-----------------------------------------------------------------------------
 //-----------------------------------------------------------------------------
 // 作成済みの Image Widget のキャッシュ
 Map<String, Widget> _imageCache = {};
-
-// Google Cloud Storage for firebase のバケットURL
-String _bucketURL = "";
-final _mutex = Mutex();
 
 
 //-----------------------------------------------------------------------------
@@ -50,29 +45,14 @@ class _MyFSImageState extends State<MyFSImage>
       return;
     }
   
-    await _mutex.acquire();
     try {
       // Firebase Storage のURIスキーム(gs://)からURLを取得し、HTTPリクエストで画像を取得
       // NOTE: ブラウザにキャッシュするために、
       // - Firebase Storate にCORSを設定する必要がある。
       // - Firebase Storage のURLはキャッシュされない。Google Cloud Storage の一般公開URLで参照する。
-
       // Google Cloud Storage の一般公開URLに変換。
-      // 最初の一回だけ、バケットURLを取得するために、Firebase Storage を使う。
-      // NOTE: 一般公開URLをハードコートすよりマシ。
-      // NOTE: 並列して複数の画像が走るので、Mutexで最初の一つだけがバケットURLを取得する。
-      if(_bucketURL.isEmpty)
-      {
-        final ref = FirebaseStorage.instance.ref().child(gsPath);
-        final url = await ref.getDownloadURL();
-        int i0 = url.indexOf("/b/");
-        int i1 = url.indexOf("/o/");
-        _bucketURL = url.substring(i0 + 3, i1);
-        print("MyFSImage : _bucketURL = $_bucketURL");
-      }
-      _mutex.release();
-
-      final publicURL = "https://storage.googleapis.com/" + _bucketURL + "/" + gsPath;
+      final fb = DefaultFirebaseOptions.currentPlatform;
+      final publicURL = "https://storage.googleapis.com/" + fb.storageBucket! + "/" + gsPath;
       final response = await http.get(Uri.parse(publicURL));
 
       // HTTPレスポンスを得られたら画像を作成
@@ -98,7 +78,6 @@ class _MyFSImageState extends State<MyFSImage>
         print("MyFSImage : Excepthon : $e");
       });
     }
-    if(_mutex.isLocked) _mutex.release();
   }
 
   @override

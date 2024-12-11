@@ -48,7 +48,6 @@ dependencies:
     sdk: flutter
   intl: ^0.18.1
   crypto: ^3.0.1
-  mutex: ^3.1.0
 
 dev_dependencies:
   flutter_test:
