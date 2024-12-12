@@ -55,9 +55,11 @@ bool isShowMemberMarker()
 // メンバーデータ
 class Member {
   Member({
+    required this.index,
     required this.name,
     required this.iconFile,
     required this.pos,
+    required this.orderSortValue,
     this.attended = false,
     this.withdrawals = false,
   });
@@ -77,6 +79,10 @@ class Member {
   Widget? icon0;
   // ドラッグマーカーのアイコンのキー
   final Key iconKey = GlobalKey();
+  // メンバー一覧リスト上のインデックス
+  final int index;
+  // 表示順ソート用の比較値
+  final int orderSortValue;
 }
 
 //---------------------------------------------------------------------------
@@ -103,14 +109,17 @@ Future loadMembersListFromDB() async
   members.clear();
   if (snapshot.exists) {
     final data = snapshot.value as List<dynamic>;
-    data.forEach((m){
-      bool withdrawals = m.containsKey("withdrawals") ? m["withdrawals"] as bool : false;
+    for(int i = 0; i < data.length; i++){
+      final m = data[i];
+      final withdrawals = m.containsKey("withdrawals") ? m["withdrawals"] as bool : false;
       members.add(Member(
+        index: i,
         name: m["name"] as String,
         iconFile: m["icon"] as String,
         pos: _defaultPos,
-        withdrawals: withdrawals));
-    });
+        withdrawals: withdrawals,
+        orderSortValue: m["order"] as int));
+    }
   }
 }
 

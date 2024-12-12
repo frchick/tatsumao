@@ -164,13 +164,11 @@ class HomeIconWidget extends StatelessWidget
                 alignment: const Alignment(0.0, -0.8),
                 child: GestureDetector(
                   child: MyDraggable<int>(
-                    data: index,
+                    data: member.index,
+                    sortValue: member.orderSortValue,
                     child: member.icon0!,
                     feedback: member.icon0!,
-                    childWhenDragging: Container(
-                      width: 64,
-                      height: 72,
-                    ),
+                    childWhenDragging: const SizedBox(width: 64, height: 72),
                     onDragEnd: onDragEndFunc,
                     // 編集がロックされいたらドラッグによる出動を抑止
                     maxSimultaneousDrags: (lockEditing? 0: null),
@@ -194,6 +192,13 @@ class HomeIconWidget extends StatelessWidget
               ));
             };
 
+            // 表示順ソート
+            draggableIcons.sort((a, b) {
+              final av = (((a as Align).child as GestureDetector).child as MyDraggable<int>).sortValue;
+              final bv = (((b as Align).child as GestureDetector).child as MyDraggable<int>).sortValue;
+              return av.compareTo(bv);
+            });
+      
             // 高さ120ドット、横スクロールのリストビュー
             final ScrollController controller = ScrollController();
             return Container(

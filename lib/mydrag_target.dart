@@ -210,6 +210,7 @@ class MyDraggable<T extends Object> extends StatefulWidget {
     this.ignoringFeedbackPointer = true,
     this.rootOverlay = false,
     this.hitTestBehavior = HitTestBehavior.deferToChild,
+    this.sortValue = 0,
   }) : assert(child != null),
        assert(feedback != null),
        assert(ignoringFeedbackSemantics != null),
@@ -218,6 +219,9 @@ class MyDraggable<T extends Object> extends StatefulWidget {
 
   /// The data that will be dropped by this draggable.
   final T? data;
+
+  /// ソート用の比較値
+  final int sortValue;
 
   /// The [Axis] to restrict this draggable's movement, if specified.
   ///
