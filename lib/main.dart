@@ -33,6 +33,8 @@ import 'distance_circle_layer.dart';
 import 'area_data.dart';
 import 'globals.dart';
 import 'area_filter_dialog.dart';
+import 'mylocation_marker.dart';
+import 'package:location/location.dart';
 
 //----------------------------------------------------------------------------
 // グローバル変数
@@ -141,6 +143,11 @@ class _MapViewState extends State<MapView>
   
   // 手書き図へのアクセスキー
   final _freehandDrawingOnMapKey = GlobalKey<FreehandDrawingOnMapState>();
+
+  // GPS位置情報へのアクセス
+  var _myLocMarker = MyLocationMarker();
+  // GPS位置情報が無効か？無効なら、スイッチをONにさせない。
+  bool _gpsLocationNotAvailable = false;
 
   //----------------------------------------------------------------------------
   // 初期化
@@ -306,7 +313,8 @@ class _MapViewState extends State<MapView>
     _lockEditingListener?.cancel();
     _lockEditingListener = null;
     miscMarkers.releaseSync();
-  
+    _myLocMarker.disable();
+
     super.dispose();
   }
 
@@ -693,6 +701,8 @@ class _MapViewState extends State<MapView>
                 ),
                 // 手書きの今引いている最中のライン
                 freehandDrawing.getCurrentStrokeLayerOptions(),
+                // GPSの現在位置
+                _myLocMarker.getLayerOptions(),
               ],
             ),
 
@@ -701,9 +711,48 @@ class _MapViewState extends State<MapView>
 
             // 手書き図
             FreehandDrawingOnMap(key:_freehandDrawingOnMapKey),
+
+            // GPSスイッチ
+            Align(
+              alignment: Alignment.bottomLeft,
+              child: Container(
+                margin: const EdgeInsets.fromLTRB(5, 0, 0, 15),
+                child: makeGpsLocationSW(context),
+              ),
+            ),
           ]
         ),
       ),
+    );
+  }
+
+  Widget makeGpsLocationSW(BuildContext context)
+  {
+    return OnOffIconButton2(
+      size: 55,
+      icon: Icon(Icons.gps_fixed, size:45, color:Colors.orange.shade900),
+      backgroundColor: Colors.white.withOpacity(0.70),
+      offIcon: Icon(Icons.gps_off, size:45, color:Colors.grey.shade700),
+      offBackgroundColor: Colors.grey.withOpacity(0.70),
+      isOn: _myLocMarker.enabled,
+      onChange: (bool onoff, OnOffIconButton2State state) {
+        // GPS位置情報が無効なら、以降スイッチをONにさせない。
+        if(_gpsLocationNotAvailable){
+          return false;
+        }
+        if(onoff){
+          _myLocMarker.enable(context).then((res){
+            // GPSの初期化に失敗したら、スイッチをONにさせない。
+            if(!res){
+              state.changeState(false);
+              _gpsLocationNotAvailable = true;
+            }
+          });
+        }else{
+          _myLocMarker.disable();
+        }
+        return onoff;
+      },
     );
   }
 }
