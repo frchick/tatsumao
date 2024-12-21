@@ -181,14 +181,13 @@ class _MapViewState extends State<MapView>
     createMemberMarkers();
 
     // 初期状態で開くファイルパスを取得
-    final String fullURL = Uri.decodeFull(Uri.base.toString());
-    final int pi = fullURL.indexOf("?open=");
-    late String openPath;
-    if(0 < pi) openPath = fullURL.substring(pi + 6);
-    else openPath = "/1";
-    openPath = openPath.replaceAll("~", "/");
-  
-    print(">initStateSub() fullURL=${fullURL} openPath=${openPath}");
+    String openPath = "/1";
+    final queryParams = Uri.base.queryParameters;
+    if(queryParams.containsKey("open")){
+      openPath = queryParams["open"]!;
+      openPath = openPath.replaceAll("~", "/");
+    }
+    print(">initStateSub() fullURL=${Uri.base.toString()} openPath=${openPath}");
 
     // ファイルツリーのデータベースを初期化
     await initFileTree();

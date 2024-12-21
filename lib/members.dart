@@ -309,7 +309,7 @@ void copyAssignToClipboard(BuildContext context)
   // 起動リンク
   String fullPath = getOpenedFileUIDPath();
   fullPath = fullPath.replaceAll("/", "~");
-  String fullURL = "https://tatsumao-976e2.web.app/#/?open=" + fullPath;
+  String fullURL = "https://tatsumao-976e2.web.app/?open=" + fullPath;
   fullURL = Uri.encodeFull(fullURL);
   final String textWithLink = text + fullURL;
 
