@@ -1,4 +1,5 @@
 import 'dart:async';   // Stream使った再描画
+import 'dart:html';
 import 'package:flutter/material.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -29,7 +30,13 @@ class MyLocationMarker
   LocationData get location => _myLocation;
   // 地図上に表示するマーカー
   List<Marker> _markers = [];
-  
+  // 地図上に表示するライン
+  List<Polyline> _polylines = [];
+  // 地図へのアクセス
+  final MapController _mapController;
+
+  MyLocationMarker(this._mapController);
+
   // Flutter_map のレイヤーオプションを返す
   MarkerLayerOptions getLayerOptions()
   {
@@ -37,6 +44,15 @@ class MyLocationMarker
       markers: _markers,
       rebuild: _updateMyLocationStream.stream,  // 再描画のトリガー
       usePxCache: false,  // NOTE: 無効にしないと、rebuild で再描画されない
+    );
+  }
+
+  // Flutter_map のレイヤーオプションを返す
+  PolylineLayerOptions getLineLayerOptions()
+  {
+    return PolylineLayerOptions(
+      polylines: _polylines,
+      rebuild: _updateMyLocationStream.stream,  // 再描画のトリガー
     );
   }
 
@@ -107,8 +123,9 @@ class MyLocationMarker
     _locationSubscription?.cancel();
     _locationSubscription = null;
 
-    // マーカーを非表示に
+    // マーカーとラインを非表示に
     _markers.clear();
+    _polylines.clear();
     _updateMyLocationStream.sink.add(null);
   }
 
@@ -135,8 +152,51 @@ class MyLocationMarker
       }else{
         _markers[0] = marker;
       }
+
+      // マーカーが画面外なら、地図の中心からのラインをひく
+      updateLine(_mapController.center);
+    
       // 再描画
       _updateMyLocationStream.sink.add(null);
+    }
+  }
+
+  // 地図の表示位置の変更
+  void moveMap(MapController mapController, MapPosition position)
+  {
+    // ラインの始点を画面中央に固定
+    updateLine(position.center!);
+    // 再描画
+    _updateMyLocationStream.sink.add(null);
+  }
+
+  // ライン表示の更新
+  void updateLine(LatLng center)
+  {
+    if(!_enable) return;
+
+    // GPS位置マーカーが画面外なら、ラインを消す
+    final myPos = LatLng(_myLocation.latitude!, _myLocation.longitude!);
+    final bounds = _mapController.bounds;
+    final showLine = (bounds != null)? !bounds.contains(myPos) : true;
+    if(showLine){
+      // 画面中央とGPS位置マーカーを結ぶラインを引く
+      var line = Polyline(
+        points: [
+          center,
+          myPos,
+        ],
+        strokeWidth: 4,
+        isDotted: true,
+        color: Colors.red,
+      );
+      if(_polylines.isEmpty){
+        _polylines.add(line);
+      }else{
+        _polylines[0] = line;
+      }
+    }else{
+      _polylines.clear();
     }
   }
 }

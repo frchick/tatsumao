@@ -145,7 +145,7 @@ class _MapViewState extends State<MapView>
   final _freehandDrawingOnMapKey = GlobalKey<FreehandDrawingOnMapState>();
 
   // GPS位置情報へのアクセス
-  var _myLocMarker = MyLocationMarker();
+  late MyLocationMarker _myLocMarker;
   // GPS位置情報が無効か？無効なら、スイッチをONにさせない。
   bool _gpsLocationNotAvailable = false;
 
@@ -600,6 +600,8 @@ class _MapViewState extends State<MapView>
     if(mainMapController == null){
       mainMapController = MapController();
       freehandDrawing.setMapController(mainMapController!);
+      // GPS位置情報へのアクセスを初期化
+      _myLocMarker = MyLocationMarker(mainMapController!);
     }
     // 距離サークルを作成
     if(distanceCircle == null){
@@ -654,6 +656,10 @@ class _MapViewState extends State<MapView>
                 zoom: 16,
                 maxZoom: 18,
                 onTap: (TapPosition tapPos, LatLng point) => tapOnMap(context, tapPos),
+                // 表示位置の変更に合わせた処理
+                onPositionChanged: (MapPosition position, bool hasGesture){
+                  _myLocMarker.moveMap(mainMapController!, position);
+                }                
               ),
               nonRotatedLayers: [
                 // 高さ陰影図
@@ -688,6 +694,8 @@ class _MapViewState extends State<MapView>
                   // NOTE: usePxCache=trueだと、非表示グレーマーカーで並び順が変わったときにバグる
                   usePxCache: false,
                 ),
+                // GPS現在位置のライン描画
+                _myLocMarker.getLineLayerOptions(),
                 // メンバーマーカー
                 mainMapDragMarkerPluginOptions,
                 // その他のマーカー
