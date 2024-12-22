@@ -2,6 +2,7 @@ import 'dart:async';   // Stream使った再描画
 import 'dart:typed_data'; // Uint8List
 import 'dart:convert';  // Base64
 import 'dart:ui';  // lerp
+import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:latlong2/latlong.dart';
@@ -908,15 +909,26 @@ class _Route
 
   //----------------------------------------------------------------------------
   // 指定された時間の座標を計算
+  // NOTE: time はトリム範囲内であることを前提とする
   LatLng calcPositionAtTime(DateTime time)
   {
     final int t = time.millisecondsSinceEpoch;
 
+    // トリム範囲がデータの範囲外の場合は、先頭か終端の座標を返す
+    if(_trimStartIndex == _trimEndIndex){
+      if(_trimStartIndex == 0){
+        return _points.first.pos;
+      }else{
+        return _points.last.pos;
+      } 
+    }
+
     // データの範囲外なら、先頭か終端の座標を返す
     var firstPointMs = _points[_trimStartIndex].time.millisecondsSinceEpoch;
-    var lastPointMs = _points[_trimEndIndex-1].time.millisecondsSinceEpoch;
     if(t <= firstPointMs) return _points[_trimStartIndex].pos;
-    if(lastPointMs <= t) return _points[_trimEndIndex-1].pos;
+
+    var lastPointMs = _points[max(0, _trimEndIndex-1)].time.millisecondsSinceEpoch;
+    if(lastPointMs <= t) return _points[max(0, _trimEndIndex-1)].pos;
   
     // 直前と同じ区間か、その直後の可能性が高いので、そこを優先的にチェック
     int index = -1;
@@ -980,27 +992,39 @@ class _Route
     if(!cacheOk){
       _trimStartCache = trimStart;
       _trimEndCache = trimEnd;
-      if(isEqualBefore(trimStart, _points.first.time)){
+
+      if(isEqualBefore(trimEnd, _points.first.time)){
+        // トリム範囲がログの範囲より前なら、最初のポイントのみ
         _trimStartIndex = 0;
-      }else{
-        for(int i = 0; i < _points.length-1; i++){
-          final DateTime t0 = _points[i].time;
-          final DateTime t1 = _points[i+1].time;
-          if(isEqualBefore(t0, trimStart) && isBefore(trimStart, t1)){
-            _trimStartIndex = i;
-            break;
-          }
-        }
-      }
-      if(isEqualBefore(_points.last.time, trimEnd)){
+        _trimEndIndex = 0;
+      }else if(isEqualBefore(_points.last.time, trimStart)){
+        // トリム範囲がログの範囲より後ろなら、最後のポイントのみ
+        _trimStartIndex = _points.length;
         _trimEndIndex = _points.length;
       }else{
-        for(int i = _points.length-1; 0 < i; i--){
-          final DateTime t0 = _points[i-1].time;
-          final DateTime t1 = _points[i].time;
-          if(isBefore(t0, trimEnd) && isEqualBefore(trimEnd, t1)){
-            _trimEndIndex = i + 1;
-            break;
+        // トリム範囲に含まれるポイントの範囲を探す
+        if(isEqualBefore(trimStart, _points.first.time)){
+          _trimStartIndex = 0;
+        }else{
+          for(int i = 0; i < _points.length-1; i++){
+            final DateTime t0 = _points[i].time;
+            final DateTime t1 = _points[i+1].time;
+            if(isEqualBefore(t0, trimStart) && isBefore(trimStart, t1)){
+              _trimStartIndex = i;
+              break;
+            }
+          }
+        }
+        if(isEqualBefore(_points.last.time, trimEnd)){
+          _trimEndIndex = _points.length;
+        }else{
+          for(int i = _points.length-1; 0 < i; i--){
+            final DateTime t0 = _points[i-1].time;
+            final DateTime t1 = _points[i].time;
+            if(isBefore(t0, trimEnd) && isEqualBefore(trimEnd, t1)){
+              _trimEndIndex = i + 1;
+              break;
+            }
           }
         }
       }
