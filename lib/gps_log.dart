@@ -485,7 +485,7 @@ class GPSLog
   Future<bool> uploadToCloudStorage(String path) async
   {
     //!!!!
-    print(">uploadToCloudStorage(${path})");
+    print(">uploadToCloudStorage($path)");
 
     // ストレージ上のファイルパスを参照
     final gpxRef = _getRef(path);
@@ -499,9 +499,8 @@ class GPSLog
         metadata: SettableMetadata(contentType: "application/xml"));
       FullMetadata meta = await gpxRef.getMetadata();
       _thisUpdateTime = meta.updated;
-    } on FirebaseException catch (e) {
-      res = false;
-    } on Exception catch (e) {
+    } catch (e) {
+      print(">uploadToCloudStorage($path) GPS Log couldn't be uploaded.");
       res = false;
     }
 
@@ -511,7 +510,7 @@ class GPSLog
     }
   
     //!!!!
-    print("uploadToCloudStorage() res=${res}");
+    print("uploadToCloudStorage($path) res=$res");
 
     return res;
   }
@@ -526,7 +525,7 @@ class GPSLog
     final gpxRef = _getRef(path);
 
     // GPXから読み込み
-    bool res = true;
+    bool res = false;
     try {
       final Uint8List? data = await gpxRef.getData();
       res = (data != null);
@@ -543,9 +542,8 @@ class GPSLog
         FullMetadata meta = await gpxRef.getMetadata();
         _thisUpdateTime = meta.updated;
       }
-    } on FirebaseException catch (e) {
-      res = false;
-    } on Exception catch (e) {
+    } catch (e) {
+      print(">downloadFromCloudStorage(${path}) GPS Log couldn't be downloaded.");
       res = false;
     }
 
@@ -613,6 +611,18 @@ class GPSLog
     return fileList;
   }
 
+  // 配置データから、GPSログ関連のデータを削除
+  void deleteFromAssignData(String thisUIDPath)
+  {
+    print(">deleteFromAssignData(${thisUIDPath})");
+
+    final String dbPath = "assign" + thisUIDPath + "/gps_log";
+    final DatabaseReference ref = FirebaseDatabase.instance.ref(dbPath);
+    // キーを削除
+    // NOTE: キーがなくても例外、エラーは発生しない。
+    ref.remove();
+  }
+
   //----------------------------------------------------------------------------
   // 読み込んでいるログのクラウド上のパスを取得(ユニークID)
   String? getOpenedPath()
@@ -662,16 +672,6 @@ class GPSLog
     print(">getReferencePath(${thisUIDPath}) -> ${refUIDPath}");
 
     return refUIDPath;
-  }
-
-  // 他のデータへの参照を削除
-  void removeReferencePath(String thisUIDPath)
-  {
-    print(">removeReferencePath(${thisUIDPath})");
-
-    final String dbPath = "assign" + thisUIDPath + "/gps_log";
-    final DatabaseReference ref = FirebaseDatabase.instance.ref(dbPath);
-    ref.remove();
   }
 
   //----------------------------------------------------------------------------
@@ -1661,14 +1661,16 @@ class _DogIDDialogState extends State<_DogIDDialog>
         setState((){});
 
         // クラウドストレージにアップロード
+        final filePath = getOpenedFileUIDPath();
         if(!gpsLog.isEmpty){
-          final filePath = getOpenedFileUIDPath();
           final String gpsLogPath = await gpsLog.getReferencePath(filePath);
           gpsLog.uploadToCloudStorage(gpsLogPath);
         }
         // クラウドストレージからログが削除されたら、GPSログの有無フラグを更新
+        // 同時に、配置データからGPSログ関連のデータを削除
         if(gpsLog.isEmpty){
           setOpenedFileGPSLogFlag(false);
+          gpsLog.deleteFromAssignData(filePath);
         }
       }
     });
