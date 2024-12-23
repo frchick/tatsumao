@@ -119,6 +119,7 @@ class GPSLog
   String? _openedUIDPath;
   // 他のデータへの参照か？
   bool _isReferenceLink = false;
+  bool get isReferenceLink => _isReferenceLink;
 
   //----------------------------------------------------------------------------
   // ログの登録のあるデバイスID一覧を取得
@@ -632,13 +633,6 @@ class GPSLog
   }
 
   //----------------------------------------------------------------------------
-  // 他のデータへの参照かを取得
-  bool isReferenceLink()
-  {
-    return _isReferenceLink;
-  }
-
-  //----------------------------------------------------------------------------
   // 他のデータを参照
   void saveReferencePath(String thisUIDPath, String refUIDPath)
   {
@@ -1129,17 +1123,23 @@ void showGPSLogPopupMenu(BuildContext context)
     elevation: 8.0,
     items: [
       makePopupMenuItem(
-        0, "ログ読み込み", Icons.file_open, enabled:!lockEditing),
-      makePopupMenuItem(
+        0, "ログ読み込み", Icons.file_open, 
+        enabled:(!lockEditing && !gpsLog.isReferenceLink)),
+
+      if(!gpsLog.isReferenceLink) makePopupMenuItem(
         1, "ログ参照", Icons.link, enabled:!lockEditing),
+      if(gpsLog.isReferenceLink) makePopupMenuItem(
+        2, "ログ参照の解除", Icons.link_off, enabled:!lockEditing),
+
       makePopupMenuItem(
-        2, "ログトリミング", Icons.content_cut, enabled:!lockEditing),
+        3, "ログトリミング", Icons.content_cut, enabled:!lockEditing),
       makePopupMenuItem(
-        3, "アニメーション", Icons.play_circle),
+        4, "アニメーション", Icons.play_circle),
       makePopupMenuItem(
-        4, "ログ/子機編集", Icons.pets, enabled:!lockEditing),
+        5, "ログ/子機編集", Icons.pets,
+        enabled:(!lockEditing && !gpsLog.isReferenceLink)),
       makePopupMenuItem(
-        5, "キルマーカー", Icons.pin_drop, enabled:!lockEditing),
+        6, "キルマーカー", Icons.pin_drop, enabled:!lockEditing),
     ],
   ).then((value) async {
     switch(value ?? -1){
@@ -1150,22 +1150,29 @@ void showGPSLogPopupMenu(BuildContext context)
     case 1: // ログ参照
       linkGPSLogFunc(context);
       break;
+    case 2: // ログ参照の解除
+      gpsLog.stopAnim();
+      final filePath = getOpenedFileUIDPath();
+      gpsLog.deleteFromAssignData(filePath);
+      gpsLog.clear();
+      gpsLog.redraw();
+      break;
 
-    case 2: // トリミング
+    case 3: // トリミング
       // アニメーション停止
       gpsLog.stopAnim();
       showTrimmingBottomSheet(context);
       break;
     
-    case 3: // アニメーション
+    case 4: // アニメーション
       showAnimationBottomSheet(context);
       break;
     
-    case 4: // 編集
+    case 5: // 編集
       _showDogIDDialog(context);
       break;
 
-    case 5: // キルマーカー
+    case 6: // キルマーカー
       addKillMarkerFunc(context);
       break;
     }
@@ -1330,7 +1337,7 @@ void showTrimmingBottomSheet(BuildContext context)
 
           // 他のフィルを参照していれば、参照先のファイル名を表示
           Widget? refFileName;
-          if(gpsLog.isReferenceLink()){
+          if(gpsLog.isReferenceLink){
             String uidPath = gpsLog.getOpenedPath() ?? "";
             final int t = uidPath.lastIndexOf("/");
             if(0 <= t){
