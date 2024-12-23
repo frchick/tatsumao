@@ -203,6 +203,8 @@ class _MapViewState extends State<MapView>
 
     // 初期状態のファイルを読み込み
     await openFile(openPath);
+    // 編集ロックに設定
+    lockEditing = true;
 
     // GPSログを読み込み(遅延処理)
     final String gpsLogPath = await gpsLog.getReferencePath(openPath);
@@ -284,9 +286,6 @@ class _MapViewState extends State<MapView>
     await loadAreaFilterFromDB(fileUIDPath);
     updateTatsumaMarkers();
 
-    // 編集ロックフラグを取得
-    await loadLockEditingFromDB(fileUIDPath, onLockChange:onLockChangeByOther);
-  
     // GPSログをクリア、デバイスIDと犬の対応を取得
     await gpsLog.loadDeviceID2DogFromDB(fileUIDPath);
 
@@ -295,7 +294,6 @@ class _MapViewState extends State<MapView>
   
     // 手書き図を読み込み
     freehandDrawing.open(fileUIDPath);
-    _freehandDrawingOnMapKey.currentState?.setEditLock(lockEditing);
   }
 
   //----------------------------------------------------------------------------
@@ -309,8 +307,6 @@ class _MapViewState extends State<MapView>
     // NOTE: でも期待通り動いているかは怪しい・・・
     releaseMemberSync();
     releaseTatsumasSync();
-    _lockEditingListener?.cancel();
-    _lockEditingListener = null;
     miscMarkers.releaseSync();
     _myLocMarker.disable();
 
@@ -324,24 +320,16 @@ class _MapViewState extends State<MapView>
   // コールバック内で自分自身のメソッドを呼び出すために、インスタンスをアクセス可能に定義する
   late OnOffIconButton _lockEditingButton;
 
-  // 編集ロックを他のユーザーが変更したときの通知ハンドラ
-  void onLockChangeByOther(bool lock)
-  {
-    // ロック変更時の共通処理
-    onLockChangeSub(lock);
-    // ポップアップメッセージ
-    showTextBallonMessage("他のユーザーが" + (lock? "ロック": "ロック解除"));
-  }
-
   void onLockChangeSub(bool lock)
   {
     // ボタン押し込みによるON/OFF切り替えを取り込む
     lockEditing = lock;
-    // ON/OFFボタンを再描画
-    _lockEditingButton?.changeState(lock);
+    // ON/OFFボタンを再描画(ロック(編集不可)でOFF、ロック解除(編集可)でON)
+    _lockEditingButton?.changeState(!lock);
     // マップ上のマーカーのドラッグ許可/禁止を更新
     mainMapDragMarkerPluginOptions.draggable = !lockEditing;
     miscMarkers.getMapLayerOptions().draggable = !lockEditing;
+    // これを呼ばないと、変更後にちょっとだけマーカーを動かせてしまう？
     updateMapView();
     // 手書き図に編集ロック変更を通知
     _freehandDrawingOnMapKey.currentState?.setEditLock(lockEditing);
@@ -414,11 +402,12 @@ class _MapViewState extends State<MapView>
   
     // AppBar-Action領域の、編集ロックボタン
     _lockEditingButton = OnOffIconButton(
-      icon: const Icon(Icons.lock),
-      iconOff: const Icon(Icons.lock_open),
-      onSwitch: lockEditing,
-      onChange: (lock) {
-        lockEditingFunc(context, lock);
+      icon: const Icon(Icons.edit_square),
+      iconOff: const Icon(Icons.edit_square),
+      onSwitch: !lockEditing,
+      onChange: (onoff) {
+        // スイッチがONでロック解除(編集可)、OFFでロック(編集不可)
+        lockEditingFunc(context, !onoff);
       },
     );
 
@@ -499,6 +488,8 @@ class _MapViewState extends State<MapView>
         onSelectFile: (uidPath) async {
           // ファイルを読み込み
           await openFile(uidPath);
+          // 編集ロックに設定
+          onLockChangeSub(true);
           // 再描画
           setState((){});
           // ファイル名をバルーン表示
@@ -565,27 +556,26 @@ class _MapViewState extends State<MapView>
   // 編集ロックボタンのタップ
   void lockEditingFunc(BuildContext context, bool lock) async
   {
-    // ロック操作にはパスワードが必要
-    bool authenOk = await askAndCheckPassword(context,
-      "編集ロックパスワード", lockEditingPasswordHash, lockEditingPasswordKey);
-    // ハズレ
-    if(!authenOk){
-      showTextBallonMessage("ハズレ...");
-      return;
-    }
-
-    // ロックを解除するときには確認を促す
+    // ロック解除(編集可)にはパスワードが必要
     bool ok = true;
     if(lock == false){
+      bool authenOk = await askAndCheckPassword(context,
+        "編集ロックパスワード", lockEditingPasswordHash, lockEditingPasswordKey);
+      // ハズレ
+      if(!authenOk){
+        showTextBallonMessage("ハズレ...");
+        return;
+      }
+
+      // ロックを解除するときには確認を促す
       ok = await showOkCancelDialog(context,
         title: "編集ロックの解除",
         text: "注意：記録として保存してあるデータは変更しないで下さい。") ?? false;
     }
+  
     if(ok){
       // ロック変更時の共通処理
       onLockChangeSub(lock);
-      // データベース経由で他のユーザーに同期
-      saveLockEditingToDB(getOpenedFileUIDPath());
     }
   }
 
@@ -797,51 +787,4 @@ void tapOnMap(BuildContext context, TapPosition tapPos)
       }
     });
   }        
-}
-
-//---------------------------------------------------------------------------
-// 編集ロックの設定をデータベースへ保存
-void saveLockEditingToDB(String uidPath)
-{
-  final String dbPath = "assign" + uidPath + "/lockEditing";
-  final DatabaseReference ref = database.ref(dbPath);
-  ref.set(lockEditing);
-}
-
-//---------------------------------------------------------------------------
-// 現在のデータベース変更通知のリスナー
-StreamSubscription<DatabaseEvent>? _lockEditingListener;
-
-//---------------------------------------------------------------------------
-// 編集ロックの設定をデータベースから読み込み
-Future loadLockEditingFromDB(String uidPath, { Function(bool)? onLockChange }) async
-{
-  final String dbPath = "assign" + uidPath + "/lockEditing";
-  final DatabaseReference ref = database.ref(dbPath);
-  final DataSnapshot snapshot = await ref.get();
-  if(snapshot.exists){
-    try {
-      lockEditing = snapshot.value as bool;
-    } catch(e) {}
-  }else{
-    // データベースに未登録なら初期値で作成する
-    lockEditing = false;
-    ref.set(lockEditing);
-  }
-
-  // 他のユーザーによるロック変更を受け取るリスナーを設定
-  // 直前のリスナーは停止しておく
-  _lockEditingListener?.cancel();
-  _lockEditingListener = ref.onValue.listen((DatabaseEvent event){
-    bool lock = lockEditing;
-    try {
-      lock = event.snapshot.value as bool;
-    }
-    catch(e){}
-
-    // 変更があった場合のみコールバックを呼び出す
-    if(lockEditing != lock){
-      onLockChange?.call(lock);
-    }
-  });
 }

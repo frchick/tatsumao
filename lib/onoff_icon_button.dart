@@ -17,12 +17,12 @@ class OnOffIconButton extends StatelessWidget
   });
 
   // アイコン
-  Icon icon;
-  Icon? iconOff;
+  final Icon icon;
+  final Icon? iconOff;
   // ON/OFF
   bool onSwitch;
   // ON/OFF切り替え処理
-  Function(bool)? onChange;
+  final Function(bool)? onChange;
 
   // 外部からのON/OFF変更イベント
   var _stream = StreamController<bool>();

@@ -1138,7 +1138,7 @@ class _SubMenuWidgetState
   }
 
   // 編集ロックか
-  bool _lockEditing = false;
+  bool _lockEditing = true;
   bool ?_delayLockEditing;
   void setEditLock(bool lock)
   {
