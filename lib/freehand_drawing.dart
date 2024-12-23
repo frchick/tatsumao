@@ -915,7 +915,7 @@ class FreehandDrawingOnMapState extends State<FreehandDrawingOnMap>
         ),
         // 手書き図の有効/無効切り替えアイコン
         _makeOffset(TextButton(
-          child: const Icon(Icons.border_color, size: 50),
+          child: const Icon(Icons.draw, size: 50),
           style: TextButton.styleFrom(
             foregroundColor: Colors.orange.shade900,
             backgroundColor: _dawingActive? Colors.white: Colors.transparent,

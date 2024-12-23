@@ -737,9 +737,9 @@ class _MapViewState extends State<MapView>
   {
     return OnOffIconButton2(
       size: 55,
-      icon: Icon(Icons.gps_fixed, size:45, color:Colors.orange.shade900),
+      icon: Icon(Icons.gps_fixed, size:40, color:Colors.orange.shade900),
       backgroundColor: Colors.white.withOpacity(0.70),
-      offIcon: Icon(Icons.gps_off, size:45, color:Colors.grey.shade700),
+      offIcon: Icon(Icons.gps_off, size:40, color:Colors.grey.shade700),
       offBackgroundColor: Colors.grey.withOpacity(0.70),
       isOn: _myLocMarker.enabled,
       onChange: (bool onoff, OnOffIconButton2State state) {
