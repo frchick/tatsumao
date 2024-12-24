@@ -1,0 +1,20 @@
+diff --git a/build/web/flutter_service_worker.js b/build/web/flutter_service_worker.js
+index df198fb..a4398c7 100644
+--- a/build/web/flutter_service_worker.js
++++ b/build/web/flutter_service_worker.js
+@@ -136,9 +136,12 @@ self.addEventListener("fetch", (event) => {
+   if (event.request.url == origin || event.request.url.startsWith(origin + '/#') || key == '') {
+     key = '/';
+   }
+-  // If the URL is not the RESOURCE list then return to signal that the
+-  // browser should take over.
+-  if (!RESOURCES[key]) {
++  // If the URL is contained in a resource or from a map tile or Cloud Strage,
++  // it is cacheable. (Original implementation of TatsumaO app)
++  var resourcceFile = (RESOURCES[key] != null);
++  var mapTile = event.request.url.startsWith("https://cyberjapandata.gsi.go.jp/xyz/");
++  var cloudAssets = event.request.url.startsWith("https://storage.googleapis.com/tatsumao-976e2.appspot.com/assets/");
++  if (!resourcceFile && !mapTile && !cloudAssets) {
+     return;
+   }
+   // If the URL is the index.html, perform an online-first request.

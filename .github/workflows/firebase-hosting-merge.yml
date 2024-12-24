@@ -17,7 +17,8 @@ jobs:
           channel: 'stable'
       - run: flutter pub get
 
-      - run: flutter build web --web-renderer canvaskit
+      - run: flutter build web --release --web-renderer canvaskit
+      - run: git apply flutter_service_worker.patch
       - uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: '${{ secrets.GITHUB_TOKEN }}'
