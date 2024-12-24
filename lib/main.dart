@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_map/plugin_api.dart';
-import 'package:flutter/foundation.dart'; // defaultTargetPlatform
 import 'mypolyline_layer.dart'; // マップ上のカスタムポリライン
 import 'package:latlong2/latlong.dart';
 import 'package:positioned_tap_detector_2/positioned_tap_detector_2.dart'; // マップのタップ
@@ -11,7 +10,6 @@ import 'package:after_layout/after_layout.dart';  // 起動直後の build の�
 import 'package:flutter_localizations/flutter_localizations.dart';  // カレンダー日本語化
 
 import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_database/firebase_database.dart';
 import 'firebase_options.dart';
 import 'dart:async';
 import 'package:google_fonts/google_fonts.dart';  // フォント
@@ -34,7 +32,6 @@ import 'area_data.dart';
 import 'globals.dart';
 import 'area_filter_dialog.dart';
 import 'mylocation_marker.dart';
-import 'package:location/location.dart';
 
 //----------------------------------------------------------------------------
 // グローバル変数
@@ -54,10 +51,6 @@ bool _firstMapBuild = true;
 // iOS版 Safari の謎クラッシュ対策
 double _mapViewWidthRate = 0.5;
 
-//---------------------------------------------------------------------------
-//---------------------------------------------------------------------------
-// メンバーデータの同期(firebase realtime database)
-FirebaseDatabase database = FirebaseDatabase.instance;
 
 //----------------------------------------------------------------------------
 // メンバー達の位置へマップを移動する
