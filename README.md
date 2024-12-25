@@ -22,6 +22,17 @@ Tools • Dart 3.1.5 • DevTools 2.25.0
 
 > flutter run -d chrome
 
+## ローカルChromeでのリリースビルド実行
+
+> flutter build web --release --web-renderer canvaskit 
+> git apply flutter_service_worker.patch
+> cd build/web
+> python -m http.server 8080
+
+Chromeで開く.
+http://localhost:8080/
+
+
 ## ビルドゴミの定期的な削除
 
 "C:\Users\nag\AppData\Local\Temp"
@@ -57,3 +68,14 @@ Cloud Storage からアクセスすると、より多くの設定が可能。
     + https://cloud.google.com/storage/docs/metadata?hl=ja#cache-control
   + データを一般公開する(必須)
     + https://cloud.google.com/storage/docs/access-control/making-data-public?hl=ja#console
+
+
+## Service Worker をカスタマイズして、地図タイルと Cloud Storage をキャッシュ
+
+オリジナルのソース
+/test/flutter_service_worker.js
+
+※ローカルでリリースビルドして更新する。
+
+書き換えて、以下でパッチファイルを作成
+>git diff /test/flutter_service_worker.js > flutter_service_worker.patch

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:flutter_map/plugin_api.dart';
 import 'package:firebase_database/firebase_database.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/services.dart';   // for クリップボード
 
 import 'mydragmarker.dart';   // マップ上のメンバーマーカー
@@ -102,24 +103,20 @@ Future loadMembersListFromDB() async
   print(">loadMembersListFromDB()");
 
   // キーの存在をチェックして、あればメンバー一覧を読み込む
-  final DatabaseReference ref = FirebaseDatabase.instance.ref("members");
-  DatabaseEvent event = await ref.once();
-  DataSnapshot snapshot = event.snapshot;
+  final snapshot = await FirebaseFirestore.instance.collection("members").get();
+  final documentList = snapshot.docs;
 
   members.clear();
-  if (snapshot.exists) {
-    final data = snapshot.value as List<dynamic>;
-    for(int i = 0; i < data.length; i++){
-      final m = data[i];
-      final withdrawals = m.containsKey("withdrawals") ? m["withdrawals"] as bool : false;
-      members.add(Member(
-        index: i,
-        name: m["name"] as String,
-        iconFile: m["icon"] as String,
-        pos: _defaultPos,
-        withdrawals: withdrawals,
-        orderSortValue: m["order"] as int));
-    }
+  for(int i = 0; i < documentList.length; i++){
+    final m = documentList[i].data();
+    final withdrawals = m.containsKey("withdrawals") ? m["withdrawals"] as bool : false;
+    members.add(Member(
+      index: i,
+      name: m["name"] as String,
+      iconFile: m["icon"] as String,
+      pos: _defaultPos,
+      withdrawals: withdrawals,
+      orderSortValue: m["order"] as int));
   }
 }
 

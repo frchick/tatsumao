@@ -36,10 +36,10 @@ dependencies:
   flutter_map_dragmarker: 3.1.0
   latlong2: ^0.8.1
   cupertino_icons: ^1.0.2
-  firebase_core: ^2.20.0
-  firebase_database: ^10.3.2
-  firebase_storage: ^11.4.0
-  cloud_firestore_web: ^3.8.2
+  firebase_core: ^2.24.2
+  firebase_database: ^10.4.0
+  firebase_storage: ^11.6.0
+  cloud_firestore: ^4.14.0
   file_selector: ^0.8.2
   xml: ^6.1.0
   google_fonts: ^4.0.4
