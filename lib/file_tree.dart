@@ -229,6 +229,12 @@ String getOpenedFileName()
   return name;
 }
 
+// 現在開かれているファイルのUIDを取得
+int getOpenedFileUID()
+{
+  return _openedUIDPathStack.last;
+}
+
 // 開いたファイルへのUIDフルパスを設定
 bool setOpenedFileUIDPath(String uidPath)
 {

@@ -71,6 +71,7 @@ class HomeIconWidget extends StatelessWidget
 
     // データベースに変更を通知
     syncMemberState(index);
+    changeAttendeeSync();
   }
 
   //----------------------------------------------------------------------------

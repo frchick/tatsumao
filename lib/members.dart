@@ -164,6 +164,47 @@ Future initMemberSync(String uidPath) async
     });
     _membersListener.add(listener);
   }
+
+  //!!!! Firestore にコピーを作成
+  // 参加IDリストも作成
+  final dbDocId = uidPath.split("/").last;
+  final dataDocRef = FirebaseFirestore.instance.collection("assign").doc(dbDocId);
+  final attendeesRef = dataDocRef.collection("attendees");
+  String attendedIds = "";
+  String separator = "";
+  for(int index = 0; index < members.length; index++){
+    Member member = members[index];
+    if(member.attended){
+      final memberDocId = index.toString().padLeft(3, '0');
+      attendeesRef.doc(memberDocId).set({
+        "latitude": member.pos.latitude,
+        "longitude": member.pos.longitude,
+      });
+      attendedIds += "${separator}${memberDocId}";
+      separator = ",";
+    }
+  }
+  dataDocRef.set({"attendedIdList": attendedIds});
+}
+
+//---------------------------------------------------------------------------
+// 参加メンバーを変更したときの処理
+void changeAttendeeSync()
+{
+  // 参加IDリストを更新
+  final dbDocId = getOpenedFileUID().toString();
+  final dataDocRef = FirebaseFirestore.instance.collection("assign").doc(dbDocId);
+  String attendedIds = "";
+  String separator = "";
+  for(int index = 0; index < members.length; index++){
+    Member member = members[index];
+    if(member.attended){
+      final String id = index.toString().padLeft(3, '0');
+      attendedIds += "${separator}${id}";
+      separator = ",";
+    }
+  }
+  dataDocRef.set({"attendedIdList": attendedIds});
 }
 
 //---------------------------------------------------------------------------
@@ -265,6 +306,10 @@ bool goEveryoneHome()
       syncMemberState(i, goEveryoneHome:true);
       goHome = true;
     }
+  }
+  // データベースに変更を通知
+  if(goHome){
+    changeAttendeeSync();
   }
   return goHome;
 }
@@ -400,6 +445,7 @@ class MyDragMarker2 extends MyDragMarker
 
         // データベースに変更を通知
         syncMemberState(index);
+        changeAttendeeSync();
 
         // ポップアップメッセージ
         String msg = members[index].name + " は家に帰った";
