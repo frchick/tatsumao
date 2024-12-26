@@ -71,7 +71,6 @@ class HomeIconWidget extends StatelessWidget
 
     // データベースに変更を通知
     syncMemberState(index);
-    changeAttendeeSync();
   }
 
   //----------------------------------------------------------------------------
@@ -243,6 +242,7 @@ class HomeIconWidget extends StatelessWidget
         if(goEveryoneHome()){
           updateMapView();
           HomeIconWidget.update();
+          showTextBallonMessage("全員家に帰った");
         }
         break;
       }
