@@ -13,6 +13,7 @@ import 'package:intl/intl.dart';  // 日時の文字列化
 import 'package:firebase_storage/firebase_storage.dart';  // Cloud Storage
 import 'package:firebase_core/firebase_core.dart';  // Firebase RealtimeDatabase
 import 'package:firebase_database/firebase_database.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'file_tree.dart';
 import 'text_ballon_widget.dart';
@@ -339,6 +340,13 @@ class GPSLog
           int id = int.parse(idText);
           _deviceID2Dogs[id] = dogName as String;
         });
+
+        //!!!! Firestore にコピーを作成(過渡期の処理。最終的には Firestore のみにする)
+        {
+          final dbDocId = uidPath.split("/").last;
+          final ref = FirebaseFirestore.instance.collection("assign").doc(dbDocId);
+          ref.update({ "gps_log.deviceIDs": data });
+        }
       } catch(e) {}
       print(">loadDeviceID2DogFromDB(${uidPath}) ${_deviceID2Dogs}");
     }
@@ -363,6 +371,13 @@ class GPSLog
         data[k] = value;
       });
       ref.update(data);
+
+      //!!!! Firestore にコピーを作成(過渡期の処理。最終的には Firestore のみにする)
+      {
+        final dbDocId = uidPath.split("/").last;
+        final ref = FirebaseFirestore.instance.collection("assign").doc(dbDocId);
+        ref.update({ "gps_log.deviceIDs": data });
+      }
     } catch(e) {}
   
     print(">saveDeviceID2DogToDB(${uidPath}) ${data}");
@@ -623,6 +638,13 @@ class GPSLog
     // キーを削除
     // NOTE: キーがなくても例外、エラーは発生しない。
     ref.remove();
+  
+    //!!!! Firestore にコピーを作成(過渡期の処理。最終的には Firestore のみにする)
+    {
+      final dbDocId = thisUIDPath.split("/").last;
+      final ref = FirebaseFirestore.instance.collection("assign").doc(dbDocId);
+      ref.update({ "gps_log": {} });
+    }
   }
 
   //----------------------------------------------------------------------------
@@ -644,6 +666,13 @@ class GPSLog
       "referencePath" : refUIDPath,
     };
     ref.update(data);
+  
+    //!!!! Firestore にコピーを作成(過渡期の処理。最終的には Firestore のみにする)
+    {
+      final dbDocId = thisUIDPath.split("/").last;
+      final ref = FirebaseFirestore.instance.collection("assign").doc(dbDocId);
+      ref.update({ "gps_log.referencePath": refUIDPath });
+    }
   }
 
   // 読み込むべきデータのパスを取得
@@ -660,6 +689,13 @@ class GPSLog
       try {
         var data = snapshot.value as Map<String, dynamic>;
         refUIDPath = data["referencePath"];
+
+        //!!!! Firestore にコピーを作成(過渡期の処理。最終的には Firestore のみにする)
+        if(refUIDPath != null){
+          final dbDocId = thisUIDPath.split("/").last;
+          final ref = FirebaseFirestore.instance.collection("assign").doc(dbDocId);
+          ref.update({ "gps_log.referencePath": refUIDPath });
+        }
       } catch(e) {}
     }
     if(refUIDPath == null) refUIDPath = thisUIDPath;
@@ -683,6 +719,16 @@ class GPSLog
       "trimEndTime" : _trimEndTime.toIso8601String(),
     };
     ref.update(trimData);
+  
+    //!!!! Firestore にコピーを作成(過渡期の処理。最終的には Firestore のみにする)
+    {
+      final dbDocId = uidPath.split("/").last;
+      final ref = FirebaseFirestore.instance.collection("assign").doc(dbDocId);
+      ref.update({
+        "gps_log.trimStartTime": _trimStartTime.toIso8601String(),
+        "gps_log.trimEndTime": _trimEndTime.toIso8601String(),
+      });
+    }
   }
 
   Future<void> loadGPSLogTrimRangeFromDB(String uidPath) async
@@ -701,6 +747,16 @@ class GPSLog
         // 接続直後の初回読み込みで、読み込みと再描画が行われる。
         _updateTrimSyncEvent = ref.onValue.listen((DatabaseEvent event){
           _onUpdateTrimSync(event);
+
+          //!!!! Firestore にコピーを作成(過渡期の処理。最終的には Firestore のみにする)
+          {
+            final dbDocId = uidPath.split("/").last;
+            final ref = FirebaseFirestore.instance.collection("assign").doc(dbDocId);
+            ref.update({
+              "gps_log.trimStartTime": _trimStartTime.toIso8601String(),
+              "gps_log.trimEndTime": _trimEndTime.toIso8601String(),
+            });
+          }
         });
       } catch(e) {}
     }

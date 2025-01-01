@@ -1165,7 +1165,7 @@ void saveAreaFilterToDB(String uidPath)
   {
     final dbDocId = uidPath.split("/").last;
     final ref = FirebaseFirestore.instance.collection("assign").doc(dbDocId);
-    ref.set({ "areaFilter": data });
+    ref.update({ "areaFilter": data });
   }
 }
 
@@ -1183,10 +1183,15 @@ Future loadAreaFilterFromDB(String uidPath) async
       temp.forEach((t){ data.add(t as String); });
 
       //!!!! Firestore にコピーを作成(過渡期の処理。最終的には Firestore のみにする)
-      final dbDocId = uidPath.split("/").last;
-      final ref = FirebaseFirestore.instance.collection("assign").doc(dbDocId);
-      ref.set({ "areaFilter": data });
+      {
+        final dbDocId = uidPath.split("/").last;
+        final ref = FirebaseFirestore.instance.collection("assign").doc(dbDocId);
+        ref.update({ "areaFilter": data });
+      }
     } catch(e) {}
     stringsToAreaFilter(data);
+  }else{
+    // データがない場合は、とりあえず直前のフィルター状態でデータを作成
+    saveAreaFilterToDB(uidPath);
   }
 }
