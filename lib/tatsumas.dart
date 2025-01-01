@@ -7,6 +7,7 @@ import 'package:file_selector/file_selector.dart';  // ファイル選択
 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_database/firebase_database.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'firebase_options.dart';
 import 'dart:async';    // for StreamSubscription<>
 
@@ -1159,6 +1160,13 @@ void saveAreaFilterToDB(String uidPath)
   final DatabaseReference ref = database.ref(dbPath);
   List<String> data = areaFilterToStrings();
   ref.set(data);
+
+  //!!!! Firestore にコピーを作成(過渡期の処理。最終的には Firestore のみにする)
+  {
+    final dbDocId = uidPath.split("/").last;
+    final ref = FirebaseFirestore.instance.collection("assign").doc(dbDocId);
+    ref.set({ "areaFilter": data });
+  }
 }
 
 // エリア表示フィルターの設定をデータベースから読み込み
@@ -1173,6 +1181,11 @@ Future loadAreaFilterFromDB(String uidPath) async
       var temp = snapshot.value as List<dynamic>;
       List<String> stringList = [];
       temp.forEach((t){ data.add(t as String); });
+
+      //!!!! Firestore にコピーを作成(過渡期の処理。最終的には Firestore のみにする)
+      final dbDocId = uidPath.split("/").last;
+      final ref = FirebaseFirestore.instance.collection("assign").doc(dbDocId);
+      ref.set({ "areaFilter": data });
     } catch(e) {}
     stringsToAreaFilter(data);
   }
