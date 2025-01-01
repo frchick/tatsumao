@@ -54,6 +54,7 @@ class FileItem {
 
   // 子階層
   // ディレクトリの場合、このディレクトリ内のファイル/ディレクトリの一覧
+  // その場合、親ディレクトリを表す FilrItem が必ず作成されるので、null にはならない
   List<FileItem>? child;
 
   String get name => _name;
@@ -115,8 +116,9 @@ FileItem _fileRoot = FileItem(uid:_rootDirId, name:"");
 // _directoryStack.last.child がカレントディレクトリのファイル一覧
 List<FileItem> _directoryStack = [ _fileRoot ];
 
-// 現在開いているファイルまでのスタック
-List<int> _openedUIDPathStack = [ _rootDirId ];
+// 現在開いているファイルのID
+// 必ずなんらかのファイルを開いている設計
+int _currentFileUID = _defaultFileUID;
 
 // ユニークIDと名前の対応表
 Map<int, String> _uid2name = {
@@ -170,12 +172,12 @@ String getCurrentPath()
 
 // カレントディレクトへのUIDフルパスを取得
 // 先頭は"/"から始まり、最後のディレクトリ名の後ろは"/"で終わる。
-String getCurrentUIDPath()
+String getCurrentDirUIDPath()
 {
   // ルートディレクトリのユニークID'0'は含まない
   String path = "/";
   for(int d = 1; d < _directoryStack.length; d++){
-    path += _directoryStack[d].uid.toString() + "/";
+    path += "${_directoryStack[d].uid}/";
   }
   return path;
 }
@@ -195,11 +197,11 @@ String getOpenedFileUIDPath()
 {
   // ルートディレクトリのユニークID'0'は含まない
   String uidPath = "";
-  for(int d = 1; d < _openedUIDPathStack.length; d++){
-    final int uid = _openedUIDPathStack[d];
-    uidPath = uidPath + "/" + uid.toString();
+  for(int d = 1; d < _directoryStack.length; d++){
+    final int uid = _directoryStack[d].uid;
+    uidPath += "/$uid";
   }
-  if(uidPath == "") uidPath = "/";
+  uidPath += "/$_currentFileUID";
 
   return uidPath;
 }
@@ -222,14 +224,14 @@ String convertUIDPath2NamePath(String uidPath)
 // 現在開かれているファイル名を取得
 String getOpenedFileName()
 {
-  String name = _uid2name[_openedUIDPathStack.last] ?? "";
+  String name = _uid2name[_currentFileUID] ?? "";
   return name;
 }
 
 // 現在開かれているファイルのUIDを取得
 int getOpenedFileUID()
 {
-  return _openedUIDPathStack.last;
+  return _currentFileUID;
 }
 
 // 開いたファイルへのUIDフルパスを設定
@@ -246,11 +248,12 @@ bool setOpenedFileUIDPath(String uidPath)
 bool _setOpenedFileUIDPath(String uidPath)
 {
   // 指定されたパスががカレントディレクトリでなければエラー
+  // (カレントディレクトリ以外のファイルを開くことはできない)
   int i = uidPath.lastIndexOf("/");
   if(i < 0) return false;
   var uidDirPart = uidPath.substring(0, i+1);
   final int fileUID = int.parse(uidPath.substring(i+1));
-  if(getCurrentUIDPath() != uidDirPart) return false;
+  if(getCurrentDirUIDPath() != uidDirPart) return false;
 
   // 指定されたファイルがカレントディレクトリになければエラー
   List<FileItem> currentDir = getCurrentDir();
@@ -264,9 +267,7 @@ bool _setOpenedFileUIDPath(String uidPath)
   if(openedFile == null) return false;
 
   // OK
-  _openedUIDPathStack.clear();
-  _directoryStack.forEach((item){ _openedUIDPathStack.add(item.uid); });
-  _openedUIDPathStack.add(openedFile!.uid);
+  _currentFileUID = fileUID;
 
   return true;
 }
@@ -382,11 +383,11 @@ Future<FileResult> _addFileItem(String name, bool folder) async
   sortDir(currentDir);
 
   // ディレクトリツリーのデータベースを更新
-  updateFileListToDB(getCurrentUIDPath(), currentDir);
+  updateFileListToDB(getCurrentDirUIDPath(), currentDir);
 
   // 作成されたファイルパスを返す
   final String newPath = getCurrentPath() + name;
-  final String newUIDPath = getCurrentUIDPath() + uid.toString();
+  final String newUIDPath = getCurrentDirUIDPath() + uid.toString();
 
   return FileResult(path:newPath, uidPath:newUIDPath);
 }
@@ -425,11 +426,11 @@ FileResult _renameFile(FileItem item, String newName)
   sortDir(currentDir);
 
   // ディレクトリツリーのデータベースを更新
-  updateFileListToDB(getCurrentUIDPath(), currentDir);
+  updateFileListToDB(getCurrentDirUIDPath(), currentDir);
 
   // 変更されたファイルパスを返す
   final String newPath = getCurrentPath() + newName;
-  final String newUIDPath = getCurrentUIDPath() + item.uid.toString();
+  final String newUIDPath = getCurrentDirUIDPath() + item.uid.toString();
 
   return FileResult(path:newPath, uidPath:newUIDPath);
 }
@@ -482,8 +483,7 @@ FileResult _deleteFile(FileItem item)
   if(!_canDelete(item.uid)){
     return FileResult(res:false, message:"'デフォルトデータ'等は削除できません");
   }
-  final int openedFileUID = _openedUIDPathStack.last;
-  if(item.uid == openedFileUID){
+  if(item.uid == _currentFileUID){
     return FileResult(res:false, message:"開いているファイルは削除できません");
   }
 
@@ -494,10 +494,10 @@ FileResult _deleteFile(FileItem item)
   }
 
   // ディレクトリツリーのデータベースを更新
-  updateFileListToDB(getCurrentUIDPath(), currentDir);
+  updateFileListToDB(getCurrentDirUIDPath(), currentDir);
 
   // 配置データも削除する
-  final String fileUIDPath = getCurrentUIDPath() + item.uid.toString();
+  final String fileUIDPath = getCurrentDirUIDPath() + item.uid.toString();
   final String path = "assign" + fileUIDPath;
   final DatabaseReference ref = database.ref(path);
   try{ ref.remove(); } catch(e) {}
@@ -553,7 +553,7 @@ Future<FileResult> _deleteFolder(FileItem folder) async
     }
   }
   // ディレクトリツリーのデータベースを更新
-  updateFileListToDB(getCurrentUIDPath(), currentDir);
+  updateFileListToDB(getCurrentDirUIDPath(), currentDir);
 
   return FileResult();
 }
@@ -576,7 +576,7 @@ Future deleteFolderRecursive(FileItem folder) async
   }
 
   // データベースから自分自身を削除
-  final String path = getCurrentUIDPath();
+  final String path = getCurrentDirUIDPath();
   final DatabaseReference ref = getDatabaseRef(path);
   try { ref.remove(); } catch(e) {}
   print("deleteFolderRecursive(${folder}) delete:${ref.path}");
@@ -619,7 +619,7 @@ Future<bool> moveDir(FileItem folder) async
     _blockingMoveDir = true;
     res = await _moveDir(folder);
     _blockingMoveDir = false;
-    print(">moveDir(${folder.uid}:${folder.name}) ${res} " + getCurrentUIDPath());
+    print(">moveDir(${folder.uid}:${folder.name}) ${res} " + getCurrentDirUIDPath());
   }else{
     print(">  Blocking!");
   }
@@ -645,7 +645,7 @@ Future<bool> _moveDir(FileItem folder) async
 
   // 移動先ディレクトリの構成をデータベースから取得
   // 取得完了時のイベント内でデータ更新も行い、Completer 用いて同期処理する
-  final String uidPath = getCurrentUIDPath();
+  final String uidPath = getCurrentDirUIDPath();
   DatabaseReference ref = getDatabaseRef(uidPath);
   _completerMoveDir = Completer();
   _currentDirChangeListener?.cancel();
@@ -707,7 +707,7 @@ void setOpenedFileGPSLogFlag(bool gpsLog)
   // カレントディレクトリが開いているファイルと別の位置なら、moveDir() でセットされる
   List<FileItem> files = getCurrentDir();
   files.forEach((file){
-    if(file.uid == _openedUIDPathStack.last){
+    if(file.uid == _currentFileUID){
       file.gpsLog = gpsLog;
       return;
     }
@@ -720,7 +720,7 @@ Future<bool> moveFullPathDir(String fullUIDPath) async
   print(">moveFullPathDir(${fullUIDPath})");
   bool res = await _moveFullPathDir(fullUIDPath);
 
-  print(">moveFullPathDir(${fullUIDPath}) ${res} " + getCurrentUIDPath());
+  print(">moveFullPathDir(${fullUIDPath}) ${res} " + getCurrentDirUIDPath());
 
   return res;
 }
@@ -978,7 +978,7 @@ class FilesPageState extends State<FilesPage>
 
     // 現在開いているファイルとその途中のフォルダは強調表示する。
     // 削除も禁止
-    final String thisUIDPath = getCurrentUIDPath() + currentDir[index].uid.toString();
+    final String thisUIDPath = getCurrentDirUIDPath() + currentDir[index].uid.toString();
     final String openedUIDPath = getOpenedFileUIDPath();
     late bool isOpenedFile;
     if(currentDir[index].isFile()){
