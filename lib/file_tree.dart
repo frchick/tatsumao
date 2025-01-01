@@ -116,9 +116,17 @@ FileItem _fileRoot = FileItem(uid:_rootDirId, name:"");
 // _directoryStack.last.child がカレントディレクトリのファイル一覧
 List<FileItem> _directoryStack = [ _fileRoot ];
 
-// 現在開いているファイルのID
-// 必ずなんらかのファイルを開いている設計
-int _currentFileUID = _defaultFileUID;
+// 現在開いているファイルへのUIDパス(必ずなんらかのファイルを開いている設計)
+// ルートディレクトリを表す"/0"は含まない
+// ファイル一覧画面でディレクトリを移動しても変わらない
+String _currentFileUIDPath = "/$_defaultFileUID";
+int get _currentFileUID {
+  try{
+    return int.parse(_currentFileUIDPath.split("/").last);
+  }catch(e){
+    return _invalidUID;
+  }
+}
 
 // ユニークIDと名前の対応表
 Map<int, String> _uid2name = {
@@ -195,15 +203,7 @@ String getOpenedFilePath()
 // 先頭は"/"から始まり、最後はファイルのユニークID
 String getOpenedFileUIDPath()
 {
-  // ルートディレクトリのユニークID'0'は含まない
-  String uidPath = "";
-  for(int d = 1; d < _directoryStack.length; d++){
-    final int uid = _directoryStack[d].uid;
-    uidPath += "/$uid";
-  }
-  uidPath += "/$_currentFileUID";
-
-  return uidPath;
+  return _currentFileUIDPath;
 }
 
 // UIDパスから表示名パスへ変換
@@ -224,14 +224,8 @@ String convertUIDPath2NamePath(String uidPath)
 // 現在開かれているファイル名を取得
 String getOpenedFileName()
 {
-  String name = _uid2name[_currentFileUID] ?? "";
-  return name;
-}
-
-// 現在開かれているファイルのUIDを取得
-int getOpenedFileUID()
-{
-  return _currentFileUID;
+  int uid = _currentFileUID;
+  return _uid2name[uid] ?? "";
 }
 
 // 開いたファイルへのUIDフルパスを設定
@@ -267,7 +261,7 @@ bool _setOpenedFileUIDPath(String uidPath)
   if(openedFile == null) return false;
 
   // OK
-  _currentFileUID = fileUID;
+  _currentFileUIDPath = uidPath;
 
   return true;
 }
@@ -705,9 +699,10 @@ void setOpenedFileGPSLogFlag(bool gpsLog)
 {
   // カレントディレクトリに開いているファイルがあれば、フラグをセットする
   // カレントディレクトリが開いているファイルと別の位置なら、moveDir() でセットされる
+  final currentFileUID = _currentFileUID;
   List<FileItem> files = getCurrentDir();
   files.forEach((file){
-    if(file.uid == _currentFileUID){
+    if(file.uid == currentFileUID){
       file.gpsLog = gpsLog;
       return;
     }
@@ -978,15 +973,14 @@ class FilesPageState extends State<FilesPage>
 
     // 現在開いているファイルとその途中のフォルダは強調表示する。
     // 削除も禁止
-    final String thisUIDPath = getCurrentDirUIDPath() + currentDir[index].uid.toString();
-    final String openedUIDPath = getOpenedFileUIDPath();
     late bool isOpenedFile;
     if(currentDir[index].isFile()){
-      // ファイルの場合はパスの完全一致で判定
-      isOpenedFile = (openedUIDPath == thisUIDPath);
+      // ファイルの場合はIDの一致で判定
+      isOpenedFile = (_currentFileUID == currentDir[index].uid);
     }else{
-      // フォルダの場合は、パスの先頭一致で判定
-      isOpenedFile = (openedUIDPath.indexOf(thisUIDPath+"/") == 0);
+      // フォルダの場合は、パスにIDが含まれるかで判定
+      final String uid = currentDir[index].uid.toString();
+      isOpenedFile = _currentFileUIDPath.contains("/$uid/");
     }
 
     // アイコンボタンの座標を取得するため
@@ -1032,6 +1026,7 @@ class FilesPageState extends State<FilesPage>
               // 他のユーザーによる変更のコールバックをクリア
               _onCurrentDirChangedForFilesPage = null;
               // ファイルを切り替える
+              final String thisUIDPath = getCurrentDirUIDPath() + currentDir[index].uid.toString();
               widget.onSelectFile(thisUIDPath);
               Navigator.pop(context);
             }
