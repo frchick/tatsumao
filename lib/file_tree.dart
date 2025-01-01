@@ -241,21 +241,17 @@ bool setOpenedFileUIDPath(String uidPath)
 
 bool _setOpenedFileUIDPath(String uidPath)
 {
-  // 指定されたパスががカレントディレクトリでなければエラー
-  // (カレントディレクトリ以外のファイルを開くことはできない)
-  int i = uidPath.lastIndexOf("/");
-  if(i < 0) return false;
-  var uidDirPart = uidPath.substring(0, i+1);
-  final int fileUID = int.parse(uidPath.substring(i+1));
-  if(getCurrentDirUIDPath() != uidDirPart) return false;
-
   // 指定されたファイルがカレントディレクトリになければエラー
-  List<FileItem> currentDir = getCurrentDir();
+  // (カレントディレクトリ以外のファイルを開くことはできない)
+  final List<FileItem> currentDir = getCurrentDir();
+  final String currentDirUIDPath = getCurrentDirUIDPath();
   FileItem? openedFile;
   currentDir.forEach((item){
-    if(item.isFile() && (item.uid == fileUID)){
-      openedFile = item;
-      return;
+    if(item.isFile()){
+      if((currentDirUIDPath + item.uid.toString()) == uidPath){
+        openedFile = item;
+        return;
+      }
     }
   });
   if(openedFile == null) return false;
