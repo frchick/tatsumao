@@ -87,8 +87,6 @@ class FileItem {
 const int _rootDirId = 0;
 // 親ディレクトリを表すユニークID
 const int _parentDirId = -1;
-// カレントディレクトリを表すユニークID
-const int _currentDirId = -2;
 // 無効なユニークID
 const int _invalidUID = -3;
 // 削除不可のデフォルトデータを示すユニークID
@@ -124,7 +122,6 @@ List<int> _openedUIDPathStack = [ _rootDirId ];
 Map<int, String> _uid2name = {
   _rootDirId: "",
   _parentDirId: "..",
-  _currentDirId: ".",
   _invalidUID: "",
   _defaultFileUID: "デフォルトデータ",
 };
@@ -302,8 +299,8 @@ Future initFileTree() async
   // "デフォルトデータ"と共に登録。
   final DatabaseReference ref = getDatabaseRef("/");
   final DataSnapshot snapshot = await ref.get();
-  var defaultFile = FileItem(uid:_defaultFileUID, name:"デフォルトデータ");
   if(!snapshot.exists){
+    var defaultFile = FileItem(uid:_defaultFileUID, name:"デフォルトデータ");
     final List<Map<String,dynamic>> files = [ defaultFile.getDBData() ];
     ref.set(files);
     // ファイル/フォルダのユニークIDを発行するためのパスも作成
@@ -311,7 +308,7 @@ Future initFileTree() async
     refNextUID.set(_firstUserFileID);
   }
   // ルートディレクトリをデータベースから読み込み
-  await moveDir(FileItem(uid:_currentDirId));
+  await moveDir(FileItem(uid:_rootDirId));
 }
 
 //----------------------------------------------------------------------------
@@ -631,7 +628,7 @@ Future<bool> moveDir(FileItem folder) async
 
 Future<bool> _moveDir(FileItem folder) async
 {
-  if(folder.uid != _currentDirId){
+  if(folder.uid != _rootDirId){
     // 移動先は当然フォルダーのみ
     if(!folder.isFolder()) return false;
 
