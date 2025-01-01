@@ -4,6 +4,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_map/plugin_api.dart';
 import 'package:firebase_database/firebase_database.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'mydragmarker.dart';
 import 'globals.dart';
@@ -44,6 +45,9 @@ class MiscMarker
   // メモ
   String memo;
 
+  // データが有効か？
+  bool get ok => ((position.latitude != 0) && (position.longitude != 0));
+
   // マーカーの build に渡された BuildContext
   BuildContext? _context;
 
@@ -59,28 +63,18 @@ class MiscMarker
   }
 
   // データベースに保存されたMapデータから読み込み
-  bool fromMapData(Map<String,dynamic> map)
+  factory MiscMarker.fromMapData(Map<String,dynamic> map)
   {
-    // 読み込みに失敗したら更新しない
-    bool ok = true;
-    late LatLng _position;
-    late int _iconType;
-    late String _memo;
     try {
       double latitude = map["latitude"] as double;
       double longitude = map["longitude"] as double;
-      _position = LatLng(latitude, longitude);
-      _iconType = map["iconType"] as int;
-      _memo = map["memo"] as String;
+      final position = LatLng(latitude, longitude);
+      final iconType = map["iconType"] as int;
+      final memo = map["memo"] as String;
+      return MiscMarker(position: position, iconType: iconType, memo: memo);
     } catch(e) {
-      ok = false;
+      return MiscMarker(position: LatLng(0,0));
     }
-    if(ok){
-      position = _position;
-      iconType = _iconType;
-      memo = _memo;
-    }
-    return ok;
   }
 
   // マップ上に表示する用のマーカーを作成
@@ -193,6 +187,13 @@ class MiscMarkers
       "sender_id": appInstKey,
       "markers": data,
     });
+
+    //!!!! Firestore にコピーを作成(過渡期の処理。最終的には Firestore のみにする)
+    {
+      final dbDocId = _openedPath.split("/").last;
+      final ref = FirebaseFirestore.instance.collection("assign").doc(dbDocId);
+      ref.update({ "misc_markers": data });
+    }
   }
 
   // 変更通知の受信を設定
@@ -210,7 +211,7 @@ class MiscMarkers
     final DatabaseReference ref = FirebaseDatabase.instance.ref(path);
     _firstOnSyncAfterOpenFile = true;
     _syncListener = ref.onValue.listen((DatabaseEvent event){
-      _onSync(event);
+      _onSync(event, _openedPath);
     });
   }
 
@@ -222,7 +223,7 @@ class MiscMarkers
   }
 
   // 変更通知受けたときの処理
-  void _onSync(DatabaseEvent event)
+  void _onSync(DatabaseEvent event, String uidPath)
   {
     //!!!!
     print(">MiscMarkers._onSync(${event.snapshot.ref.path})");
@@ -249,13 +250,19 @@ class MiscMarkers
       if(data.containsKey("markers")){
         final List<dynamic> markers = data["markers"] as List<dynamic>;
         markers.forEach((data){
-          var map = data as Map<String,dynamic>;
-          var marker = MiscMarker(position:LatLng(0,0));
-          bool ok = marker.fromMapData(map);
-          if(ok){
+          final map = data as Map<String,dynamic>;
+          final marker = MiscMarker.fromMapData(map);
+          if(marker.ok){
             addMarker(marker);
           }
         });
+
+        //!!!! Firestore にコピーを作成(過渡期の処理。最終的には Firestore のみにする)
+        {
+          final dbDocId = uidPath.split("/").last;
+          final ref = FirebaseFirestore.instance.collection("assign").doc(dbDocId);
+          ref.update({ "misc_markers": markers });
+        }
       }
     } catch(e) {
       //!!!!
