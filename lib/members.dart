@@ -95,6 +95,10 @@ String _assignPath = "";
 // Firestore の通知変更リスナー
 StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _membersUpdateListener;
 
+// initMemberSync() 直後か？
+// NOTE: リスナーコールバック内で、初回のデータ変更通知を拾うために参照
+bool _isFirstSyncEvent = true;
+
 // メンバー一覧データをデータベースから取得
 Future loadMembersListFromDB() async
 {
@@ -124,49 +128,55 @@ Future initMemberSync(String uidPath) async
 {
   print(">initMemberSync($uidPath)");
 
-  // メンバーの配置データを RealtimeDatabase から取得
-  _assignPath = "assign" + uidPath;
-  final DatabaseReference ref = FirebaseDatabase.instance.ref(_assignPath);
-  final DataSnapshot snapshot = await ref.get();
+  // 直前のリスナーは停止しておく
+  releaseMemberSync();
+  // 全員一旦非表示に
   for(int index = 0; index < members.length; index++)
   {
-    Member member = members[index];
-    final String id = index.toString().padLeft(3, '0');
-
-    if (snapshot.hasChild(id)) {
-      // メンバーデータがデータベースにあれば、初期値として取得(直前の状態)
-      // NOTE: 退会者かどうかのフラグは、配置データとは関係ない。
-      // NOTE: 過去の配置データに参加していれば、退会後もその配置データでは表示される。
-      member.attended = snapshot.child(id + "/attended").value as bool;
-      member.pos = LatLng(
-        snapshot.child(id + "/latitude").value as double,
-        snapshot.child(id + "/longitude").value as double);
-      // 地図上に表示されているメンバーマーカーの情報も変更
-      memberMarkers[index].visible = member.attended;
-      memberMarkers[index].point = member.pos;
-    }  
+    members[index].attended = false;
+    memberMarkers[index].visible = false;
   }
 
-  //!!!! Firestore にコピーを作成(過渡期の処理。最終的には Firestore のみにする)
-  await goEveryoneHomeAsync();
-  final dbDocId = _assignPath.split("/").last;
+  //!!!! Firestore にデータがなければ、RealtimeDatabase から取得して作成
+  //!!!! (過渡期の処理。最終的には Firestore のみにする)
+  _assignPath = "assign" + uidPath;
+  final dbDocId = uidPath.split("/").last;
   final assignDocRef = FirebaseFirestore.instance.collection("assign").doc(dbDocId);
   final attendeesColRef = assignDocRef.collection("attendees");
-  for(int index = 0; index < members.length; index++){
-    Member member = members[index];
-    if(member.attended){
-      final memberDocId = index.toString().padLeft(3, '0');
-      attendeesColRef.doc(memberDocId).set({
-        "latitude": member.pos.latitude,
-        "longitude": member.pos.longitude,
-        "attended": true,
-      });
+  final snapshot = await assignDocRef.get();
+  if(!snapshot.exists){
+    // メンバーの配置データを RealtimeDatabase から取得
+    print(">  Attendees data was duplicated form RealtimeDatabase to Firestore.");
+    final DatabaseReference ref = FirebaseDatabase.instance.ref(_assignPath);
+    final DataSnapshot snapshot = await ref.get();
+    for(int index = 0; index < members.length; index++)
+    {
+      final memberId = index.toString().padLeft(3, '0');
+
+      if (snapshot.hasChild(memberId)) {
+        // メンバーデータがデータベースにあれば、初期値として取得(直前の状態)
+        // NOTE: 退会者かどうかのフラグは、配置データとは関係ない。
+        // NOTE: 過去の配置データに参加していれば、退会後もその配置データでは表示される。
+        final attended = snapshot.child("${memberId}/attended").value as bool;
+        final lat = snapshot.child("${memberId}/latitude").value as double;
+        final lon = snapshot.child("${memberId}/longitude").value as double;
+
+        // Firestore にコピーを作成
+        if(attended){
+          attendeesColRef.doc(memberId).set({
+            "latitude": lat,
+            "longitude": lon,
+            "attended": true, // クエリをリッスンするために必要
+          });
+        }
+      }
     }
   }
 
   // Firestore から変更通知を受け取るリスナーを設定
-  // 直前のリスナーは停止しておく
-  releaseMemberSync();
+  // NOTE: コレクションをリッスンすると、期待に反してドキュメントの削除を検知できない。
+  // NOTE: クエリをリッスンすることで、ドキュメントの削除を検知できる。
+  _isFirstSyncEvent = true;
   _membersUpdateListener = attendeesColRef.where("attended", isEqualTo: true).snapshots().listen(
     (event){
       onChangeMemberState(event);
@@ -184,22 +194,26 @@ void releaseMemberSync()
 
 //---------------------------------------------------------------------------
 // メンバーマーカーの移動を他のユーザーへ同期
-void syncMemberState(final int index) async
+void syncMemberState(final int index)
 {
   // NOTE: 退会者かどうかのフラグは、配置データとは関係ない。
   // NOTE: 過去の配置データに参加していれば、退会後もその配置データでは表示される。
 
-  //!!!! Firestore のデータを更新
+  // Firestore のデータを更新
   final Member member = members[index];
   final String id = index.toString().padLeft(3, '0');
   final dbDocId = _assignPath.split("/").last;
-  final dataDocRef = FirebaseFirestore.instance.collection("assign").doc(dbDocId);
-  final attendeesRef = dataDocRef.collection("attendees");
-  attendeesRef.doc(id).set({
-    "latitude": member.pos.latitude,
-    "longitude": member.pos.longitude,
-    "attended": member.attended,
-  });
+  final assignRef = FirebaseFirestore.instance.collection("assign").doc(dbDocId);
+  final memberRef = assignRef.collection("attendees").doc(id);
+  if(member.attended){
+    memberRef.set({
+      "latitude": member.pos.latitude,
+      "longitude": member.pos.longitude,
+      "attended": true, // クエリをリッスンするために必要
+    });
+  }else{
+    memberRef.delete();
+  }
 }
 
 //---------------------------------------------------------------------------
@@ -207,7 +221,7 @@ void syncMemberState(final int index) async
 void onChangeMemberState(QuerySnapshot<Map<String, dynamic>> event)
 {
   // ログ出力
-  print("Firestore callback: local=${event.metadata.hasPendingWrites}");
+  print("Firestore callback: local=${event.metadata.hasPendingWrites}, first=${_isFirstSyncEvent}");
   final docs = event.docs;
   for(int i = 0; i < docs.length; i++){
     final doc = docs[i];
@@ -217,7 +231,10 @@ void onChangeMemberState(QuerySnapshot<Map<String, dynamic>> event)
   }
       
   // ローカルの変更による通知では何もしない
-  if(event.metadata.hasPendingWrites){
+  // ただし、マーカーを初期化するために、ファイルを開いた直後のデータ変更通知は拾う
+  final first = _isFirstSyncEvent;
+  _isFirstSyncEvent = false;
+  if(!first && event.metadata.hasPendingWrites){
     return;
   }
 
@@ -227,10 +244,10 @@ void onChangeMemberState(QuerySnapshot<Map<String, dynamic>> event)
   int lastAttendedCount = 0;
   for(int index = 0; index < members.length; index++){
     final member = members[index];
+    final memberMarker = memberMarkers[index];
     if(member.attended) lastAttendedCount++;
     lastAttendedArray[index] = member.attended;
-    member.attended = false;
-    memberMarkers[index].visible = false;
+    member.attended = memberMarker.visible = false;
   }
 
   for(int i = 0; i < docs.length; i++){
@@ -238,16 +255,20 @@ void onChangeMemberState(QuerySnapshot<Map<String, dynamic>> event)
     final index = int.parse(doc.id);
 
     final member = members[index];
-    member.attended = doc["attended"];  // true
-    member.pos = LatLng(doc["latitude"], doc["longitude"]);
-
     final memberMarker = memberMarkers[index];
-    memberMarker.visible = member.attended;
-    memberMarker.point = member.pos;
+    member.attended = memberMarker.visible = true;
+    member.pos = memberMarker.point = LatLng(doc["latitude"], doc["longitude"]);
   }
 
-  // マーカーの再描画
-  updateMapView();
+  // マップの表示更新
+  if(first){
+    // ファイルを開いた直後では、メンバー達の位置へマップを移動する
+    moveMapToLocationOfMembers();
+  }else{
+    updateMapView();
+  }
+
+  // ホームアイコンの更新
   HomeIconWidget.update();
 
   // 家に帰った/参加したポップアップメッセージ
@@ -265,6 +286,29 @@ void onChangeMemberState(QuerySnapshot<Map<String, dynamic>> event)
       }
     }
   }
+}
+
+//----------------------------------------------------------------------------
+// メンバー達の位置へマップを移動する
+void moveMapToLocationOfMembers()
+{
+  // MapViewが未初期化ならば何もしない
+  if(mainMapController == null) return;
+
+  // 参加しているメンバーの座標の範囲に、マップをフィットさせる
+  List<LatLng> points = [];
+  members.forEach((member){
+    if(member.attended){
+      points.add(member.pos);
+    }
+  });
+  if(points.isEmpty) return;
+  var bounds = LatLngBounds.fromPoints(points);
+
+  mainMapController!.fitBounds(bounds,
+    options: const FitBoundsOptions(
+      padding: EdgeInsets.all(64),
+      maxZoom: 16));
 }
 
 //---------------------------------------------------------------------------

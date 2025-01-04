@@ -53,29 +53,6 @@ double _mapViewWidthRate = 0.5;
 
 
 //----------------------------------------------------------------------------
-// メンバー達の位置へマップを移動する
-void moveMapToLocationOfMembers()
-{
-  // MapViewが未初期化ならば何もしない
-  if(mainMapController == null) return;
-
-  // 参加しているメンバーの座標の範囲に、マップをフィットさせる
-  List<LatLng> points = [];
-  members.forEach((member){
-    if(member.attended){
-      points.add(member.pos);
-    }
-  });
-  if(points.length == 0) return;
-  var bounds = LatLngBounds.fromPoints(points);
-
-  mainMapController!.fitBounds(bounds,
-    options: FitBoundsOptions(
-      padding: EdgeInsets.all(64),
-      maxZoom: 16));
-}
-
-//----------------------------------------------------------------------------
 //----------------------------------------------------------------------------
 // アプリケーション
 
@@ -268,11 +245,6 @@ class _MapViewState extends State<MapView>
   
     // メンバーの配置データをデータベースから取得
     await initMemberSync(fileUIDPath);
-    // メンバーの位置へ地図を移動
-    // 直前の地図が表示され続ける時間を短くするために、なるべく早めに
-    if(!_initializingApp){
-      moveMapToLocationOfMembers();
-    }
 
     // タツマのエリアフィルターを取得(表示/非表示)
     // それに応じてマーカー配列を作成
