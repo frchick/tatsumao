@@ -1156,42 +1156,53 @@ Future<Map<String,dynamic>?>
 // エリア表示フィルターの設定をデータベースへ保存
 void saveAreaFilterToDB(String uidPath)
 {
-  final String dbPath = "assign" + uidPath + "/areaFilter";
-  final DatabaseReference ref = database.ref(dbPath);
-  List<String> data = areaFilterToStrings();
-  ref.set(data);
-
-  //!!!! Firestore にコピーを作成(過渡期の処理。最終的には Firestore のみにする)
-  {
-    final dbDocId = uidPath.split("/").last;
-    final ref = FirebaseFirestore.instance.collection("assign").doc(dbDocId);
-    ref.update({ "areaFilter": data });
-  }
+  // Firestore に保存
+  final dbDocId = uidPath.split("/").last;
+  final docRef = FirebaseFirestore.instance.collection("assign").doc(dbDocId);
+  final data = areaFilterToStrings();
+  docRef.update({ "areaFilter": data });
 }
 
 // エリア表示フィルターの設定をデータベースから読み込み
 Future loadAreaFilterFromDB(String uidPath) async
 {
-  final String dbPath = "assign" + uidPath + "/areaFilter";
-  final DatabaseReference ref = database.ref(dbPath);
-  final DataSnapshot snapshot = await ref.get();
-  if(snapshot.exists){
-    List<String> data = [];
-    try {
-      var temp = snapshot.value as List<dynamic>;
-      List<String> stringList = [];
-      temp.forEach((t){ data.add(t as String); });
+  final dbDocId = uidPath.split("/").last;
+  final docRef = FirebaseFirestore.instance.collection("assign").doc(dbDocId);
 
-      //!!!! Firestore にコピーを作成(過渡期の処理。最終的には Firestore のみにする)
-      {
-        final dbDocId = uidPath.split("/").last;
-        final ref = FirebaseFirestore.instance.collection("assign").doc(dbDocId);
-        ref.update({ "areaFilter": data });
+  //!!!! Firestore にデータがなければ、RealtimeDatabase から取得して作成
+  //!!!! (過渡期の処理。最終的には Firestore のみにする)
+  try{
+    bool existData = false;
+    final docSnapshot = await docRef.get();
+    if(docSnapshot.exists){
+      final doc = docSnapshot.data();
+      existData = doc?.containsKey("areaFilter") ?? false;
+    }
+    if(!existData){
+      print(">  AreaFilter data was duplicated from RealtimeDatabase to Firestore.");
+      final ref = FirebaseDatabase.instance.ref("assign" + uidPath + "/areaFilter");
+      final s = await ref.get();
+      List<dynamic> data = [ "(未設定)" ];
+      if(s.exists){
+        data = s.value as List<dynamic>;
       }
-    } catch(e) {}
-    stringsToAreaFilter(data);
-  }else{
-    // データがない場合は、とりあえず直前のフィルター状態でデータを作成
+      docRef.update({ "areaFilter": data });
+    }
+  }catch(e) {}
+
+  // Firestore から読み込み
+  bool existData = false;
+  final docSnapshot = await docRef.get();
+  if(docSnapshot.exists){
+    final doc = docSnapshot.data();
+    existData = doc?.containsKey("areaFilter") ?? false;
+    if(existData){
+      final data = doc!["areaFilter"];
+      stringsToAreaFilter(data.cast<String>());
+    }
+  }
+  // データベース上になければ、直前の状態で保存する
+  if(!existData){
     saveAreaFilterToDB(uidPath);
   }
 }

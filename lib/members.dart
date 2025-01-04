@@ -136,17 +136,18 @@ Future initMemberSync(String uidPath) async
     members[index].attended = false;
     memberMarkers[index].visible = false;
   }
+  // ファイルパスを保存
+  _assignPath = "assign" + uidPath;
 
   //!!!! Firestore にデータがなければ、RealtimeDatabase から取得して作成
   //!!!! (過渡期の処理。最終的には Firestore のみにする)
-  _assignPath = "assign" + uidPath;
   final dbDocId = uidPath.split("/").last;
   final assignDocRef = FirebaseFirestore.instance.collection("assign").doc(dbDocId);
   final attendeesColRef = assignDocRef.collection("attendees");
   final snapshot = await assignDocRef.get();
   if(!snapshot.exists){
     // メンバーの配置データを RealtimeDatabase から取得
-    print(">  Attendees data was duplicated form RealtimeDatabase to Firestore.");
+    print(">  Attendees data was duplicated from RealtimeDatabase to Firestore.");
     final DatabaseReference ref = FirebaseDatabase.instance.ref(_assignPath);
     final DataSnapshot snapshot = await ref.get();
     for(int index = 0; index < members.length; index++)
