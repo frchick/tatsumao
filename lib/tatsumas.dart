@@ -1176,7 +1176,7 @@ Future loadAreaFilterFromDB(String uidPath) async
     final docSnapshot = await docRef.get();
     if(docSnapshot.exists){
       final doc = docSnapshot.data();
-      existData = doc?.containsKey("areaFilter") ?? false;
+      existData = doc!.containsKey("areaFilter");
     }
     if(!existData){
       print(">  AreaFilter data was duplicated from RealtimeDatabase to Firestore.");
@@ -1188,17 +1188,17 @@ Future loadAreaFilterFromDB(String uidPath) async
       }
       docRef.update({ "areaFilter": data });
     }
-  }catch(e) {}
+  }catch(e) { /**/ }
 
   // Firestore から読み込み
   bool existData = false;
   final docSnapshot = await docRef.get();
   if(docSnapshot.exists){
     final doc = docSnapshot.data();
-    existData = doc?.containsKey("areaFilter") ?? false;
-    if(existData){
-      final data = doc!["areaFilter"];
+    final data = doc!["areaFilter"];
+    if(data != null){
       stringsToAreaFilter(data.cast<String>());
+      existData = true;
     }
   }
   // データベース上になければ、直前の状態で保存する

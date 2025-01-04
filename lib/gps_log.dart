@@ -323,32 +323,45 @@ class GPSLog
 
   //----------------------------------------------------------------------------
   // デバイスIDと犬の対応を読み込む
-  Future<void> loadDeviceID2DogFromDB(String uidPath) async
+  Future<void> loadDeviceID2DogFromDB(String uidPath, { bool recurcive=false }) async
   {
-    //!!!!
-    print(">loadDeviceID2DogFromDB(${uidPath})");
+    print(">loadDeviceID2DogFromDB($uidPath) recurcive=$recurcive");
 
-    final String dbPath = "assign" + uidPath + "/gps_log/deviceIDs";
-    final DatabaseReference ref = FirebaseDatabase.instance.ref(dbPath);
-    final DataSnapshot snapshot = await ref.get();
-    if(snapshot.exists){
-      try {
-        var data = snapshot.value as Map<String, dynamic>;
-        _deviceID2Dogs.clear();
-        _modifyDeviceID2Dogs = false;
-        data.forEach((idText, dogName){
-          int id = int.parse(idText);
-          _deviceID2Dogs[id] = dogName as String;
-        });
-
-        //!!!! Firestore にコピーを作成(過渡期の処理。最終的には Firestore のみにする)
-        {
-          final dbDocId = uidPath.split("/").last;
-          final ref = FirebaseFirestore.instance.collection("assign").doc(dbDocId);
-          ref.update({ "gps_log.deviceIDs": data });
+    //!!!! Firestore から優先的に読み込む。
+    final dbDocId = uidPath.split("/").last;
+    final docRef = FirebaseFirestore.instance.collection("assign").doc(dbDocId);
+    bool existData = false;
+    try {
+      final docSnapshot = await docRef.get();
+      if(docSnapshot.exists){
+        final data = docSnapshot.data();
+        final deviceIDs = data!["gps_log.deviceIDs"];
+        if(deviceIDs != null){
+          _deviceID2Dogs.clear();
+          _modifyDeviceID2Dogs = false;
+          deviceIDs.forEach((key, value){
+            int id = int.parse(key);
+            _deviceID2Dogs[id] = value as String;
+          });
+          existData = true;
+          print(">loadDeviceID2DogFromDB($uidPath) $_deviceID2Dogs");
         }
-      } catch(e) {}
-      print(">loadDeviceID2DogFromDB(${uidPath}) ${_deviceID2Dogs}");
+      }
+    } catch(e) { /**/ }
+
+    // なければ、RealtimeDatabase から読み込んで Firestore にコピー
+    if(!existData && !recurcive){
+      try {
+        final String dbPath = "assign" + uidPath + "/gps_log/deviceIDs";
+        final DatabaseReference ref = FirebaseDatabase.instance.ref(dbPath);
+        final DataSnapshot snapshot = await ref.get();
+        if(snapshot.exists){
+          print(">  gps_log.deviceIDs was duplicated from RealtimeDatabase to Firestore.");
+          var data = snapshot.value;
+          docRef.update({ "gps_log.deviceIDs": data });
+          loadDeviceID2DogFromDB(uidPath, recurcive: true);
+        }
+      } catch(e) { /**/ }
     }
   }
 
@@ -357,30 +370,25 @@ class GPSLog
   void saveDeviceID2DogToDB(String uidPath)
   {
     //!!!!
-    print(">saveDeviceID2DogToDB(${uidPath})");
+    print(">saveDeviceID2DogToDB($uidPath)");
 
     // 変更がなければ保存しない
     if(!_modifyDeviceID2Dogs) return;
   
-    final String dbPath = "assign" + uidPath + "/gps_log/deviceIDs";
-    final DatabaseReference ref = FirebaseDatabase.instance.ref(dbPath);
-    Map<String,dynamic> data = {};
     try {
+      Map<String,dynamic> data = {};
       _deviceID2Dogs.forEach((key, value){
         final String k = _fourDigits(key);
         data[k] = value;
       });
-      ref.update(data);
 
       //!!!! Firestore にコピーを作成(過渡期の処理。最終的には Firestore のみにする)
-      {
-        final dbDocId = uidPath.split("/").last;
-        final ref = FirebaseFirestore.instance.collection("assign").doc(dbDocId);
-        ref.update({ "gps_log.deviceIDs": data });
-      }
-    } catch(e) {}
-  
-    print(">saveDeviceID2DogToDB(${uidPath}) ${data}");
+      final dbDocId = uidPath.split("/").last;
+      final ref = FirebaseFirestore.instance.collection("assign").doc(dbDocId);
+      ref.update({ "gps_log.deviceIDs": data });
+
+      print(">saveDeviceID2DogToDB($uidPath) $data");
+    } catch(e) { /**/ }
 }
 
   //----------------------------------------------------------------------------
