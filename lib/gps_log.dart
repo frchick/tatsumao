@@ -185,7 +185,9 @@ class GPSLog
   DateTime get trimStartTime => _trimStartTime;
   void setTrimStartTime(DateTime t, { bool snapCurrentTimeIfModify = false})
   {
-    final DateTime tt = (t.isAfter(_startTime)? t: _startTime);
+    var tt = t;
+    tt = (tt.isAfter(_startTime)? tt: _startTime); // 開始時間より前にはしない
+    tt = (tt.isBefore(_endTime)? tt: _endTime);    // 終了時間より後にはしない
     final bool modify = (_trimStartTime != tt);
     _trimStartTime = tt;
 
@@ -203,7 +205,9 @@ class GPSLog
   DateTime get trimEndTime => _trimEndTime;
   void setTrimEndTime(DateTime t, { bool snapCurrentTimeIfModify = false})
   {
-    final DateTime tt = (t.isBefore(_endTime)? t: _endTime);;
+    var tt = t;
+    tt = (tt.isAfter(_startTime)? tt: _startTime); // 開始時間より前にはしない
+    tt = (tt.isBefore(_endTime)? tt: _endTime);    // 終了時間より後にはしない
     final bool modify = (_trimEndTime != tt);
     _trimEndTime = tt;
 
@@ -315,17 +319,13 @@ class GPSLog
 
     _openedUIDPath = null;
     _isReferenceLink = false;
-
-    // 直前の同期イベントを削除
-    _updateTrimSyncEvent?.cancel();
-    _updateTrimSyncEvent = null;
   }
 
   //----------------------------------------------------------------------------
   // デバイスIDと犬の対応を読み込む
   Future<void> loadDeviceID2DogFromDB(String uidPath, { bool recurcive=false }) async
   {
-    print(">loadDeviceID2DogFromDB($uidPath) recurcive=$recurcive");
+    print(">GPSLog.loadDeviceID2DogFromDB($uidPath) recurcive=$recurcive");
 
     //!!!! Firestore から優先的に読み込む。
     final dbDocId = uidPath.split("/").last;
@@ -344,7 +344,7 @@ class GPSLog
             _deviceID2Dogs[id] = value as String;
           });
           existData = true;
-          print(">loadDeviceID2DogFromDB($uidPath) $_deviceID2Dogs");
+          print(">GPSLog.loadDeviceID2DogFromDB($uidPath) $_deviceID2Dogs");
         }
       }
     } catch(e) { /**/ }
@@ -370,7 +370,7 @@ class GPSLog
   void saveDeviceID2DogToDB(String uidPath)
   {
     //!!!!
-    print(">saveDeviceID2DogToDB($uidPath)");
+    print(">GPSLog.saveDeviceID2DogToDB($uidPath)");
 
     // 変更がなければ保存しない
     if(!_modifyDeviceID2Dogs) return;
@@ -387,7 +387,7 @@ class GPSLog
       final ref = FirebaseFirestore.instance.collection("assign").doc(dbDocId);
       ref.update({ "gps_log.deviceIDs": data });
 
-      print(">saveDeviceID2DogToDB($uidPath) $data");
+      print(">GPSLog.saveDeviceID2DogToDB($uidPath) $data");
     } catch(e) { /**/ }
 }
 
@@ -510,7 +510,7 @@ class GPSLog
   Future<bool> uploadToCloudStorage(String path) async
   {
     //!!!!
-    print(">uploadToCloudStorage($path)");
+    print(">GPSLog.uploadToCloudStorage($path)");
 
     // ストレージ上のファイルパスを参照
     final gpxRef = _getRef(path);
@@ -525,7 +525,7 @@ class GPSLog
       FullMetadata meta = await gpxRef.getMetadata();
       _thisUpdateTime = meta.updated;
     } catch (e) {
-      print(">uploadToCloudStorage($path) GPS Log couldn't be uploaded.");
+      print(">GPSLog.uploadToCloudStorage($path) GPS Log couldn't be uploaded.");
       res = false;
     }
 
@@ -535,7 +535,7 @@ class GPSLog
     }
   
     //!!!!
-    print("uploadToCloudStorage($path) res=$res");
+    print("GPSLog.uploadToCloudStorage($path) res=$res");
 
     return res;
   }
@@ -544,7 +544,7 @@ class GPSLog
   Future<bool> downloadFromCloudStorage(String path, bool referenceLink) async
   {
     //!!!!
-    print(">downloadFromCloudStorage(${path})");
+    print(">GPSLog.downloadFromCloudStorage(${path})");
 
     // ストレージ上のファイルパスを参照
     final gpxRef = _getRef(path);
@@ -568,7 +568,7 @@ class GPSLog
         _thisUpdateTime = meta.updated;
       }
     } catch (e) {
-      print(">downloadFromCloudStorage(${path}) GPS Log couldn't be downloaded.");
+      print(">GPSLog.downloadFromCloudStorage(${path}) GPS Log couldn't be downloaded.");
       res = false;
     }
 
@@ -579,7 +579,7 @@ class GPSLog
     }
 
     //!!!!
-    print(">downloadFromCloudStorage(${path}) ${res}");
+    print(">GPSLog.downloadFromCloudStorage(${path}) ${res}");
 
     return res;
   }
@@ -588,7 +588,7 @@ class GPSLog
   static void deleteFromCloudStorage(String path)
   {
     //!!!!
-    print(">deleteFromCloudStorage(${path})");
+    print(">GPSLog.deleteFromCloudStorage(${path})");
 
     // ストレージ上のファイルパスを参照
     final gpxRef = _getRef(path);
@@ -625,7 +625,7 @@ class GPSLog
   Future<List<String>> getFileList(String path) async
   {
     //!!!!
-    print(">getFileList(${path})");
+    print(">GPSLog.getFileList(${path})");
 
     final dirRef = _getDirRef(path);
     final list = await dirRef.listAll();
@@ -639,20 +639,12 @@ class GPSLog
   // 配置データから、GPSログ関連のデータを削除
   void deleteFromAssignData(String thisUIDPath)
   {
-    print(">deleteFromAssignData(${thisUIDPath})");
+    print(">GPSLog.deleteFromAssignData(${thisUIDPath})");
 
-    final String dbPath = "assign" + thisUIDPath + "/gps_log";
-    final DatabaseReference ref = FirebaseDatabase.instance.ref(dbPath);
-    // キーを削除
-    // NOTE: キーがなくても例外、エラーは発生しない。
-    ref.remove();
-  
-    //!!!! Firestore にコピーを作成(過渡期の処理。最終的には Firestore のみにする)
-    {
-      final dbDocId = thisUIDPath.split("/").last;
-      final ref = FirebaseFirestore.instance.collection("assign").doc(dbDocId);
-      ref.update({ "gps_log": {} });
-    }
+    // Firestore から削除
+    final dbDocId = thisUIDPath.split("/").last;
+    final ref = FirebaseFirestore.instance.collection("assign").doc(dbDocId);
+    ref.update({ "gps_log": FieldValue.delete() });
   }
 
   //----------------------------------------------------------------------------
@@ -666,128 +658,117 @@ class GPSLog
   // 他のデータを参照
   void saveReferencePath(String thisUIDPath, String refUIDPath)
   {
-    print(">saveReferencePath(${thisUIDPath} -> ${refUIDPath})");
+    print(">GPSLog.saveReferencePath($thisUIDPath) -> $refUIDPath");
   
-    final String dbPath = "assign" + thisUIDPath + "/gps_log";
-    final DatabaseReference ref = FirebaseDatabase.instance.ref(dbPath);
-    final data = {
-      "referencePath" : refUIDPath,
-    };
-    ref.update(data);
-  
-    //!!!! Firestore にコピーを作成(過渡期の処理。最終的には Firestore のみにする)
-    {
-      final dbDocId = thisUIDPath.split("/").last;
-      final ref = FirebaseFirestore.instance.collection("assign").doc(dbDocId);
-      ref.update({ "gps_log.referencePath": refUIDPath });
-    }
+    // Firestore に保存
+    final dbDocId = thisUIDPath.split("/").last;
+    final docRef = FirebaseFirestore.instance.collection("assign").doc(dbDocId);
+    docRef.update({ "gps_log.referencePath": refUIDPath });
   }
 
   // 読み込むべきデータのパスを取得
   // 他のデータを参照していれば、そちらのパスを返す
   Future<String> getReferencePath(String thisUIDPath) async
   {
-    print(">getReferencePath(${thisUIDPath})");
+    print(">GPSLog.getReferencePath($thisUIDPath)");
 
+    //!!!! Firestore から優先的に読み込む。
+    final dbDocId = thisUIDPath.split("/").last;
+    final docRef = FirebaseFirestore.instance.collection("assign").doc(dbDocId);
     String? refUIDPath;
-    final String dbPath = "assign" + thisUIDPath + "/gps_log";
-    final DatabaseReference ref = FirebaseDatabase.instance.ref(dbPath);
-    final DataSnapshot snapshot = await ref.get();
-    if(snapshot.exists){
-      try {
-        var data = snapshot.value as Map<String, dynamic>;
-        refUIDPath = data["referencePath"];
+    try {
+      final docSnapshot = await docRef.get();
+      if(docSnapshot.exists){
+        final data = docSnapshot.data();
+        refUIDPath = data!["gps_log"]["referencePath"];
+      }
+    } catch(e) { /**/ }
 
-        //!!!! Firestore にコピーを作成(過渡期の処理。最終的には Firestore のみにする)
-        if(refUIDPath != null){
-          final dbDocId = thisUIDPath.split("/").last;
-          final ref = FirebaseFirestore.instance.collection("assign").doc(dbDocId);
-          ref.update({ "gps_log.referencePath": refUIDPath });
+    // なければ、RealtimeDatabase から読み込んで Firestore にコピー
+    if(refUIDPath == null){
+      try {
+        final String dbPath = "assign" + thisUIDPath + "/gps_log";
+        final DatabaseReference ref = FirebaseDatabase.instance.ref(dbPath);
+        final DataSnapshot snapshot = await ref.get();
+        if(snapshot.exists){
+          var data = snapshot.value as Map<String, dynamic>;
+          refUIDPath = data["referencePath"];
         }
-      } catch(e) {}
+        if(refUIDPath != null){
+          print(">  gps_log.referencePath was duplicated from RealtimeDatabase to Firestore.");
+          docRef.update({ "gps_log.referencePath": refUIDPath });
+        }
+      } catch(e) { /**/ }
     }
+    // 他のデータへの参照がなければ、自分のパスを返す
     if(refUIDPath == null) refUIDPath = thisUIDPath;
   
-    print(">getReferencePath(${thisUIDPath}) -> ${refUIDPath}");
+    print(">GPSLog.getReferencePath($thisUIDPath) -> $refUIDPath");
 
     return refUIDPath;
   }
 
   //----------------------------------------------------------------------------
-  // トリミング範囲の同期
-  StreamSubscription<DatabaseEvent>? _updateTrimSyncEvent;
+  // トリミング範囲
   void Function(void Function())? bottomSheetSetState;
 
   void saveGPSLogTrimRangeToDB(String uidPath)
   {
-    final String dbPath = "assign" + uidPath + "/gps_log";
-    final DatabaseReference ref = FirebaseDatabase.instance.ref(dbPath);
-    final trimData = {
-      "trimStartTime" : _trimStartTime.toIso8601String(),
-      "trimEndTime" : _trimEndTime.toIso8601String(),
-    };
-    ref.update(trimData);
-  
-    //!!!! Firestore にコピーを作成(過渡期の処理。最終的には Firestore のみにする)
-    {
-      final dbDocId = uidPath.split("/").last;
-      final ref = FirebaseFirestore.instance.collection("assign").doc(dbDocId);
-      ref.update({
-        "gps_log.trimStartTime": _trimStartTime.toIso8601String(),
-        "gps_log.trimEndTime": _trimEndTime.toIso8601String(),
-      });
-    }
+    print(">GPSLog.saveGPSLogTrimRangeToDB($uidPath)");
+
+    // Firestore に保存
+    final dbDocId = uidPath.split("/").last;
+    final docRef = FirebaseFirestore.instance.collection("assign").doc(dbDocId);
+    docRef.update({
+      "gps_log.trimStartTime": _trimStartTime.toIso8601String(),
+      "gps_log.trimEndTime": _trimEndTime.toIso8601String(),
+    });
   }
 
-  Future<void> loadGPSLogTrimRangeFromDB(String uidPath) async
+  Future<void> loadGPSLogTrimRangeFromDB(String uidPath, { bool recurcive=false }) async
   {
-    // 直前の同期イベントを削除
-    _updateTrimSyncEvent?.cancel();
-    _updateTrimSyncEvent = null;
-  
-    // 読み込み
-    final String dbPath = "assign" + uidPath + "/gps_log";
-    final DatabaseReference ref = FirebaseDatabase.instance.ref(dbPath);
-    final DataSnapshot snapshot = await ref.get();
-    if(snapshot.exists){
-      try {
-        // 同期イベントを設定
-        // 接続直後の初回読み込みで、読み込みと再描画が行われる。
-        _updateTrimSyncEvent = ref.onValue.listen((DatabaseEvent event){
-          _onUpdateTrimSync(event);
+    print(">GPSLog.loadGPSLogTrimRangeFromDB($uidPath), recurcive=$recurcive");
 
-          //!!!! Firestore にコピーを作成(過渡期の処理。最終的には Firestore のみにする)
-          {
-            final dbDocId = uidPath.split("/").last;
-            final ref = FirebaseFirestore.instance.collection("assign").doc(dbDocId);
-            ref.update({
-              "gps_log.trimStartTime": _trimStartTime.toIso8601String(),
-              "gps_log.trimEndTime": _trimEndTime.toIso8601String(),
+    //!!!! Firestore から優先的に読み込む。
+    final dbDocId = uidPath.split("/").last;
+    final docRef = FirebaseFirestore.instance.collection("assign").doc(dbDocId);
+    bool existData = false;
+    try {
+      final docSnapshot = await docRef.get();
+      if(docSnapshot.exists){
+        final data = docSnapshot.data();
+        final start = DateTime.parse(data!["gps_log"]["trimStartTime"]!);
+        final end = DateTime.parse(data!["gps_log"]["trimEndTime"]!);
+        setTrimStartTime(start);
+        setTrimEndTime(end);
+        existData = true;
+        // 描画
+        gpsLog.makePolyLines();
+        gpsLog.makeDogMarkers();
+        gpsLog.redraw();
+      }
+    } catch(e) { /**/ }
+  
+    // なければ、RealtimeDatabase から読み込んで Firestore にコピー
+    if(!existData && !recurcive){
+      try {
+        final String dbPath = "assign" + uidPath + "/gps_log";
+        final DatabaseReference ref = FirebaseDatabase.instance.ref(dbPath);
+        final DataSnapshot snapshot = await ref.get();
+        if(snapshot.exists){
+          final trimData = snapshot.value as Map<String, dynamic>;
+          String? start = trimData["trimStartTime"];
+          String? end = trimData["trimEndTime"];
+          if((start != null) && (end != null)){
+            print(">  gps_log.trimStart/EndTime was duplicated from RealtimeDatabase to Firestore.");
+            docRef.update({
+              "gps_log.trimStartTime": start,
+              "gps_log.trimEndTime": end,
             });
+            loadGPSLogTrimRangeFromDB(uidPath, recurcive: true);
           }
-        });
-      } catch(e) {}
-    }
-  }
-
-  void _onUpdateTrimSync(DatabaseEvent event)
-  {
-    if(event.snapshot.exists){
-      try {
-        final trimData = event.snapshot.value as Map<String, dynamic>;
-        final start = DateTime.parse(trimData["trimStartTime"]!);
-        final end = DateTime.parse(trimData["trimEndTime"]!);
-        bool change = (trimStartTime != start) || (trimEndTime != end);
-        if(change){
-          setTrimStartTime(start);
-          setTrimEndTime(end);
-          // 描画
-          gpsLog.makePolyLines();
-          gpsLog.makeDogMarkers();
-          gpsLog.redraw();
-          bottomSheetSetState?.call((){});
         }
-      } catch(e) {}
+      } catch(e) { /**/ }
     }
   }
 
