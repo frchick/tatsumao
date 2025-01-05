@@ -238,13 +238,13 @@ class _MapViewState extends State<MapView>
 
     // GPSログをクリア
     gpsLog.clear();
-    // 汎用マーカーをクリア
-    miscMarkers.clear();
+    // 直前の汎用マーカーを閉じる
+    miscMarkers.close();
     // 直前の手書き図を削除
     freehandDrawing.close();
   
     // メンバーの配置データをデータベースから取得
-    await initMemberSync(fileUIDPath);
+    await openMemberSync(fileUIDPath);
 
     // タツマのエリアフィルターを取得(表示/非表示)
     // それに応じてマーカー配列を作成
@@ -255,7 +255,7 @@ class _MapViewState extends State<MapView>
     await gpsLog.loadDeviceID2DogFromDB(fileUIDPath);
 
     // 汎用マーカーを読み込み
-    miscMarkers.initSync(fileUIDPath);
+    miscMarkers.openSync(fileUIDPath);
   
     // 手書き図を読み込み
     freehandDrawing.open(fileUIDPath);

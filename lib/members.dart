@@ -95,7 +95,7 @@ String _assignPath = "";
 // Firestore の通知変更リスナー
 StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _membersUpdateListener;
 
-// initMemberSync() 直後か？
+// openMemberSync() 直後か？
 // NOTE: リスナーコールバック内で、初回のデータ変更通知を拾うために参照
 bool _isFirstSyncEvent = true;
 
@@ -124,9 +124,9 @@ Future loadMembersListFromDB() async
 
 //---------------------------------------------------------------------------
 // 初期化
-Future initMemberSync(String uidPath) async
+Future openMemberSync(String uidPath) async
 {
-  print(">initMemberSync($uidPath)");
+  print(">openMemberSync($uidPath)");
 
   // 直前のリスナーは停止しておく
   releaseMemberSync();

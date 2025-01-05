@@ -115,6 +115,7 @@ class MiscMarker
 }
 
 //-----------------------------------------------------------------------------
+//-----------------------------------------------------------------------------
 // 汎用マーカー
 class MiscMarkers
 {
@@ -144,8 +145,8 @@ class MiscMarkers
     _mapOption.markers.add(marker.makeMapMarker(index));
   }
 
-  // クリア(ファイルを切り替え)
-  void clear()
+  // ファイルを閉じる(ファイルを切り替え)
+  void close()
   {
     _colRef = null;
     releaseSync();
@@ -168,7 +169,7 @@ class MiscMarkers
   // 変更の同期
   
   // 現在開いているファイルのパス
-  String _openedPath = "";
+  String _openedUIDPath = "";
 
   // 現在開いているファイルの、マーカーのコレクションへの参照
   CollectionReference<Map<String, dynamic>>? _colRef;
@@ -176,7 +177,7 @@ class MiscMarkers
   // 変更通知を受け取るリスナー
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _syncListener;
 
-  // 変更通知が initSync() による初期化によるものかを判定するフラグ
+  // 変更通知が openSync() による初期化によるものかを判定するフラグ
   bool _isFirstSyncEvent = true;
 
   // 変更を送る
@@ -199,20 +200,18 @@ class MiscMarkers
     _colRef?.doc(marker.id).delete();
   }
 
-  // 変更通知の受信を設定
-  // ファイルを開いたタイミングで呼び出される
-  void initSync(String openedPath) async
+  // ファイルを開く
+  void openSync(String uidPath) async
   {
     //!!!!
-    print(">MiscMarkers.initSync(${openedPath})");
+    print(">MiscMarkers.openSync(${uidPath})");
   
     // 直前の変更通知リスナーを停止
     releaseSync();
 
-    _openedPath = openedPath;
-
     // Firestore のコレクションへの参照を取得
-    final dbDocId = _openedPath.split("/").last;
+    _openedUIDPath = uidPath;
+    final dbDocId = uidPath.split("/").last;
     final docRef = FirebaseFirestore.instance.collection("assign").doc(dbDocId);
     _colRef = docRef.collection("misc_markers");
 
@@ -224,7 +223,7 @@ class MiscMarkers
     } catch(e) { /**/ }
     if(!existData){
       try {
-        final String path = "assign" + _openedPath + "/misc_markers/markers";
+        final String path = "assign" + uidPath + "/misc_markers/markers";
         final DatabaseReference ref = FirebaseDatabase.instance.ref(path);
         final DataSnapshot snapshot = await ref.get();
         if(snapshot.exists){
@@ -241,7 +240,7 @@ class MiscMarkers
     _isFirstSyncEvent = true;
     _syncListener = _colRef!.where("iconType", isGreaterThanOrEqualTo: 0).snapshots().listen(
       (event){
-        _onSync(event, openedPath);
+        _onSync(event, uidPath);
       }
     );
   }
@@ -249,7 +248,7 @@ class MiscMarkers
   // 同期リスナーを停止
   void releaseSync()
   {
-    _openedPath = "";
+    _openedUIDPath = "";
     _syncListener?.cancel();
     _syncListener = null;
   }
@@ -261,7 +260,7 @@ class MiscMarkers
 
     // 現在開いているファイルと異なるファイルの変更通知は無視
     // ファイルの切り替え時に、前のファイルの変更通知が遅れてくることがあるため
-    if(_openedPath != uidPath){
+    if(_openedUIDPath != uidPath){
       return;
     }
   
