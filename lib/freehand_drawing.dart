@@ -237,20 +237,6 @@ class FreehandDrawing
 
   //---------------------------------------------------------------------------
   // 他ユーザーとのリアルタイム同期
-  //DatabaseReference? _databaseRef;
-  //DatabaseReference? get databaseRef => _databaseRef;
-
-  // 追加イベント
-  //StreamSubscription<DatabaseEvent>? _addListener;
-  // 削除イベント
-  //StreamSubscription<DatabaseEvent>? _removeListener;
-  // 変更イベント
-  //StreamSubscription<DatabaseEvent>? _changeListener;
-
-  // このアプリケーションインスタンスを一意に識別するキー
-  // 手書きの変更通知が、自分自身によるものか、他のユーザーからかを識別
-  // open() のたびに再生成されるので、ファイルごとになる。
-  //String appInstKey = "";
 
   // 現在開いているファイルの、マーカーのコレクションへの参照
   CollectionReference<Map<String, dynamic>>? _colRef;
@@ -261,41 +247,48 @@ class FreehandDrawing
 
   //---------------------------------------------------------------------------
   // 配置ファイルを開く
-  void open(String uidPath)
+  void open(String uidPath) async
   {
     //!!!!
     print(">FreehandDrawing.open($uidPath)");
 
-/*
-    // データベースにストロークを書き込んだアプリインスタンスを識別するキーを作成
-    appInstKey = UniqueKey().toString();
-
-    // データベースの参照ポイント
-    final String dbPath = "assign" + uidPath + "/freehand_drawing";
-    _databaseRef = FirebaseDatabase.instance.ref(dbPath);
-
-    // 追加削除イベント
-    _addListener?.cancel();
-    _addListener = _databaseRef!.onChildAdded.listen((event){
-      _onStrokeAdded(event);
-    });
-    _removeListener?.cancel();
-    _removeListener = _databaseRef!.onChildRemoved.listen((event){
-      _onStrokeRemoved(event);
-    });
-    _changeListener?.cancel();
-    _changeListener = _databaseRef!.onChildChanged.listen((event){
-      _onStrokeChanged(event);
-    });
-*/
     final dbDocId = uidPath.split("/").last;
     final docRef = FirebaseFirestore.instance.collection("assign").doc(dbDocId);
     _colRef = docRef.collection("freehand_drawing");
+
+    //!!!! Firestore にデータがなければ、RealtimeDatabase から取得して作成
+    //!!!! (過渡期の処理。最終的には Firestore のみにする)
+    bool existData = false;
+    try {
+      var cnt = await _colRef!.count().get();
+      existData = (0 < (cnt.count ?? 0));
+    } catch(e) { /**/ }
+    if(!existData){
+      try {
+        final path = "assign" + uidPath + "/freehand_drawing";
+        final ref = FirebaseDatabase.instance.ref(path);
+        final snapshot = await ref.get();
+        if(snapshot.exists){
+          print(">  FreehandDrawing data was duplicated from RealtimeDatabase to Firestore.");
+          final data = snapshot.value as Map<String,dynamic>;
+          data.forEach((key, figure){
+            _colRef!.add(figure).then((ref){
+              _onStrokeAdded(figure, ref.id);
+            });
+          });
+        }
+      } catch(e) { /**/ }
+    }
+
     _syncListener = _colRef!.snapshots().listen((QuerySnapshot<Map<String, dynamic>> event) {
       for (var change in event.docChanges) {
         switch (change.type) {
           case DocumentChangeType.added:
-            _onStrokeAdded(change.doc);
+            final snapshot = change.doc;
+            _onStrokeAdded(
+              snapshot.data()!,
+              snapshot.id,
+              isMyself: snapshot.metadata.hasPendingWrites);
             break;
           case DocumentChangeType.modified:
             _onStrokeChanged(change.doc);
@@ -318,17 +311,6 @@ class FreehandDrawing
     _syncListener?.cancel();
     _syncListener = null;
 
-/*
-    // 追加削除イベントを閉じる
-    _addListener?.cancel();
-    _addListener = null;
-    _removeListener?.cancel();
-    _removeListener = null;
-    _changeListener?.cancel();
-    _changeListener = null;
-    // データベースへの参照をクリア
-    _databaseRef = null;
-*/
     // まだ削除されていない図形をクリアして削除
     // ただしピン留めされた図形はデータベースに残す
     _figures.forEach((key, figure){
@@ -349,32 +331,29 @@ class FreehandDrawing
 }
 
   // 追加イベント
-  void _onStrokeAdded(DocumentSnapshot<Map<String, dynamic>> snapshot)
+  void _onStrokeAdded(Map<String, dynamic> data, String id, { bool isMyself = false })
   {
     //!!!!
-    bool isMyself = snapshot.metadata.hasPendingWrites;
-    print(">FreehandDrawing._onStrokeAdded(${snapshot.id}) ${isMyself? "from myself.": ""}");
+    print(">FreehandDrawing._onStrokeAdded($id) ${isMyself? "from myself.": ""}");
 
     // 自分自身が追加した場合は無視
     if(isMyself){
       return;
     }
-    // データが存在しない場合は無視(多分ない。念のため)
-    if(!snapshot.exists){
-      return;
-    }
 
     try {
-      final data = snapshot.data() as Map<String, dynamic>;
-
       // 作成が古すぎるデータが来たら、それは多分異常終了で残っているゴミなので削除する
       // ただしピン留めされている場合を除く
-      final createdTime = data["time"].toDate();
+      var createdTime = DateTime.now();
+      // 古い RealtimeDatabase からのデータは、time に互換性がない…
+      try{
+        createdTime = data["time"].toDate();
+      } catch(e) { /**/ }
       final Duration d = DateTime.now().difference(createdTime);
       final bool pinned = data.containsKey("pinned");
       if((10 < d.inSeconds) && !pinned){
-        print("  Remove an old garbage data. id:${snapshot.id}");
-        _colRef?.doc(snapshot.id).delete();
+        print("  Remove an old garbage data. id:${id}");
+        _colRef?.doc(id).delete();
         return;
       }
 
@@ -397,7 +376,7 @@ class FreehandDrawing
         if(pinned) figure.pushPinByRemote();
       }
       // 図形にストロークを追加
-      figure.addStroke(polyline, id:snapshot.id);
+      figure.addStroke(polyline, id:id);
 
       // 再描画
       redraw();
@@ -405,7 +384,7 @@ class FreehandDrawing
       print("  Add stroke to Figure. key:$key pinned:$pinned");
     } catch(e) {
       //!!!!
-      print(">FreehandDrawing._onStrokeAdded(${snapshot.id}) failed!!!!");
+      print(">FreehandDrawing._onStrokeAdded(${id}) failed!!!!");
     }
   }
 
