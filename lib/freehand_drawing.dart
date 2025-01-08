@@ -52,8 +52,8 @@ class FreehandDrawing
   void setColor(Color color){ _color = color; }
   Color get color => _color;
 
-  // ピン留めしている図形のリスト(ピン留め順)
-  List<Figure> _pinnedFigures = [];
+  // 自分で描いた、ピン留めしている図形のリスト(ピン留め順)
+  List<Figure> _ownPinnedFigures = [];
 
   //---------------------------------------------------------------------------
   // FlutterMap のレイヤー(描画した図形)
@@ -90,14 +90,12 @@ class FreehandDrawing
       _currnetStrokePoints = [ pt ];
       _currnetStrokeLatLng = [ point! ];
 
-      // 最後の図形にこのストロークを追加できるか？
+      // このストロークを追加できる図形を探す
       _addStrokeFigure = null;
       for(var figure in _figures.values){
-        if(figure.state == FigureState.Open){
-          if(figure.tryAddNewStroke()){
-            _addStrokeFigure = figure;
-            break;
-          }
+        if(figure.tryAddNewStroke()){
+          _addStrokeFigure = figure;
+          break;
         }
       }
     }
@@ -130,11 +128,14 @@ class FreehandDrawing
   {
     if(_mapController == null) return;
 
+    //!!!!
+    print(">FreehandDrawing.onStrokeEnd()");
+
     if(_currnetStrokeLatLng != null){
       // リダクションをかける
       List<Offset> pts = reducePolyline(_currnetStrokePoints!);
       //!!!!
-      print("The stroke has ${_currnetStrokePoints!.length} -> ${pts.length} points.");
+      print("  The stroke has ${_currnetStrokePoints!.length} -> ${pts.length} points.");
 
       // LatLng に変換し直してポリラインを作成
       List<LatLng> latlngs = [];
@@ -152,7 +153,7 @@ class FreehandDrawing
 
       // 最後の図形に追加するか、新規図形を作成するか
       if(_addStrokeFigure == null){
-        var key = UniqueKey().toString();
+        var key = UniqueKey().toString(); // 図形を識別するキー
         _addStrokeFigure = Figure(key:key, parent:this);
         _figures[key] = _addStrokeFigure!;
       }
@@ -165,19 +166,19 @@ class FreehandDrawing
     _redrawStrokeStream.sink.add(null);
   }
 
-  // 図形を削除
-  void removeFigure(Figure figure)
+  // 図形データを削除
+  void _removeFigure(Figure figure)
   {
-    final int N = _figures.length;
+    final N = _figures.length;
 
     _figures.remove(figure.key);
     if(_addStrokeFigure == figure){
       _addStrokeFigure = null;
     }
-    _pinnedFigures.remove(figure);
+    _ownPinnedFigures.remove(figure);
   
     //!!!!
-    print(">Remove Figure!!!! ${N} -> ${_figures.length}");
+    print(">FreehandDrawing._removeFigur() Num $N -> ${_figures.length}");
   }
 
   // 再描画
@@ -198,19 +199,19 @@ class FreehandDrawing
     // 作成済みの図形をピン留め(フェードアウトに入っているのは対象外)
     for(var figure in _figures.values){
       if(figure.pushPin()){
-        _pinnedFigures.add(figure);
+        _ownPinnedFigures.add(figure);
       }
     }
     redraw();
   }
 
-  // 最後にピン留めした図形を削除
-  void deleteLastPinned()
+  // 最後にピン留めした、自分で描いた図形を削除
+  void deleteLastOwnPinned()
   {
-    if(_pinnedFigures.isEmpty) return;
+    if(_ownPinnedFigures.isEmpty) return;
 
     // データを削除
-    Figure figure = _pinnedFigures.removeLast();
+    Figure figure = _ownPinnedFigures.removeLast();
     _figures.remove(figure.key);
     // データベース上からも削除
     figure.removeToDatabase();
@@ -228,7 +229,7 @@ class FreehandDrawing
       }
       return figure.pinned;
     });
-    _pinnedFigures.clear();
+    _ownPinnedFigures.clear();
 
     // 再描画
     redraw();
@@ -334,7 +335,7 @@ class FreehandDrawing
       if(!figure.pinned) figure.clear();
     });
     _figures.clear();
-    _pinnedFigures.clear();
+    _ownPinnedFigures.clear();
     _addStrokeFigure = null;
     _polylines.clear();
 
@@ -372,7 +373,7 @@ class FreehandDrawing
       final Duration d = DateTime.now().difference(createdTime);
       final bool pinned = data.containsKey("pinned");
       if((10 < d.inSeconds) && !pinned){
-        print(">FreehandDrawing._onStrokeAdded() Remove an old garbage data.");
+        print("  Remove an old garbage data. id:${snapshot.id}");
         _colRef?.doc(snapshot.id).delete();
         return;
       }
@@ -401,7 +402,7 @@ class FreehandDrawing
       // 再描画
       redraw();
       //!!!!
-      print(">FreehandDrawing._onStrokeAdded(${snapshot.id}) key:${key} pinned:${pinned}");
+      print("  Add stroke to Figure. key:$key pinned:$pinned");
     } catch(e) {
       //!!!!
       print(">FreehandDrawing._onStrokeAdded(${snapshot.id}) failed!!!!");
@@ -424,7 +425,6 @@ class FreehandDrawing
       final data = snapshot.data() as Map<String, dynamic>;
 
       // 削除
-      // 自分での削除の後の通知の場合、図形が削除済みなので何もしない
       final key = data["key"] as String;
       final contains = _figures.containsKey(key);
       if(contains){
@@ -484,23 +484,30 @@ class Figure
     required FreehandDrawing parent,
     bool remote = false }) :
     _key = key,
-    _freehandDrawing = parent
+    _freehandDrawing = parent,
+    _remote = remote
   {
     //!!!!
-    print(">new Figure(${key}, remote:${remote})");
+    print(">Figure.Figure(key:$key, remote:$remote)");
 
-    // 他のユーザーが作成したストロークの図形の場合
+    // 他のユーザーが作成した図形かによって、初期状態を変える
     if(remote){
       _state = FigureState.RemoteOpen;
+    }else{
+      _state = FigureState.Open;
     }
   }
 
   // 親
-  late FreehandDrawing _freehandDrawing;
+  final FreehandDrawing _freehandDrawing;
 
   // 状態
   FigureState _state = FigureState.Open;
   FigureState get state => _state;
+
+  // リモート図形か？
+  final bool _remote;
+  bool get remote => _remote;
 
   // 複数ユーザー間で図形を識別するキー
   final String _key;
@@ -530,18 +537,16 @@ class Figure
   static const double pinnedWidth = 5.0;
 
   // 一塊の図形として連続したストロークと判定する時間
-//!!!!  final _openDuration = const Duration(milliseconds: 1500);
-  final _openDuration = const Duration(seconds: 10);
+  final _openDuration = const Duration(milliseconds: 1500);
   // 図形を表示する時間
-//!!!!  final _showDuration = const Duration(milliseconds: 1500);
-  final _showDuration = const Duration(seconds: 20);
+  final _showDuration = const Duration(milliseconds: 1500);
 
   // 次のストロークを追加可能か試す。
   // 可能ならその状態へ。出来ないなら false を返す。
   bool tryAddNewStroke()
   {
     //!!!!
-    print(">tryAddNewStroke(${_state.toString()})");
+    print(">Figure.tryAddNewStroke() ${_state.toString()}");
 
     // Open状態でなければ追加できない
     if(_state != FigureState.Open) return false;
@@ -550,7 +555,7 @@ class Figure
     _openTimer?.cancel();
     _openTimer = null;
     // 状態を切り替え
-    print(">FigureState.Open => FigureState.WaitStroke");
+    print("  FigureState.Open => FigureState.WaitStroke");
     _state = FigureState.WaitStroke;
 
     return true;
@@ -560,14 +565,12 @@ class Figure
   bool addStroke(MyPolyline polyline, { String? id })
   {
     //!!!!
-    print(">addStroke(${_state.toString()})");
+    print(">Figure.addStroke() ${_state.toString()}");
 
     // 図形の新規作成(Open/RemoteOpen)か、連続したストロークの追加(WaitStroke)のみ
-    final bool remote = (_state == FigureState.RemoteOpen) ||
-                        (_state == FigureState.RemotePinned);
     final bool ok = (_state == FigureState.Open) ||
                     (_state == FigureState.WaitStroke) || 
-                    remote;
+                    _remote;
     if(!ok) return false;
 
     // ピン留めされてない場合には半透明
@@ -576,9 +579,9 @@ class Figure
 
     // ストロークを追加
     _polylines.add(polyline);
-    if(!remote){
+    if(!_remote){
       // 連続ストローク判定のタイマーを開始
-      print(">${_state.toString()} => FigureState.Open");
+      print("  ${_state.toString()} => FigureState.Open");
       _state = FigureState.Open;
       _openTimer?.cancel();
       _openTimer = Timer(_openDuration, _onOpenTimer);
@@ -597,14 +600,14 @@ class Figure
   void _onOpenTimer()
   {
     //!!!!
-    print(">_onOpenTimer(${_state.toString()})");
+    print(">Figure._onOpenTimer() ${_state.toString()}");
 
     _openTimer = null;
     // 異常な状態遷移は無視
     if(_state != FigureState.Open) return;
 
     // この図形を表示する期間のタイマーを開始
-    print(">FigureState.Open => FigureState.Close");
+    print("  FigureState.Open => FigureState.Close");
     _state = FigureState.Close;
     _showTimer?.cancel();
     _showTimer = Timer(_showDuration, _onShowTimer);
@@ -614,25 +617,26 @@ class Figure
   void _onShowTimer()
   {
     //!!!!
-    print(">_onShowTimer(${_state.toString()})");
+    print(">Figure._onShowTimer() ${_state.toString()}");
 
     _showTimer = null;
 
     // 異常な状態遷移は無視
-    final bool removeByRemote = (_state == FigureState.RemoteOpen);
-    if((_state != FigureState.Close) && !removeByRemote){
+    final removeOwnFigure = !_remote && (_state == FigureState.Close);
+    final removeByRemote = _remote && (_state == FigureState.RemoteOpen);
+    if(!removeOwnFigure && !removeByRemote){
       return;
     }
 
     // フェードアウトアニメーションを開始
-    print(">${_state.toString()} => FigureState.FadeOut");
+    print("  ${_state.toString()} => FigureState.FadeOut");
     _state = FigureState.FadeOut;
     _fadeAnimTimer?.cancel();
     _fadeAnimTimer = Timer.periodic(Duration(milliseconds: 125), _onFadeAnimTimer);
     _opacity = defaultOpacity;
 
-    // データベース上の図形も削除
-    if(!removeByRemote){
+    // 自分で描いた図形の場合、データベース上の図形も削除
+    if(!_remote){
       removeToDatabase();
     }
   }
@@ -641,7 +645,7 @@ class Figure
   void _onFadeAnimTimer(Timer timer)
   {
     //!!!!
-    print(">_onFadeAnimTimer(${_state.toString()})");
+    print(">Figure._onFadeAnimTimer() ${_state.toString()}");
 
     // 異常な状態遷移は無視
     if(_state != FigureState.FadeOut) return;
@@ -656,7 +660,7 @@ class Figure
       // 完全透明になったら削除
       _fadeAnimTimer?.cancel();
       _fadeAnimTimer = null;
-      _freehandDrawing.removeFigure(this);
+      _freehandDrawing._removeFigure(this);
     }
     // アニメーションのための再描画
     _freehandDrawing.redraw();
@@ -668,6 +672,9 @@ class Figure
 
   bool pushPin()
   {
+    //!!!!
+    print(">Figure.pushPin() ${_state.toString()}");
+
     // ピン留めできるのは、フェードアウトが始まるまで
     // すでにピン留めされている場合も処理しない
     final bool ok = (_state == FigureState.Open) ||
@@ -677,7 +684,7 @@ class Figure
     _pinned = true;
 
     // 即座にピン留め状態に遷移
-    print(">pushPin() ${_state.toString()} => FigureState.Pinned");
+    print("  ${_state.toString()} => FigureState.Pinned");
     _state = FigureState.Pinned;
     // 動いている可能性のあるタイマーは破棄
     _openTimer?.cancel();
@@ -765,13 +772,16 @@ class Figure
   // データベース経由で削除
   bool removeByRemote()
   {
+    // リモート図形でなければ処理しない
+    if(!_remote) return false;
+  
     bool redraw = false;
     if(!_pinned){
       // ピン留めされていなければ、フェードアウトの削除シーケンス開始
       _onShowTimer();
     }else{
       // ピン留めされていれば、即座に削除
-      _freehandDrawing.removeFigure(this);
+      _freehandDrawing._removeFigure(this);
       // 再描画必要
       redraw = true;
     }
@@ -781,12 +791,15 @@ class Figure
   // データベース経由でピン留め
   bool pushPinByRemote()
   {
+    //!!!!
+    print(">Figure.pushPinByRemote() ${_state.toString()}");
+
     // すでにピン留めされている場合も処理しない
     if((_state != FigureState.RemoteOpen) || _pinned) return false;
     _pinned = true;
 
     // 即座にピン留め状態に遷移
-    print(">pushPinByRemote() ${_state.toString()} => FigureState.RemotePinned");
+    print("  ${_state.toString()} => FigureState.RemotePinned");
     _state = FigureState.RemotePinned;
 
     // すでに含まれているストロークを不透明にする
@@ -972,7 +985,7 @@ class FreehandDrawingOnMapState extends State<FreehandDrawingOnMap>
         _makeOffset(_SubMenuWidget(
           key: _subMenuWidgetKey,
           onPushPin: _onPushPin,
-          onDeleteLastPinned: _onDeleteLastPinned,
+          onDeleteLastPinned: _onDeleteLastOwnPinned,
           onDeleteAllPinned: _onDeleteAllPinned,
           colorPaletteWidgetKey: _colorPaletteWidgetKey),
         ),
@@ -1053,9 +1066,9 @@ class FreehandDrawingOnMapState extends State<FreehandDrawingOnMap>
   }
 
   // 最後にピン留めした図形を削除(UIイベントハンドラ)
-  void _onDeleteLastPinned()
+  void _onDeleteLastOwnPinned()
   {
-    freehandDrawing.deleteLastPinned();
+    freehandDrawing.deleteLastOwnPinned();
   }
 
   // 全てのピン留め図形を削除(UIイベントハンドラ)
