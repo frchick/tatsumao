@@ -145,6 +145,33 @@ class MiscMarkers
     _mapOption.markers.add(marker.makeMapMarker(index));
   }
 
+  // マーカーの変更
+  bool modifyMarker(MiscMarker marker)
+  {
+    int index = _markers.indexWhere((m) => (m.id == marker.id));
+    if(index < 0){
+      return false;
+    }
+    _markers[index] = marker;
+    _mapOption.markers[index] = marker.makeMapMarker(index);
+    return true;
+  }
+
+  // マーカーの削除
+  bool removeMarker(String id)
+  {
+    int index = _markers.indexWhere((m) => (m.id == id));
+    if(index < 0){
+      return false;
+    }
+    _markers.removeAt(index);
+    _mapOption.markers.removeAt(index);
+    for(int i=index; i<_markers.length; i++){
+      _mapOption.markers[i].index = i;
+    }
+    return true;
+  }
+
   // ファイルを閉じる(ファイルを切り替え)
   void close()
   {
@@ -238,11 +265,17 @@ class MiscMarkers
 
     // Firestore から変更通知を受け取るリスナーを設定
     _isFirstSyncEvent = true;
-    _syncListener = _colRef!.where("iconType", isGreaterThanOrEqualTo: 0).snapshots().listen(
-      (event){
-        _onSync(event, uidPath);
+    _syncListener = _colRef!.snapshots().listen((QuerySnapshot<Map<String, dynamic>> event) {
+      bool redraw = false;
+      for (var change in event.docChanges) {
+        redraw |= _onSync(change, uidPath);
       }
-    );
+      // 再描画
+      if(redraw){
+        updateMapView();
+      }
+      _isFirstSyncEvent = false;
+    });
   }
 
   // 同期リスナーを停止
@@ -254,36 +287,44 @@ class MiscMarkers
   }
 
   // 変更通知受けたときの処理
-  void _onSync(QuerySnapshot<Map<String, dynamic>> event, String uidPath)
+  bool _onSync(DocumentChange<Map<String, dynamic>> change, String uidPath)
   {
-    print(">MiscMarkers._onSync(): count=${event.docs.length}, local=${event.metadata.hasPendingWrites}, first=${_isFirstSyncEvent}");
+    final doc = change.doc;
+    final localChange = doc.metadata.hasPendingWrites;
+    print(">MiscMarkers._onSync(): id=${doc.id}, type=${change.type}, local=$localChange, first=$_isFirstSyncEvent");
 
     // 現在開いているファイルと異なるファイルの変更通知は無視
     // ファイルの切り替え時に、前のファイルの変更通知が遅れてくることがあるため
     if(_openedUIDPath != uidPath){
-      return;
+      return false;
     }
   
     // ローカルの変更による通知では何もしない
     // ただし、マーカーを初期化するために、ファイルを開いた直後のデータ変更通知は拾う
-    final first = _isFirstSyncEvent;
-    _isFirstSyncEvent = false;
-    if(!first && event.metadata.hasPendingWrites){
-      return;
+    if(!_isFirstSyncEvent && localChange){
+      return false;
     }
 
-    // マーカーリストを全て再構築
-    try {
-      _markers.clear();
-      _mapOption.markers.clear();
-      event.docs.forEach((doc){
-        final marker = MiscMarker.fromMapData(doc.data(), doc.id);
+    bool redraw = false;
+    switch(change.type){
+      case  DocumentChangeType.added:
+        // マーカーの追加
+        final marker = MiscMarker.fromMapData(doc.data()!, doc.id);
         addMarker(marker);
-      });
-    } catch(e) { /**/ }
-
-    // 再描画
-    updateMapView();
+        redraw = true;
+        break;
+      case DocumentChangeType.modified:
+        // 変更
+        final marker = MiscMarker.fromMapData(doc.data()!, doc.id);
+        redraw |= modifyMarker(marker);
+        break;
+      case DocumentChangeType.removed:
+        // 削除
+        // NOTE: 削除は自分からの削除でもリモート扱いで通知される
+        redraw |= removeMarker(doc.id);
+        break;
+    }
+    return redraw;
   }
 
   //----------------------------------------------------------------------------
