@@ -89,8 +89,8 @@ class Member {
 //---------------------------------------------------------------------------
 //---------------------------------------------------------------------------
 
-// メンバーのアサインデータへのパス
-String _assignPath = "";
+// 現在開いているファイルのパス
+String _openedUIDPath = "";
 
 // Firestore の通知変更リスナー
 StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _membersUpdateListener;
@@ -137,7 +137,7 @@ Future openMemberSync(String uidPath) async
     memberMarkers[index].visible = false;
   }
   // ファイルパスを保存
-  _assignPath = "assign" + uidPath;
+  _openedUIDPath = uidPath;
 
   //!!!! Firestore にデータがなければ、RealtimeDatabase から取得して作成
   //!!!! (過渡期の処理。最終的には Firestore のみにする)
@@ -148,7 +148,7 @@ Future openMemberSync(String uidPath) async
   if(!snapshot.exists){
     // メンバーの配置データを RealtimeDatabase から取得
     print(">  Attendees data was duplicated from RealtimeDatabase to Firestore.");
-    final DatabaseReference ref = FirebaseDatabase.instance.ref(_assignPath);
+    final DatabaseReference ref = FirebaseDatabase.instance.ref("assign" + uidPath);
     final DataSnapshot snapshot = await ref.get();
     for(int index = 0; index < members.length; index++)
     {
@@ -167,7 +167,6 @@ Future openMemberSync(String uidPath) async
           attendeesColRef.doc(memberId).set({
             "latitude": lat,
             "longitude": lon,
-            "attended": true, // クエリをリッスンするために必要
           });
         }
       }
@@ -175,14 +174,11 @@ Future openMemberSync(String uidPath) async
   }
 
   // Firestore から変更通知を受け取るリスナーを設定
-  // NOTE: コレクションをリッスンすると、期待に反してドキュメントの削除を検知できない。
-  // NOTE: クエリをリッスンすることで、ドキュメントの削除を検知できる。
   _isFirstSyncEvent = true;
-  _membersUpdateListener = attendeesColRef.where("attended", isEqualTo: true).snapshots().listen(
-    (event){
-      onChangeMemberState(event);
-    }
-  );
+  _membersUpdateListener = attendeesColRef.snapshots().listen((QuerySnapshot<Map<String, dynamic>> event) {
+    _onChangeMemberState(event, uidPath);
+    _isFirstSyncEvent = false;
+  });
 }
 
 //---------------------------------------------------------------------------
@@ -203,14 +199,13 @@ void syncMemberState(final int index)
   // Firestore のデータを更新
   final Member member = members[index];
   final String id = index.toString().padLeft(3, '0');
-  final dbDocId = _assignPath.split("/").last;
+  final dbDocId = _openedUIDPath.split("/").last;
   final assignRef = FirebaseFirestore.instance.collection("assign").doc(dbDocId);
   final memberRef = assignRef.collection("attendees").doc(id);
   if(member.attended){
     memberRef.set({
       "latitude": member.pos.latitude,
       "longitude": member.pos.longitude,
-      "attended": true, // クエリをリッスンするために必要
     });
   }else{
     memberRef.delete();
@@ -219,74 +214,104 @@ void syncMemberState(final int index)
 
 //---------------------------------------------------------------------------
 // 他の利用者からの変更通知を受け取ったときの処理
-void onChangeMemberState(QuerySnapshot<Map<String, dynamic>> event)
+void _onChangeMemberState(QuerySnapshot<Map<String, dynamic>> event, String uidPath)
 {
-  // ログ出力
-  print("Firestore callback: local=${event.metadata.hasPendingWrites}, first=${_isFirstSyncEvent}");
-  final docs = event.docs;
-  for(int i = 0; i < docs.length; i++){
-    final doc = docs[i];
-    final index = int.parse(doc.id);
-    final member = members[index];
-    print("  $i: ${member.name}, attended=${doc["attended"]}, local=${doc.metadata.hasPendingWrites}");
+  // 「全員家に帰った」表示を判定するため、変更前に参加していた人数を数えておく
+  int lastAttendedCount = 0;
+  for(int index = 0; index < members.length; index++){
+    if(members[index].attended) lastAttendedCount++;
   }
-      
-  // ローカルの変更による通知では何もしない
-  // ただし、マーカーを初期化するために、ファイルを開いた直後のデータ変更通知は拾う
-  final first = _isFirstSyncEvent;
-  _isFirstSyncEvent = false;
-  if(!first && event.metadata.hasPendingWrites){
+
+  // 個々のメンバーの参加状態を更新
+  bool modify = false;
+  bool membersChanged = false;
+  int gohomeMemberIndex = -1;
+  for (var change in event.docChanges) {
+    bool res = _onChangeMemberStateSub(change, uidPath);
+    modify |= res;
+
+    // 帰った人を記録
+    if(res && (change.type == DocumentChangeType.removed)){
+      gohomeMemberIndex = int.parse(change.doc.id);
+    }
+    // ホームアイコンの更新が必要かチェック
+    membersChanged |= res &&
+      ((change.type == DocumentChangeType.added) ||
+       (change.type == DocumentChangeType.removed));
+  }
+
+  // 変更がなければここでおしまい
+  if(!modify){
     return;
   }
 
-  // 一旦すべてのメンバーを非表示にした後に、通知を受けたメンバーだけ表示する
-  // 「参加しているメンバー」しか通知に含まれないため、帰ったメンバーを直接取得できない
-  var lastAttendedArray = List.filled(members.length, false);
-  int lastAttendedCount = 0;
-  for(int index = 0; index < members.length; index++){
-    final member = members[index];
-    final memberMarker = memberMarkers[index];
-    if(member.attended) lastAttendedCount++;
-    lastAttendedArray[index] = member.attended;
-    member.attended = memberMarker.visible = false;
-  }
-
-  for(int i = 0; i < docs.length; i++){
-    final doc = docs[i];
-    final index = int.parse(doc.id);
-
-    final member = members[index];
-    final memberMarker = memberMarkers[index];
-    member.attended = memberMarker.visible = true;
-    member.pos = memberMarker.point = LatLng(doc["latitude"], doc["longitude"]);
-  }
-
   // マップの表示更新
-  if(first){
+  if(_isFirstSyncEvent){
     // ファイルを開いた直後では、メンバー達の位置へマップを移動する
     moveMapToLocationOfMembers();
   }else{
     updateMapView();
   }
 
-  // ホームアイコンの更新
-  HomeIconWidget.update();
+  if(membersChanged){
+    // ホームアイコンの更新
+    HomeIconWidget.update();
 
-  // 家に帰った/参加したポップアップメッセージ
-  // 複数人が同時にいなくなりゼロになった場合には、「全員家に帰った」と表示
-  if(docs.isEmpty && (2 <= lastAttendedCount)){
-    showTextBallonMessage("全員家に帰った");
-  }else{
-    // 個別に帰った人を表示
-    // 複数人が同時に帰った場合には、最初の一人だけ表示(通常の操作ではありえない)
+    // 家に帰った/参加したポップアップメッセージ
+    // 複数人が同時にいなくなりゼロになった場合には、「全員家に帰った」と表示
+    int attendedCount = 0;
     for(int index = 0; index < members.length; index++){
-      final member = members[index];
-      if(lastAttendedArray[index] && !member.attended){
+      if(members[index].attended) attendedCount++;
+    }
+    if((2 <= lastAttendedCount) && (attendedCount == 0)){
+      showTextBallonMessage("全員家に帰った");
+    }else if(gohomeMemberIndex != -1){
+      // 個別に帰った人を表示
+      // 「全員家に帰った」以外で、複数人が同時にいなくなることは、想定していない
+      final member = members[gohomeMemberIndex];
+      if(!member.attended){
         showTextBallonMessage("${member.name} は家に帰った");
-        break;
       }
     }
   }
+}
+
+bool _onChangeMemberStateSub(DocumentChange<Map<String, dynamic>> change, String uidPath)
+{
+  // ログ出力
+  final doc = change.doc;
+  final index = int.parse(doc.id);
+  final member = members[index];
+  final memberMarker = memberMarkers[index];
+  final localChange = doc.metadata.hasPendingWrites;
+  print("_onChangeMemberStateSub(): ${member.name}, id=${doc.id}, type=${change.type}, local=$localChange, first=$_isFirstSyncEvent");
+      
+  // ローカルの変更による通知では何もしない
+  // ただし、マーカーを初期化するために、ファイルを開いた直後のデータ変更通知は拾う
+  if(!_isFirstSyncEvent && localChange){
+    return false;
+  }
+
+  bool modified = true;
+  switch(change.type){
+    case  DocumentChangeType.added:
+      // 出動
+      member.attended = memberMarker.visible = true;
+      member.pos = memberMarker.point = LatLng(doc["latitude"], doc["longitude"]);
+      break;
+    case DocumentChangeType.modified:
+      // 変更(座標だけ)
+      member.pos = memberMarker.point = LatLng(doc["latitude"], doc["longitude"]);
+      break;
+    case DocumentChangeType.removed:
+      // 家に帰る
+      // NOTE: 削除は自分からの削除でもリモート扱いで通知される
+      modified = member.attended;
+      member.attended = memberMarker.visible = false;
+      break;
+  }
+
+  return modified;
 }
 
 //----------------------------------------------------------------------------
@@ -333,7 +358,7 @@ bool goEveryoneHome()
 
 Future<void> goEveryoneHomeAsync() async
 {
-  final dbDocId = _assignPath.split("/").last;
+  final dbDocId = _openedUIDPath.split("/").last;
   final assignDocRef = FirebaseFirestore.instance.collection("assign").doc(dbDocId);
   final snapshot = await assignDocRef.collection("attendees").get();
   List<DocumentReference> batchDocs = [];
