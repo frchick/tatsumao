@@ -163,10 +163,10 @@ class _MapViewState extends State<MapView>
     await initFileTree();
     // 初期状態で開くファイルの位置までカレントディレクトリを移動
     // 失敗していたら標準ファイル("/1")を開く
-    bool res = await moveFullPathDir(openPath);
+    bool res = await moveAbsUIDPathDir(openPath);
     if(!res){
       openPath = "/1";
-      await moveFullPathDir(openPath);
+      await moveAbsUIDPathDir(openPath);
     }
     // タツマデータをデータベースから取得
     await loadTatsumaFromDB();
