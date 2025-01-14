@@ -202,23 +202,10 @@ List<FileItem> getCurrentDir()
 // 先頭は"/"から始まり、最後のディレクトリ名の後ろは"/"で終わる。
 String getCurrentDirPath()
 {
-  // ディレクトリにあるフォルダから、スタックの次のディレクトリを探しながらたどる
   String path = "/";
-  for(int d = 0; d < (_directoryStack.length - 1); d++){
-    final directory = _directoryStack[d];
-    bool ok = false;
-    for(var item in directory){
-      ok = (item.isFolder && (item.uid == _directoryUIDStack[d]));
-      if(ok){
-        path += "${item.name}/";
-        break;
-      }
-    }
-    // ディレクトリが見つからなかったらエラーで、ルートに戻す
-    if(!ok){
-      print(">FileTree.getCurrentDirPath(): Error: Directory not found.");
-      return "/";
-    }
+  for(final uid in _directoryUIDStack){
+    final name = _uid2name[uid] ?? uid.toString();
+    path += "$name/";
   }
   return path;
 }
@@ -240,21 +227,8 @@ String getCurrentDirUIDPath()
 {
   // ディレクトリにあるフォルダから、スタックの次のディレクトリを探しながらたどる
   String path = "/";
-  for(int d = 0; d < (_directoryStack.length - 1); d++){
-    final directory = _directoryStack[d];
-    bool ok = false;
-    for(var item in directory){
-      ok = (item.isFolder && (item.uid == _directoryUIDStack[d]));
-      if(ok){
-        path += "${item.uid}/";
-        break;
-      }
-    }
-    // ディレクトリが見つからなかったらエラーで、ルートに戻す
-    if(!ok){
-      print(">FileTree.getCurrentDirUIDPath(): Error: Directory not found.");
-      return "/";
-    }
+  for(final uid in _directoryUIDStack){
+    path += "$uid/";
   }
   return path;
 }
@@ -734,9 +708,6 @@ void sortDir(List<FileItem> dir)
 // 直前の moveDir() が完了するまで、次の処理を破棄するフラグ
 bool _blockingMoveDir = false;
 
-// ディレクトリの移動において、処理の完了待ちをする場合の同期フラグ
-Completer? _completerMoveDir;
-
 // ディレクトリを移動
 // 現在のディレクトリから1階層の移動のみ。
 Future<bool> moveDir(int uid) async
@@ -768,9 +739,17 @@ Future<bool> _moveDir(int uid) async
   }else if(uid == _parentDirId){
     // 親ディレクトリに戻る
     // ルートにいて、更に親はない
-    if(_directoryStack.length <= 1) return false;
+    if(_directoryStack.length <= 1){
+      print(">FileTree._moveDir(): Error: No parent directory of the root.");
+      return false;
+    }
+    // 現在のディレクトリを削除
     _directoryStack.removeLast();
+    // 親ディレクトリも読み込みなおすので削除
+    _directoryStack.removeLast();
+    // フォルダUIDスタックも一つ戻る
     _directoryUIDStack.removeLast();
+    // 移動先ディレクトリのUIDを取得
     if(_directoryUIDStack.isNotEmpty){
       nextUID = _directoryUIDStack.last;
     }else{
@@ -779,13 +758,15 @@ Future<bool> _moveDir(int uid) async
     }
   }else{ 
     // 現在のディレクトリの一つ下のフォルダに入る
+    // 指定されたフォルダが存在しなければエラー
+    bool ok = false;
     for(var item in getCurrentDir()){
-      if(item.uid == uid){
-        if(!item.isFolder){
-          return false;
-        }
-        break;
-      }
+      ok = (item.uid == uid) && item.isFolder;
+      if(ok) break;
+    }
+    if(!ok){
+      print(">FileTree._moveDir(): Error: Folder(uid:$uid) is not in current directory.");
+      return false;
     }
     enterChild = true;
   }
@@ -794,6 +775,7 @@ Future<bool> _moveDir(int uid) async
   final docRef = FirebaseFirestore.instance.collection("directories").doc("$nextUID");
   final doc = await docRef.get();
   if(!doc.exists){
+    print(">FileTree._moveDir(): Error: Doc of directory(uid:$nextUID) does not exist in DB.");
     return false;
   }
   // ルート階層以外なら、「親ディレクトリ」を追加
@@ -825,9 +807,6 @@ Future<bool> _moveDir(int uid) async
     }
   }
 
-  // 処理の完了を通知
-  _completerMoveDir?.complete();
-
   // ファイル一覧画面を表示していたら再描画
   _onCurrentDirChangedForFilesPage?.call();
 
@@ -854,14 +833,14 @@ void setOpenedFileGPSLogFlag(bool gpsLog)
 Future<bool> moveAbsUIDPathDir(String uidPath) async
 {
   print(">FileTree.moveAbsUIDPathDir(${uidPath})");
-  bool res = await _moveUIDPathDir(uidPath);
+  bool res = await _moveAbsUIDPathDir(uidPath);
 
   print(">FileTree.moveAbsUIDPathDir(${uidPath}) ${res} " + getCurrentDirUIDPath());
 
   return res;
 }
 
-Future<bool> _moveUIDPathDir(String uidPath) async
+Future<bool> _moveAbsUIDPathDir(String uidPath) async
 {
   // 先頭にパス文字がないのは文字列がおかしい
   if(!uidPath.startsWith("/")) return false;
