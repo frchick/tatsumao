@@ -521,6 +521,13 @@ FileResult _renameFile(FileItem item, String newName)
   // ディレクトリツリーのデータベースを更新
   _updateFileListToDB(getCurrentDirUID(), currentDir);
 
+  // ファイルの場合、配置データ側にあるファイル名も変更
+  if(item.isFile){
+    final dbDocId = "${item.uid}";
+    final assignDocRef = FirebaseFirestore.instance.collection("assign").doc(dbDocId);
+    assignDocRef.update({ "name": newName });
+  }
+
   // 変更されたファイルパスを返す
   final String newPath = getCurrentDirPath() + newName;
   final String newUIDPath = getCurrentDirUIDPath() + item.uid.toString();
