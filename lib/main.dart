@@ -244,7 +244,8 @@ class _MapViewState extends State<MapView>
     freehandDrawing.close();
   
     // メンバーの配置データをデータベースから取得
-    await openMemberSync(fileUIDPath);
+    String name = getOpenedFileName();
+    await openMemberSync(fileUIDPath, name);
 
     // タツマのエリアフィルターを取得(表示/非表示)
     // それに応じてマーカー配列を作成

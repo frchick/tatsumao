@@ -9,7 +9,7 @@ import 'text_edit_dialog.dart';
 import 'text_edit_icon_dialog.dart';
 import 'text_ballon_widget.dart';
 import 'text_item_list_dialog.dart';
-import 'tatsumas.dart';
+import 'members.dart';
 import 'gps_log.dart';
 import 'responsiveAppBar.dart';
 import 'globals.dart';
@@ -83,7 +83,7 @@ class FileItem {
   @override
   String toString ()
   {
-    return "${uid}:${_name}";
+    return "$uid:$_name:${isFolder?"Folder":"File"}";
   }
 }
 
@@ -167,27 +167,6 @@ Map<int, String> _uid2name = {
 
 // 各ディレクトリにある「親ディレクトリ」を表すアイテム(ルートディレクトリを除く)
 final _parentFolder = FileItem(uid:_parentDirId, name:"..", isFolder:true);  
-
-// 現在のディレクトリの変更通知があったときの、ファイル選択画面の再描画
-Function? _onCurrentDirChangedForFilesPage;
-
-// フォルダを指すUIDパスから Firestore の参照パスを取得
-// NOTE: フォルダが存在するかはチェックしない。
-DocumentReference getFolderDatabaseRef(String uidPath)
-{
-  // パスの最後に "/" があれば取り除く
-  if (uidPath.endsWith("/")) {
-    uidPath = uidPath.substring(0, uidPath.length - 1);
-  }
-  // UIDパスの最後のフォルダIDを取得
-  // 空文字列の場合はルートディレクトリ
-  String uid = "0";
-  if(uidPath.isNotEmpty){
-    uid = uidPath.split("/").last;
-  }
-  // そのフォルダのIDが、Firestore のドキュメントIDになる
-  return FirebaseFirestore.instance.collection("directories").doc(uid);
-}
 
 // 現在のディレクトリを参照
 List<FileItem> getCurrentDir()
@@ -412,7 +391,7 @@ Future initFileTree() async
   }
 
   // ルートディレクトリをデータベースから読み込み
-  await moveDir(_rootDirId);
+  await _moveDir(_rootDirId);
 }
 
 //----------------------------------------------------------------------------
@@ -440,6 +419,7 @@ Future<int> _getUniqueID() async
 Future<FileResult> createNewFile(String fileName) async
 {
   print(">FileTree.createNewFile($fileName)");
+
   FileResult res = await _addFileItem(fileName, false);
 
   print(">FileTree.createNewFile($fileName) $res");
@@ -483,9 +463,14 @@ Future<FileResult> _addFileItem(String name, bool folder) async
   // ディレクトリツリーのデータベースを更新
   _updateFileListToDB(getCurrentDirUID(), currentDir);
 
+  // フォルダを作成した場合は、データベースに空のディレクトリを作成
+  if(folder){
+    _updateFileListToDB(uid, []);
+  }
+
   // 作成されたファイルパスを返す
-  final String newPath = getCurrentDirPath() + name;
-  final String newUIDPath = getCurrentDirUIDPath() + uid.toString();
+  final String newPath = getCurrentDirPath() + name + (folder?"/":"");
+  final String newUIDPath = getCurrentDirUIDPath() + uid.toString() + (folder?"/":"");
 
   return FileResult(path:newPath, uidPath:newUIDPath);
 }
@@ -633,16 +618,16 @@ Future<FileResult> _deleteFolder(FileItem folder) async
   if(folder.uid == _parentDirId){
     return FileResult(res:false, message:"'上階層に戻る'は削除できません");
   }
-  final String folderUID = "/" + folder.uid.toString() + "/";
-  if(getOpenedFileUIDPath().indexOf(folderUID) == 0){
+  final String folderUID = "/${folder.uid}/";
+  if(getOpenedFileUIDPath().contains(folderUID)){
     return FileResult(res:false, message:"開いているファイルを含むフォルダは削除できません");
   }
 
   // item が現在のディレクトリにあることをチェック
-  List<FileItem> currentDir = getCurrentDir();
+  var currentDir = getCurrentDir();
   int index = -1;
   for(int i = 0; i < currentDir.length; i++){
-    var item = currentDir[i];
+    final item = currentDir[i];
     if(item.isFolder && (item.uid == folder.uid)){
       index = i;
       break;
@@ -656,10 +641,17 @@ Future<FileResult> _deleteFolder(FileItem folder) async
   await _deleteFolderRecursive(folder);
 
   // 現在のディレクトリから要素を削除
-  currentDir.removeAt(index);
-
-  // ディレクトリツリーのデータベースを更新
-  _updateFileListToDB(getCurrentDirUID(), currentDir);
+  // NOTE: _deleteFolderRecursive() でディレクトが再構築されているので、currentDir を参照しなおす
+  currentDir = getCurrentDir();
+  for(int i = 0; i < currentDir.length; i++){
+    final item = currentDir[i];
+    if(item.isFolder && (item.uid == folder.uid)){
+      currentDir.removeAt(i);
+      // ディレクトリツリーのデータベースを更新
+      _updateFileListToDB(getCurrentDirUID(), currentDir);
+      break;
+    }
+  }
 
   // 配置データやGPSログは削除せずに放っておく(サルベージ可能なように)
 
@@ -670,7 +662,8 @@ Future<FileResult> _deleteFolder(FileItem folder) async
 Future _deleteFolderRecursive(FileItem folder) async
 {
   // 指定されたフォルダに降りて、
-  await moveDir(folder.uid);
+  bool res = await _moveDir(folder.uid);
+  if(!res) return;
 
   // その中のディレクトリに再帰しながら削除
   // NOTE: forEach() 使うと await で処理止められない…
@@ -688,7 +681,7 @@ Future _deleteFolderRecursive(FileItem folder) async
   docRef.delete();
 
   // 親ディレクトリへ戻る
-  await moveDir(_parentDirId);
+  await _moveDir(_parentDirId);
 }
 
 // ディレクトリ内の並びをソート
@@ -729,38 +722,31 @@ Future<bool> moveDir(int uid) async
 
 Future<bool> _moveDir(int uid) async
 {
+  print(">FileTree._moveDir($uid)");
+
   // 次に現在のディレクトリとなるフォルダのUIDを決定
   int nextUID = uid;
-  bool enterChild = false;
   if(uid == _rootDirId){
     // ルートディレクトリに戻る
-    _directoryStack.clear();
-    _directoryUIDStack.clear();
   }else if(uid == _parentDirId){
     // 親ディレクトリに戻る
-    // ルートにいて、更に親はない
-    if(_directoryStack.length <= 1){
+    final n = _directoryUIDStack.length;
+    if(n == 0){
+      // ルートにいて、更に親はない
       print(">FileTree._moveDir(): Error: No parent directory of the root.");
       return false;
-    }
-    // 現在のディレクトリを削除
-    _directoryStack.removeLast();
-    // 親ディレクトリも読み込みなおすので削除
-    _directoryStack.removeLast();
-    // フォルダUIDスタックも一つ戻る
-    _directoryUIDStack.removeLast();
-    // 移動先ディレクトリのUIDを取得
-    if(_directoryUIDStack.isNotEmpty){
-      nextUID = _directoryUIDStack.last;
-    }else{
+    }else if(n == 1){
       // (結果として)ルートディレクトリに戻る
       nextUID = _rootDirId;
+    }else{
+      // 親ディレクトリに戻る
+      nextUID = _directoryUIDStack[n - 2];
     }
   }else{ 
     // 現在のディレクトリの一つ下のフォルダに入る
     // 指定されたフォルダが存在しなければエラー
     bool ok = false;
-    for(var item in getCurrentDir()){
+    for(final item in getCurrentDir()){
       ok = (item.uid == uid) && item.isFolder;
       if(ok) break;
     }
@@ -768,7 +754,6 @@ Future<bool> _moveDir(int uid) async
       print(">FileTree._moveDir(): Error: Folder(uid:$uid) is not in current directory.");
       return false;
     }
-    enterChild = true;
   }
 
   // 移動先ディレクトリの構成をデータベースから取得
@@ -791,10 +776,20 @@ Future<bool> _moveDir(int uid) async
   sortDir(directory);
 
   // ディレクトリスタックに追加
-  _directoryStack.add(directory);
-  if(enterChild){
+  if(nextUID == _rootDirId){
+    // ルートディレクトリに戻るので、スタックをクリア
+    _directoryStack.clear();
+    _directoryUIDStack.clear();
+  }else if(uid == _parentDirId){
+    // 親ディレクトリに戻るので、現在のディレクトリを削除
+    _directoryStack.removeLast();
+    _directoryStack.removeLast();
+    _directoryUIDStack.removeLast();
+  }else{
+    // 一つ下に降りる場合は、現在のスタックに追加するだけ
     _directoryUIDStack.add(nextUID);
   }
+  _directoryStack.add(directory);
 
   // GPSログファイルの一覧をクラウドストレージから取得する
   // ファイルに対応するGPSログがあるかどうかをチェック
@@ -806,9 +801,6 @@ Future<bool> _moveDir(int uid) async
       item.gpsLog = gpsFileList.contains(gpxFileName);
     }
   }
-
-  // ファイル一覧画面を表示していたら再描画
-  _onCurrentDirChangedForFilesPage?.call();
 
   return true;
 }
@@ -833,6 +825,7 @@ void setOpenedFileGPSLogFlag(bool gpsLog)
 Future<bool> moveAbsUIDPathDir(String uidPath) async
 {
   print(">FileTree.moveAbsUIDPathDir(${uidPath})");
+
   bool res = await _moveAbsUIDPathDir(uidPath);
 
   print(">FileTree.moveAbsUIDPathDir(${uidPath}) ${res} " + getCurrentDirUIDPath());
@@ -846,7 +839,8 @@ Future<bool> _moveAbsUIDPathDir(String uidPath) async
   if(!uidPath.startsWith("/")) return false;
 
   // 現在のディレクトリをルートに戻す
-  await moveDir(_rootDirId);
+  bool res = await _moveDir(_rootDirId);
+  if(!res) return false;
 
   // UIDを分解
   List<int> uidList = [];
@@ -861,7 +855,7 @@ Future<bool> _moveAbsUIDPathDir(String uidPath) async
 
   // 指定されたパスから1階層ずつ入っていく
   for(final uid in uidList){
-    final bool res = await moveDir(uid);
+    final bool res = await _moveDir(uid);
     if(!res) return false;
   }
 
@@ -944,14 +938,9 @@ class FilesPageState extends State<FilesPage>
 
     final List<FileItem> currentDir = getCurrentDir();
 
-    // 他のユーザーによる現在のディレクトリ変更のコールバックを設定
-    _onCurrentDirChangedForFilesPage = (){ setState((){}); };
-
     return WillPopScope(
       // ページ閉じる際の処理
       onWillPop: (){
-        // 他のユーザーによる変更のコールバックをクリア
-        _onCurrentDirChangedForFilesPage = null;
         Navigator.pop(context);
         return Future.value(false);
       },
@@ -968,14 +957,14 @@ class FilesPageState extends State<FilesPage>
             // (左)フォルダ作成ボタン
             if(!widget.readOnlyMode) IconButton(
               icon: Icon(Icons.create_new_folder),
-              onPressed:() async {
+              onPressed:() {
                 createNewFolderSub(context);
               },
             ),
             // (右)ファイル作成ボタン
             if(!widget.readOnlyMode) IconButton(
               icon: Icon(Icons.note_add),
-              onPressed:() async {
+              onPressed:() {
                 createNewFileSub(context);
               },
             ),
@@ -1082,8 +1071,6 @@ class FilesPageState extends State<FilesPage>
         onTap: () {
           if(currentDir[index].isFile){
             if(enable){
-              // 他のユーザーによる変更のコールバックをクリア
-              _onCurrentDirChangedForFilesPage = null;
               // ファイルを切り替える
               final String thisUIDPath = getCurrentDirUIDPath() + currentDir[index].uid.toString();
               widget.onSelectFile(thisUIDPath);
@@ -1091,8 +1078,9 @@ class FilesPageState extends State<FilesPage>
             }
           }else{
             // ディレクトリ移動
-            // NOTE: データベース読み込みの完了イベント内で setState() しているのでここでは不要。
-            moveDir(currentDir[index].uid);
+            moveDir(currentDir[index].uid).then((_){
+              setState((){});
+            });
           }
         },
       ),
@@ -1148,9 +1136,7 @@ class FilesPageState extends State<FilesPage>
         break;
       case 1:
         // ファイルを削除
-        deleteFileSub(context, item).then((_){
-          setState((){});
-        });
+        deleteFileSub(context, item);
         break;
       }
     });
@@ -1166,8 +1152,8 @@ class FilesPageState extends State<FilesPage>
     // 作成
     var res = await createNewFile(name);
     if(res.res){
-      // 他のユーザーによる変更のコールバックをクリア
-      _onCurrentDirChangedForFilesPage = null;
+      // 実際に配置ファイルを作成
+      createNewAssignFile(res.uidPath, name);
       // 作成が成功したら、切り替えてマップに戻る
       widget.onSelectFile(res.uidPath);
       Navigator.pop(context);
@@ -1187,7 +1173,7 @@ class FilesPageState extends State<FilesPage>
     if(name == null) return;
 
     // 作成
-    var res = await createNewFolder(name);
+    final res = await createNewFolder(name);
     if(res.res){
       // フォルダ作成が成功したら再描画
       setState((){});
@@ -1214,10 +1200,12 @@ class FilesPageState extends State<FilesPage>
     if(item.isFile){
       res = deleteFile(item);
     }else{
-      await deleteFolder(item).then((r){ res = r; });
+      res = await deleteFolder(item);
     }
 
     if(res.res){
+      // 再描画
+      setState((){});
     }else{
       // エラーメッセージ
       showDialog(

@@ -124,9 +124,9 @@ Future loadMembersListFromDB() async
 
 //---------------------------------------------------------------------------
 // 初期化
-Future openMemberSync(String uidPath) async
+Future openMemberSync(String uidPath, String name) async
 {
-  print(">openMemberSync($uidPath)");
+  print(">openMemberSync($uidPath:$name)");
 
   // 直前のリスナーは停止しておく
   releaseMemberSync();
@@ -146,6 +146,9 @@ Future openMemberSync(String uidPath) async
   final attendeesColRef = assignDocRef.collection("attendees");
   final snapshot = await assignDocRef.get();
   if(!snapshot.exists){
+    // まず名前を記録
+    assignDocRef.set({ "name": name });
+
     // メンバーの配置データを RealtimeDatabase から取得
     print(">  Attendees data was duplicated from RealtimeDatabase to Firestore.");
     final DatabaseReference ref = FirebaseDatabase.instance.ref("assign" + uidPath);
@@ -179,6 +182,36 @@ Future openMemberSync(String uidPath) async
     _onChangeMemberState(event, uidPath);
     _isFirstSyncEvent = false;
   });
+}
+
+//---------------------------------------------------------------------------
+// 現在のメンバーの状態で、新しくファイルを作成
+// NOTE: 現在のファイルを切り替えたりはしない
+void createNewAssignFile(String uidPath, String name)
+{
+  print(">createNewAssignFile($uidPath:$name)");
+
+  // ドキュメントに名前を記録
+  final dbDocId = uidPath.split("/").last;
+  final assignDocRef = FirebaseFirestore.instance.collection("assign").doc(dbDocId);
+  assignDocRef.set({ "name": name });
+
+  // 参加メンバーをコピー
+  final attendeesColRef = assignDocRef.collection("attendees");
+  for(int index = 0; index < members.length; index++)
+  {
+    final memberId = index.toString().padLeft(3, '0');
+    final member = members[index];
+    if(member.attended){
+      attendeesColRef.doc(memberId).set({
+        "latitude": member.pos.latitude,
+        "longitude": member.pos.longitude,
+      });
+    }
+  }
+
+  // タツマのエリア表示フィルターもコピー
+  saveAreaFilterToDB(uidPath);
 }
 
 //---------------------------------------------------------------------------
