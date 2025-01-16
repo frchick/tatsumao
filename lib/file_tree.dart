@@ -1078,10 +1078,10 @@ class FilesPageState extends State<FilesPage>
         onTap: () {
           if(currentDir[index].isFile){
             if(enable){
+              Navigator.pop(context);
               // ファイルを切り替える
               final String thisUIDPath = getCurrentDirUIDPath() + currentDir[index].uid.toString();
               widget.onSelectFile(thisUIDPath);
-              Navigator.pop(context);
             }
           }else{
             // ディレクトリ移動

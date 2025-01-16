@@ -176,19 +176,6 @@ class _MapViewState extends State<MapView>
     // 編集ロックに設定
     lockEditing = true;
 
-    // GPSログを読み込み(遅延処理)
-    final String gpsLogPath = await gpsLog.getReferencePath(openPath);
-    final bool refLink = (gpsLogPath != openPath);
-    gpsLog.downloadFromCloudStorage(gpsLogPath, refLink).then((res) async {
-      if(res){
-        await gpsLog.loadGPSLogTrimRangeFromDB(openPath);
-        gpsLog.saveDeviceID2DogToDB(openPath);
-      }
-      gpsLog.makePolyLines();
-      gpsLog.makeDogMarkers();
-      gpsLog.redraw();
-    });
-
     // 初期化完了(GPSログ除く)
     // 一通りの処理が終わるので、処理中インジケータを消す
     if(_progressIndicatorState == ProgressIndicatorState.Showing){
@@ -222,16 +209,18 @@ class _MapViewState extends State<MapView>
   // 指定されたファイルがカレントディレクトリになければエラー
   Future<void> openFile(String fileUIDPath) async
   {
-    // メンバーマーカーが非表示なら、表示に戻す。
+    print("----------------------------------------");
+    print(">openFile($fileUIDPath)");
+  
+    // メンバーマーカーの表示設定が非表示なら、表示に戻す。
     if(!isShowMemberMarker()){
       memberMarkerSizeSelector = 1;
       createMemberMarkers();
     }
-    // GPSログが非表示なら、表示に戻す。(強制的に表示にする)
+    // GPSログの表示設定が非表示なら、表示に戻す。(強制的に表示にする)
     gpsLog.showLogLine = true;
     
-    // ファイルを開く準備
-    // もし指定されたファイルが無ければ何もしない
+    // 「現在のファイル」のパスを設定
     if(!setOpenedFileUIDPath(fileUIDPath)){
       return;
     }
@@ -255,11 +244,24 @@ class _MapViewState extends State<MapView>
     // GPSログをクリア、デバイスIDと犬の対応を取得
     await gpsLog.loadDeviceID2DogFromDB(fileUIDPath);
 
-    // 汎用マーカーを読み込み
+    // 汎用マーカーを読み込み(非同期)
     miscMarkers.openSync(fileUIDPath);
   
-    // 手書き図を読み込み
+    // 手書き図を読み込み(非同期)
     freehandDrawing.open(fileUIDPath);
+  
+    // GPSログを読み込み(非同期)
+    final String gpsLogPath = await gpsLog.getReferencePath(fileUIDPath);
+    final bool refLink = (gpsLogPath != fileUIDPath);
+    gpsLog.downloadFromCloudStorage(gpsLogPath, refLink).then((res) async {
+      if(res){
+        await gpsLog.loadGPSLogTrimRangeFromDB(fileUIDPath);
+        gpsLog.saveDeviceID2DogToDB(fileUIDPath);
+      }
+      gpsLog.makePolyLines();
+      gpsLog.makeDogMarkers();
+      gpsLog.redraw();
+    });
   }
 
   //----------------------------------------------------------------------------
@@ -451,35 +453,39 @@ class _MapViewState extends State<MapView>
     Navigator.push(
       context,
       MaterialPageRoute(builder: (context) => FilesPage(
-        onSelectFile: (uidPath) async {
-          // ファイルを読み込み
-          await openFile(uidPath);
-          // 編集ロックに設定
-          onLockChangeSub(true);
-          // 再描画
-          setState((){});
-          // ファイル名をバルーン表示
-          final String path = getOpenedFilePath();
-          showTextBallonMessage(path);
-          // GPSログを読み込み(遅延処理)
-          final String gpsLogPath = await gpsLog.getReferencePath(uidPath);
-          final bool refLink = (gpsLogPath != uidPath);
-          gpsLog.downloadFromCloudStorage(gpsLogPath, refLink).then((res) async {
-            if(res){
-              await gpsLog.loadGPSLogTrimRangeFromDB(uidPath);
-              gpsLog.saveDeviceID2DogToDB(uidPath);
-            }
-            gpsLog.makePolyLines();
-            gpsLog.makeDogMarkers();
-            gpsLog.redraw();
-          });
-        },
+        onSelectFile: (uidPath) => onSelectFileToOpen(uidPath),
         onChangeState: (){
           // ファイル変更に至らない程度の変更があった場合には、AppBar を更新
           setState((){});
         },
       ))
     );
+  }
+
+  //----------------------------------------------------------------------------
+  // ファイルを開く(切り替える)
+  Future<void> onSelectFileToOpen(String uidPath) async
+  {
+    // 読み込み処理のうち、完了待を行うものが終わるまではクルクルを表示
+    afterFirstLayout(context);
+  
+    // ファイルを読み込み
+    // NOTE: 非同期読み込みの処理は、この後に実行される可能性あり
+    await openFile(uidPath);
+
+    // クルクルを消す    
+    Navigator.of(context).pop();
+    _progressIndicatorState = ProgressIndicatorState.NoIndicate;
+
+    // 編集ロックに設定
+    onLockChangeSub(true);
+
+    // 再描画
+    setState((){});
+
+    // ファイル名をバルーン表示
+    final String path = getOpenedFilePath();
+    showTextBallonMessage(path);
   }
 
   //----------------------------------------------------------------------------
