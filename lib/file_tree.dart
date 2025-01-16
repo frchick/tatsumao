@@ -391,7 +391,8 @@ Future initFileTree() async
   }
 
   // ルートディレクトリをデータベースから読み込み
-  await _moveDir(_rootDirId);
+  // NOTE: 直後に最初のファイル読み込みで moveAbsUIDPathDir() が呼ばれるので、それに任す
+  // await _moveDir(_rootDirId);
 }
 
 //----------------------------------------------------------------------------
@@ -798,18 +799,21 @@ Future<bool> _moveDir(int uid) async
   }
   _directoryStack.add(directory);
 
-  // GPSログファイルの一覧をクラウドストレージから取得する
-  // ファイルに対応するGPSログがあるかどうかをチェック
+  return true;
+}
+
+// カレントディレクトリのファイルに対して、GPSログの有無フラグを更新
+Future<void> updateGpsLogFlagForCurrentDir() async
+{
   final uidPath = getCurrentDirUIDPath();
   final gpsFileList = await gpsLog.getFileList(uidPath);
-  for(var item in directory){
+  final currentDir = getCurrentDir();
+  for(var item in currentDir){
     if(item.isFile){
       final String gpxFileName = "${item.uid}.gpx";
       item.gpsLog = gpsFileList.contains(gpxFileName);
     }
   }
-
-  return true;
 }
 
 // 現在開いているファイルのGPSログの有無フラグを変更
@@ -916,22 +920,34 @@ class FilesPage extends StatefulWidget
 
 class FilesPageState extends State<FilesPage>
 {
-  TextStyle _textStyle = const TextStyle(
+  final _textStyle = const TextStyle(
     color:Colors.black, fontSize:18.0
   );
-  TextStyle _textStyleBold = const TextStyle(
+  final _textStyleBold = const TextStyle(
     color:Colors.black, fontSize:18.0, fontWeight:FontWeight.bold
   );
-  TextStyle _textStyleDisable = const TextStyle(
+  final _textStyleDisable = const TextStyle(
     color:Color(0xFFBDBDBD)/*Colors.grey[400]*/, fontSize:18.0
   );
-  Border _borderStyle = const Border(
+  final _borderStyle = const Border(
     bottom: BorderSide(width:1.0, color:Colors.grey)
   );
 
   @override
-  initState() {
+  void initState()
+  {
+    print("----------------------------------------");
+    print(">FilesPage.initState()");
+  
     super.initState();
+
+    // GPSログ参照モードなら、現在のディレクトリのファイル毎に、GPSログの有無を更新
+    if(widget.referGPSLogMode){
+      updateGpsLogFlagForCurrentDir().then((_){
+        // 非同期処理が初回の build() に間に合わないので、読取完了したら再描画
+        setState((){});
+      });
+    }
   }
 
   var _responsiveAppBar = ResponsiveAppBar();
@@ -963,16 +979,25 @@ class FilesPageState extends State<FilesPage>
           actionsLine: [
             // (左)フォルダ作成ボタン
             if(!widget.readOnlyMode) IconButton(
-              icon: Icon(Icons.create_new_folder),
-              onPressed:() {
-                createNewFolderSub(context);
+              icon: const Icon(Icons.create_new_folder, size:32),
+              onPressed:() async {
+                // ファイル操作にはパスワードが必要
+                final ok = await askEditingLockPassword(context, "ファイル操作パスワード");
+                if(ok){
+                  createNewFolderSub();
+                }
               },
             ),
+            const SizedBox(width:16),
             // (右)ファイル作成ボタン
             if(!widget.readOnlyMode) IconButton(
-              icon: Icon(Icons.note_add),
-              onPressed:() {
-                createNewFileSub(context);
+              icon: const Icon(Icons.note_add, size:32),
+              onPressed:() async {
+                // ファイル操作にはパスワードが必要
+                final ok = await askEditingLockPassword(context, "ファイル操作パスワード");
+                if(ok){
+                  createNewFileSub();
+                }
               },
             ),
           ],
@@ -982,7 +1007,7 @@ class FilesPageState extends State<FilesPage>
         body: ListView.builder(
           itemCount: currentDir.length,
           itemBuilder: (context, index){
-            return _menuItem(context, index);
+            return _menuItem(context, currentDir[index]);
           }
         ),        
       ),
@@ -990,52 +1015,50 @@ class FilesPageState extends State<FilesPage>
   }
 
   // ファイル一覧アイテムの作成
-  Widget _menuItem(BuildContext context, int index)
+  Widget _menuItem(BuildContext context, final FileItem fileItem)
   {
     // アイコンを選択
-    final int stackDepth = _directoryStack.length;
-    final List<FileItem> currentDir = getCurrentDir();
-    var file = currentDir[index];
-    IconData icon;
+    Widget? icon;
     late String name;
-    bool goParentDir;
     bool enable = true;
-    if((1 < stackDepth) && (index == 0)){
+    final goParentDir = (fileItem.uid == _parentDirId);
+    if(goParentDir){
       //「上階層に戻る」
-      goParentDir = true;
       name = "上階層に戻る";
-      icon = Icons.drive_file_move_rtl;
+      icon = const Icon(Icons.drive_file_move_rtl);
     }else{
       // ファイルかフォルダ
-      goParentDir = false;
-      name = file.name;
-      if(file.isFile){
+      name = fileItem.name;
+      if(fileItem.isFile){
         if(!widget.referGPSLogMode){
-          icon = Icons.description;
+          // ファイル
+          icon = const Icon(Icons.description);
         }else{
           // GPSログ参照モードでは、GPSログの有無
-          if(file.gpsLog){
-            icon = Icons.timeline;
+          if(fileItem.gpsLog){
+            // GPSログあり
+            icon = const Icon(Icons.timeline);
           }else{
-            icon = Icons.horizontal_rule; // 意味のない無難なアイコン
-            enable = false; // 選択不可
+            // GPSログなし。アイコンなし(サイズは適当でOK)、選択不可
+            icon = const SizedBox(width:4, height:4);
+            enable = false;
           }
         }
       }else{
-        icon = Icons.folder;
+        // フォルダ
+        icon = const Icon(Icons.folder);
       }
     }
 
     // 現在開いているファイルとその途中のフォルダは強調表示する。
     // 削除も禁止
     late bool isOpenedFile;
-    if(currentDir[index].isFile){
+    if(fileItem.isFile){
       // ファイルの場合はIDの一致で判定
-      isOpenedFile = (_openedFileUID == currentDir[index].uid);
+      isOpenedFile = (_openedFileUID == fileItem.uid);
     }else{
       // フォルダの場合は、パスにIDが含まれるかで判定
-      final String uid = currentDir[index].uid.toString();
-      isOpenedFile = _openedFileUIDPath.contains("/$uid/");
+      isOpenedFile = _openedFileUIDPath.contains("/${fileItem.uid}/");
     }
 
     // アイコンボタンの座標を取得するため
@@ -1050,7 +1073,7 @@ class FilesPageState extends State<FilesPage>
       // アイコンとファイル名
       child:ListTile(
         // (左側)ファイル/フォルダーアイコン
-        leading: Icon(icon),
+        leading: icon,
         iconColor: (isOpenedFile?
           Colors.black:
           (enable? null: Colors.grey[400])),
@@ -1070,24 +1093,28 @@ class FilesPageState extends State<FilesPage>
             // ボタンの座標を取得してメニューを表示
             RenderBox box = iconGlobalKey.currentContext!.findRenderObject() as RenderBox;
             var offset = box.localToGlobal(Offset.zero);
-            showFileItemMenu(context, currentDir[index], offset, !isOpenedFile);
+            showFileItemMenu(context, fileItem, offset, !isOpenedFile);
           },
         ) : null,
 
         // タップでファイルを切り替え
-        onTap: () {
-          if(currentDir[index].isFile){
+        onTap: () async {
+          if(fileItem.isFile){
             if(enable){
               Navigator.pop(context);
               // ファイルを切り替える
-              final String thisUIDPath = getCurrentDirUIDPath() + currentDir[index].uid.toString();
-              widget.onSelectFile(thisUIDPath);
+              final uidPath = getCurrentDirUIDPath() + fileItem.uid.toString();
+              widget.onSelectFile(uidPath);
             }
           }else{
             // ディレクトリ移動
-            moveDir(currentDir[index].uid).then((_){
-              setState((){});
-            });
+            await moveDir(fileItem.uid);
+            // GPSログ参照モードなら、現在のディレクトリのファイル毎に、GPSログの有無を更新
+            if(widget.referGPSLogMode){
+              await updateGpsLogFlagForCurrentDir();
+            }
+            // 再描画
+            setState((){});
           }
         },
       ),
@@ -1114,11 +1141,8 @@ class FilesPageState extends State<FilesPage>
       ],
     ).then((value) async {
       // ファイル操作にはパスワードが必要
-      bool authenOk = await askAndCheckPassword(context,
-        "ファイル操作パスワード", lockEditingPasswordHash, lockEditingPasswordKey);
-      // ハズレ
-      if(!authenOk){
-        showTextBallonMessage("ハズレ...");
+      final ok = await askEditingLockPassword(context, "ファイル操作パスワード");
+      if(!ok){
         return;
       }
 
@@ -1150,7 +1174,7 @@ class FilesPageState extends State<FilesPage>
   }
 
   // ファイル作成
-  void createNewFileSub(BuildContext context) async
+  void createNewFileSub() async
   {
     // ファイル名入力ダイアログ
     String? name = await showCreateFileDialog(context);
@@ -1173,7 +1197,7 @@ class FilesPageState extends State<FilesPage>
   }
 
   // フォルダ作成
-  void createNewFolderSub(BuildContext context) async
+  void createNewFolderSub() async
   {
     // ファイル名入力ダイアログ
     String? name = await showCreateFolderDialog(context);

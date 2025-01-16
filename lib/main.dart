@@ -531,11 +531,8 @@ class _MapViewState extends State<MapView>
     // ロック解除(編集可)にはパスワードが必要
     bool ok = true;
     if(lock == false){
-      bool authenOk = await askAndCheckPassword(context,
-        "編集ロックパスワード", lockEditingPasswordHash, lockEditingPasswordKey);
-      // ハズレ
-      if(!authenOk){
-        showTextBallonMessage("ハズレ...");
+      ok = await askEditingLockPassword(context, "編集ロックパスワード");
+      if(!ok){
         return;
       }
 
