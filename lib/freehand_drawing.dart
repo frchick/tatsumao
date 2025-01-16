@@ -1017,11 +1017,10 @@ class FreehandDrawingOnMapState extends State<FreehandDrawingOnMap>
   void _onTapDrawingIcon()
   {
     // 有効無効を切り替え、同時にサブメニューの展開、閉じるを制御
-    _dawingActive = !_dawingActive;
-    if(_dawingActive){
+    if(!_dawingActive){
       _subMenuWidgetKey.currentState?.expand();
       // 再描画ではなく、ジェスチャー検出の有効無効切り替えのために必要
-      setState((){});
+      setState((){ _dawingActive = true; });
     }else{
       disableDrawing();
     }
@@ -1059,6 +1058,9 @@ class FreehandDrawingOnMapState extends State<FreehandDrawingOnMap>
   // 手書きを無効化(外部からの制御用関数)
   void disableDrawing()
   {
+    // 有効になっていなければ何もしない
+    if(!_dawingActive) return;
+
     _colorPaletteWidgetKey.currentState?.close();
     _subMenuWidgetKey.currentState?.close();
     // 再描画ではなく、ジェスチャー検出の有効無効切り替えのために必要
@@ -1069,9 +1071,7 @@ class FreehandDrawingOnMapState extends State<FreehandDrawingOnMap>
   {
     // 手書きが有効な場合には、一旦無効化する(サブメニューを閉じる)
     _subMenuWidgetKey.currentState?.setEditLock(lockEditing);
-    if(_dawingActive){
-      disableDrawing();
-    }
+    disableDrawing();
   }
 }
 
