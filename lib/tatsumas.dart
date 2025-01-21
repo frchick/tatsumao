@@ -108,14 +108,16 @@ List<Marker> tatsumaMarkers = [];
 FirebaseDatabase database = FirebaseDatabase.instance;
 
 // 変更通知
-StreamSubscription<DatabaseEvent>? _changesTatsumaListener;
-StreamSubscription<DatabaseEvent>? _addTatsumaListener;
+//!!!! 一旦保留
+//StreamSubscription<DatabaseEvent>? _changesTatsumaListener;
+//StreamSubscription<DatabaseEvent>? _addTatsumaListener;
 
 // 他のユーザーによるタツマデータの変更通知があった場合のコールバック
 Function(int)? _onTatsumaChanged;
 
 // 連続するタツマ追加イベントを一つにまとめるためのタイマー
-Timer? _tatsumaAddEventMergeTimer;
+//!!!! 一旦保留
+//Timer? _tatsumaAddEventMergeTimer;
 
 // タツマアイコン画像
 // NOTE: 表示回数が多くて静的なので、事前に作成しておく
@@ -219,7 +221,7 @@ void saveAllTatsumasToDB()
 {
   // タツマデータをJSONの配列に変換
   List<Map<String, dynamic>> data = [];
-  tatsumas.forEach((tatsuma){
+  for(final tatsuma in tatsumas){
     data.add({
       "name": tatsuma.name,
       "latitude": tatsuma.pos.latitude,
@@ -228,76 +230,78 @@ void saveAllTatsumasToDB()
       "auxPoint": tatsuma.auxPoint,
       "areaBits": tatsuma.areaBits,
     });
-  });
+  }
 
   // データベースに上書き保存
-  final DatabaseReference ref = database.ref("tatsumas");
-  try { ref.set(data); } catch(e) {}
+  final colRef = FirebaseFirestore.instance.collection("tatsumas");
+  final docRef = colRef.doc("all");
+  docRef.set({ "list": data });
 }
 
 //----------------------------------------------------------------------------
 // タツマをデータベースへ保存(個別)
 void updateTatsumaToDB(int index)
 {
-  // タツマデータ
-  final TatsumaData tatsuma = tatsumas[index];
-  final Map<String, dynamic> data = {
-    "name": tatsuma.name,
-    "latitude": tatsuma.pos.latitude,
-    "longitude": tatsuma.pos.longitude,
-    "visible": tatsuma.visible,
-    "auxPoint": tatsuma.auxPoint,
-    "areaBits": tatsuma.areaBits,
-  };
-
-  // データベースに上書き保存
-  // ソートされている場合でも、元の順番で書き出す。
-  final String path = "tatsumas/" + tatsuma.originalIndex.toString();
-  final DatabaseReference ref = database.ref(path);
-  try { ref.set(data); } catch(e) {}
+  //!!!! データベースに上書き保存
+  //!!!! NOTE: とりあえず1ドキュメントに全体を書き出す
+  saveAllTatsumasToDB();
 }
 
 //----------------------------------------------------------------------------
 // データベースからタツマを読み込み
 Future loadTatsumaFromDB() async
 {
+  //!!!! Firestore にデータがなければ、RealtimeDatabase から取得して作成
+  //!!!! (過渡期の処理。最終的には Firestore のみにする)
+  final colRef = FirebaseFirestore.instance.collection("tatsumas");
+  final docRef = colRef.doc("all");
+  final snapshot = await docRef.get();
+  if(!snapshot.exists){
+    final DatabaseReference ref = database.ref("tatsumas");
+    final DataSnapshot snapshot = await ref.get();    
+    if(snapshot.exists){
+      try {
+        final data = snapshot.value as List<dynamic>;
+        docRef.set({ "list": data });
+      }catch(e){ /**/ }
+    }
+  }
+
   // データベースから読み込み
   // List<TatsumaData> を配列として記録してある。
-  final DatabaseReference ref = database.ref("tatsumas");
-  final DataSnapshot snapshot = await ref.get();
-  if(!snapshot.exists) return;
   List<dynamic> data;
-  try {
-    data = snapshot.value as List<dynamic>;
-  }catch(e){
-    return;
+  {
+    final snapshot = await docRef.get();
+    if(!snapshot.exists) return;
+    try {
+      data = snapshot.data()!["list"] as List<dynamic>;
+    }catch(e){
+      return;
+    }
   }
 
   // タツマデータを更新
   int index = 0;
   tatsumas.clear();
-  data.forEach((d){
-    Map<String, dynamic> t;
+  for(final d in data){
     try {
-      t = d as Map<String, dynamic>;
-    }catch(e){
-      return;
-    }
+      final t = d as Map<String, dynamic>;
 
-    // 禁猟区マークは読み込まない
-    // (レッドゾーンの表示に対応したので。)
-    var name = t["name"] as String;
-    if(name.contains("禁猟区")) return;
+      // 禁猟区マークは読み込まない
+      // (レッドゾーンの表示に対応したので。)
+      var name = t["name"] as String;
+      if(name.contains("禁猟区")) continue;
 
-    tatsumas.add(TatsumaData(
-      /*pos:*/ LatLng(t["latitude"] as double, t["longitude"] as double),
-      /*name:*/ name,
-      /*visible:*/ t["visible"] as bool,
-      /*areaBits:*/ t["areaBits"] as int,
-      /*auxPoint:*/ t["auxPoint"] as bool,
-      /*originalIndex*/ index));
-    index++;
-  });
+      tatsumas.add(TatsumaData(
+        /*pos:*/ LatLng(t["latitude"] as double, t["longitude"] as double),
+        /*name:*/ name,
+        /*visible:*/ t["visible"] as bool,
+        /*areaBits:*/ t["areaBits"] as int,
+        /*auxPoint:*/ t["auxPoint"] as bool,
+        /*originalIndex*/ index));
+      index++;
+    }catch(e){ /**/ }
+  }
 
   // タツマ一覧での表示順をリセット
   // 結果としてソートされていないことになる
@@ -307,24 +311,27 @@ Future loadTatsumaFromDB() async
   // 他のユーザーからの変更通知
   // 直前の変更通知を終了しておく
   releaseTatsumasSync();
-  _changesTatsumaListener = ref.onChildChanged.listen(_onTatsumaChangedFromDB);
-  _addTatsumaListener = ref.onChildAdded.listen(_onTatsumaAddedFromDB);
+//!!!!  _changesTatsumaListener = ref.onChildChanged.listen(_onTatsumaChangedFromDB);
+//!!!!  _addTatsumaListener = ref.onChildAdded.listen(_onTatsumaAddedFromDB);
 }
 
 //----------------------------------------------------------------------------
 // データベースからの変更通知を停止
 void releaseTatsumasSync()
 {
+/*!!!!
   _changesTatsumaListener?.cancel();
   _changesTatsumaListener = null;
   _addTatsumaListener?.cancel();
   _addTatsumaListener = null;
+*/
 }
 
 //----------------------------------------------------------------------------
 // 他のユーザーによるタツマデータの変更通知
 void _onTatsumaChangedFromDB(DatabaseEvent event)
 {
+/*!!!!
   DataSnapshot snapshot = event.snapshot;
   if((snapshot.key == null) || (snapshot.value == null)) return;
 
@@ -349,12 +356,14 @@ void _onTatsumaChangedFromDB(DatabaseEvent event)
   }else{
     updateMapView();
   }
+*/
 }
 
 //----------------------------------------------------------------------------
 // 他のユーザーによるタツマデータの追加通知
 void _onTatsumaAddedFromDB(DatabaseEvent event)
 {
+/*!!!!
   DataSnapshot snapshot = event.snapshot;
   if((snapshot.key == null) || (snapshot.value == null)) return;
 
@@ -402,6 +411,7 @@ void _onTatsumaAddedFromDB(DatabaseEvent event)
       showTextBallonMessage("他のユーザーがタツマを追加");
     }
   });
+*/
 }
 
 //----------------------------------------------------------------------------
@@ -418,7 +428,7 @@ Map<String,int>? readTatsumaFromGPX(String fileContent)
   List<TatsumaData> newTatsumas = [];
   final Iterable<XmlElement> wpts = gpx.findAllElements("wpt");
   int index = 0;
-  wpts.forEach((wpt){
+  for(final wpt in wpts){
     final String? lat = wpt.getAttribute("lat");
     final String? lon = wpt.getAttribute("lon");
     final XmlElement? name = wpt.getElement("name");
@@ -432,7 +442,7 @@ Map<String,int>? readTatsumaFromGPX(String fileContent)
         index));
       index++;
     }
-  });
+  }
 
   // タツマの属性をコピー
   var res = copyTatsumaAttribute(newTatsumas);
@@ -453,11 +463,11 @@ void deleteTatsuma(int index)
 
   // もとの表示順を先に詰めておく
   final int deleteOriginalIndex = tatsumas[index].originalIndex;
-  tatsumas.forEach((tatsuma){
+  for(var tatsuma in tatsumas){
     if(deleteOriginalIndex <= tatsuma.originalIndex){
       tatsuma.originalIndex--;
     }
-  });
+  }
   // 配列から削除
   tatsumas.removeAt(index);
 }
@@ -579,7 +589,7 @@ void updateTatsumaMarkers()
   tatsumaMarkers.clear();
   List<Marker> visibleMarkers = [];
   List<Marker> auxMarkers = [];
-  tatsumas.forEach((tatsuma) {
+  for(final tatsuma in tatsumas){
     // タツマ(オレンジ)、主要地点(グリーン)、非表示を表示(グレー)毎にマーカーを作り分け
     Image? icon;
     TextStyle ts = textStyle;
@@ -617,7 +627,7 @@ void updateTatsumaMarkers()
           mainAxisAlignment: MainAxisAlignment.start,
         )));
     }
-  });
+  }
   // グレー > 表示状態の順
   tatsumaMarkers.addAll(auxMarkers);
   tatsumaMarkers.addAll(visibleMarkers);
@@ -647,7 +657,7 @@ class TatsumasPageState extends State<TatsumasPage>
   List<Container> _hideAreaTags = [];
 
   // リストビューのスクロールコントロール
-  ScrollController _listScrollController = ScrollController();
+  var _listScrollController = ScrollController();
 
   @override
   initState() {
@@ -655,20 +665,20 @@ class TatsumasPageState extends State<TatsumasPage>
 
     // エリアラベルを作成
     // NOTE: 初回のみ
-    if(_areaTags.length == 0){
+    if(_areaTags.isEmpty){
       // 表示のスタイル
       final BoxDecoration visibleBoxDec = BoxDecoration(
         borderRadius: BorderRadius.circular(4),
         border: Border.all(color: Colors.orange, width:2),
         color: Colors.orange[200],
       );
-      final TextStyle visibleTexStyle = const TextStyle(color: Colors.white);
+      const visibleTexStyle = TextStyle(color: Colors.white);
       // 非表示のスタイル
       final BoxDecoration hideBoxDec = BoxDecoration(
         borderRadius: BorderRadius.circular(4),
         border: Border.all(color: Colors.grey, width:2),
       );
-      final TextStyle hideTexStyle = const TextStyle(color: Colors.grey);
+      const hideTexStyle = TextStyle(color: Colors.grey);
 
       for(int i = 0; i < areaNames.length; i++){
         // 表示のエリアラベル
@@ -737,7 +747,7 @@ class TatsumasPageState extends State<TatsumasPage>
                 });
                 _listScrollController.animateTo(
                   0,
-                  duration: Duration(milliseconds: 500),
+                  duration: const Duration(milliseconds: 500),
                   curve: Curves.easeOut,
                 );
               }),
@@ -827,7 +837,7 @@ class TatsumasPageState extends State<TatsumasPage>
     ));
     
     // アイコンの選択
-    const Color hideColor = const Color(0xFFBDBDBD)/*Colors.grey[400]*/;
+    const hideColor = Color(0xFFBDBDBD)/*Colors.grey[400]*/;
     late Icon icon;
     if(!tatsuma.visible){
       icon = const Icon(Icons.visibility_off, color: hideColor);
