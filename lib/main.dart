@@ -490,8 +490,14 @@ class _MapViewState extends State<MapView>
 
   //----------------------------------------------------------------------------
   // タツマアイコンタップしてタツマ一覧画面に遷移
-  void tatsumaIconFunc(BuildContext context)
+  void tatsumaIconFunc(BuildContext context) async
   {
+    // パスワードロック
+    final ok = await askEditingLockPassword(context, "編集ロックパスワード");
+    if(!ok){
+      return;
+    }
+
     Navigator.of(context).push(
       MaterialPageRoute<bool?>(
         builder: (context) => TatsumasPage()
@@ -740,8 +746,6 @@ void tapOnMap(BuildContext context, TapPosition tapPos)
           // 削除
           deleteTatsuma(index);
           updateTatsumaMarkers();
-          // データベース全体を更新
-          saveAllTatsumasToDB();
         }else{
           // タツマデータに変更を反映
           tatsuma.name     = res["name"];
@@ -749,8 +753,6 @@ void tapOnMap(BuildContext context, TapPosition tapPos)
           tatsuma.areaBits = res["areaBits"];
           tatsuma.auxPoint = res["auxPoint"];
           updateTatsumaMarkers();
-          // データベースに同期
-          updateTatsumaToDB(index);
         }
         updateMapView();
       }
