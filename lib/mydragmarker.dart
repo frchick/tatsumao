@@ -336,7 +336,7 @@ class MyDragMarker {
   final double nearEdgeSpeed;
   final bool rotateMarker;
   late Anchor anchor;
-  final int index;
+  int index;
   bool visible;
 
   MyDragMarker({

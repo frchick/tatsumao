@@ -53,29 +53,6 @@ double _mapViewWidthRate = 0.5;
 
 
 //----------------------------------------------------------------------------
-// メンバー達の位置へマップを移動する
-void moveMapToLocationOfMembers()
-{
-  // MapViewが未初期化ならば何もしない
-  if(mainMapController == null) return;
-
-  // 参加しているメンバーの座標の範囲に、マップをフィットさせる
-  List<LatLng> points = [];
-  members.forEach((member){
-    if(member.attended){
-      points.add(member.pos);
-    }
-  });
-  if(points.length == 0) return;
-  var bounds = LatLngBounds.fromPoints(points);
-
-  mainMapController!.fitBounds(bounds,
-    options: FitBoundsOptions(
-      padding: EdgeInsets.all(64),
-      maxZoom: 16));
-}
-
-//----------------------------------------------------------------------------
 //----------------------------------------------------------------------------
 // アプリケーション
 
@@ -186,10 +163,10 @@ class _MapViewState extends State<MapView>
     await initFileTree();
     // 初期状態で開くファイルの位置までカレントディレクトリを移動
     // 失敗していたら標準ファイル("/1")を開く
-    bool res = await moveFullPathDir(openPath);
+    bool res = await moveAbsUIDPathDir(openPath);
     if(!res){
       openPath = "/1";
-      await moveFullPathDir(openPath);
+      await moveAbsUIDPathDir(openPath);
     }
     // タツマデータをデータベースから取得
     await loadTatsumaFromDB();
@@ -198,19 +175,6 @@ class _MapViewState extends State<MapView>
     await openFile(openPath);
     // 編集ロックに設定
     lockEditing = true;
-
-    // GPSログを読み込み(遅延処理)
-    final String gpsLogPath = await gpsLog.getReferencePath(openPath);
-    final bool refLink = (gpsLogPath != openPath);
-    gpsLog.downloadFromCloudStorage(gpsLogPath, refLink).then((res) async {
-      if(res){
-        await gpsLog.loadGPSLogTrimRangeFromDB(openPath);
-        gpsLog.saveDeviceID2DogToDB(openPath);
-      }
-      gpsLog.makePolyLines();
-      gpsLog.makeDogMarkers();
-      gpsLog.redraw();
-    });
 
     // 初期化完了(GPSログ除く)
     // 一通りの処理が終わるので、処理中インジケータを消す
@@ -245,34 +209,32 @@ class _MapViewState extends State<MapView>
   // 指定されたファイルがカレントディレクトリになければエラー
   Future<void> openFile(String fileUIDPath) async
   {
-    // メンバーマーカーが非表示なら、表示に戻す。
+    print("----------------------------------------");
+    print(">openFile($fileUIDPath)");
+  
+    // メンバーマーカーの表示設定が非表示なら、表示に戻す。
     if(!isShowMemberMarker()){
       memberMarkerSizeSelector = 1;
       createMemberMarkers();
     }
-    // GPSログが非表示なら、表示に戻す。(強制的に表示にする)
+    // GPSログの表示設定が非表示なら、表示に戻す。(強制的に表示にする)
     gpsLog.showLogLine = true;
     
-    // ファイルを開く準備
-    // もし指定されたファイルが無ければ何もしない
+    // 「現在のファイル」のパスを設定
     if(!setOpenedFileUIDPath(fileUIDPath)){
       return;
     }
 
     // GPSログをクリア
     gpsLog.clear();
-    // 汎用マーカーをクリア
-    miscMarkers.clear();
+    // 直前の汎用マーカーを閉じる
+    miscMarkers.close();
     // 直前の手書き図を削除
     freehandDrawing.close();
   
     // メンバーの配置データをデータベースから取得
-    await initMemberSync(fileUIDPath);
-    // メンバーの位置へ地図を移動
-    // 直前の地図が表示され続ける時間を短くするために、なるべく早めに
-    if(!_initializingApp){
-      moveMapToLocationOfMembers();
-    }
+    String name = getOpenedFileName();
+    await openMemberSync(fileUIDPath, name);
 
     // タツマのエリアフィルターを取得(表示/非表示)
     // それに応じてマーカー配列を作成
@@ -282,11 +244,24 @@ class _MapViewState extends State<MapView>
     // GPSログをクリア、デバイスIDと犬の対応を取得
     await gpsLog.loadDeviceID2DogFromDB(fileUIDPath);
 
-    // 汎用マーカーを読み込み
-    miscMarkers.initSync(fileUIDPath);
+    // 汎用マーカーを読み込み(非同期)
+    miscMarkers.openSync(fileUIDPath);
   
-    // 手書き図を読み込み
+    // 手書き図を読み込み(非同期)
     freehandDrawing.open(fileUIDPath);
+  
+    // GPSログを読み込み(非同期)
+    final String gpsLogPath = await gpsLog.getReferencePath(fileUIDPath);
+    final bool refLink = (gpsLogPath != fileUIDPath);
+    gpsLog.downloadFromCloudStorage(gpsLogPath, refLink).then((res) async {
+      if(res){
+        await gpsLog.loadGPSLogTrimRangeFromDB(fileUIDPath);
+        gpsLog.saveDeviceID2DogToDB(fileUIDPath);
+      }
+      gpsLog.makePolyLines();
+      gpsLog.makeDogMarkers();
+      gpsLog.redraw();
+    });
   }
 
   //----------------------------------------------------------------------------
@@ -478,29 +453,7 @@ class _MapViewState extends State<MapView>
     Navigator.push(
       context,
       MaterialPageRoute(builder: (context) => FilesPage(
-        onSelectFile: (uidPath) async {
-          // ファイルを読み込み
-          await openFile(uidPath);
-          // 編集ロックに設定
-          onLockChangeSub(true);
-          // 再描画
-          setState((){});
-          // ファイル名をバルーン表示
-          final String path = getOpenedFilePath();
-          showTextBallonMessage(path);
-          // GPSログを読み込み(遅延処理)
-          final String gpsLogPath = await gpsLog.getReferencePath(uidPath);
-          final bool refLink = (gpsLogPath != uidPath);
-          gpsLog.downloadFromCloudStorage(gpsLogPath, refLink).then((res) async {
-            if(res){
-              await gpsLog.loadGPSLogTrimRangeFromDB(uidPath);
-              gpsLog.saveDeviceID2DogToDB(uidPath);
-            }
-            gpsLog.makePolyLines();
-            gpsLog.makeDogMarkers();
-            gpsLog.redraw();
-          });
-        },
+        onSelectFile: (uidPath) => onSelectFileToOpen(uidPath),
         onChangeState: (){
           // ファイル変更に至らない程度の変更があった場合には、AppBar を更新
           setState((){});
@@ -510,9 +463,41 @@ class _MapViewState extends State<MapView>
   }
 
   //----------------------------------------------------------------------------
-  // タツマアイコンタップしてタツマ一覧画面に遷移
-  void tatsumaIconFunc(BuildContext context)
+  // ファイルを開く(切り替える)
+  Future<void> onSelectFileToOpen(String uidPath) async
   {
+    // 読み込み処理のうち、完了待を行うものが終わるまではクルクルを表示
+    afterFirstLayout(context);
+  
+    // ファイルを読み込み
+    // NOTE: 非同期読み込みの処理は、この後に実行される可能性あり
+    await openFile(uidPath);
+
+    // クルクルを消す    
+    Navigator.of(context).pop();
+    _progressIndicatorState = ProgressIndicatorState.NoIndicate;
+
+    // 編集ロックに設定
+    onLockChangeSub(true);
+
+    // 再描画
+    setState((){});
+
+    // ファイル名をバルーン表示
+    final String path = getOpenedFilePath();
+    showTextBallonMessage(path);
+  }
+
+  //----------------------------------------------------------------------------
+  // タツマアイコンタップしてタツマ一覧画面に遷移
+  void tatsumaIconFunc(BuildContext context) async
+  {
+    // パスワードロック
+    final ok = await askEditingLockPassword(context, "編集ロックパスワード");
+    if(!ok){
+      return;
+    }
+
     Navigator.of(context).push(
       MaterialPageRoute<bool?>(
         builder: (context) => TatsumasPage()
@@ -552,11 +537,8 @@ class _MapViewState extends State<MapView>
     // ロック解除(編集可)にはパスワードが必要
     bool ok = true;
     if(lock == false){
-      bool authenOk = await askAndCheckPassword(context,
-        "編集ロックパスワード", lockEditingPasswordHash, lockEditingPasswordKey);
-      // ハズレ
-      if(!authenOk){
-        showTextBallonMessage("ハズレ...");
+      ok = await askEditingLockPassword(context, "編集ロックパスワード");
+      if(!ok){
         return;
       }
 
@@ -710,6 +692,15 @@ class _MapViewState extends State<MapView>
                 child: makeGpsLocationSW(context),
               ),
             ),
+
+            // バージョン番号
+            Align(
+              alignment: Alignment.bottomRight,
+              child: Container(
+                margin: const EdgeInsets.fromLTRB(0, 0, 8, 2),
+                child: const Text("ver $appVersion", style: TextStyle(fontSize: 15)),
+              ),
+            ),
           ]
         ),
       ),
@@ -764,8 +755,6 @@ void tapOnMap(BuildContext context, TapPosition tapPos)
           // 削除
           deleteTatsuma(index);
           updateTatsumaMarkers();
-          // データベース全体を更新
-          saveAllTatsumasToDB();
         }else{
           // タツマデータに変更を反映
           tatsuma.name     = res["name"];
@@ -773,8 +762,6 @@ void tapOnMap(BuildContext context, TapPosition tapPos)
           tatsuma.areaBits = res["areaBits"];
           tatsuma.auxPoint = res["auxPoint"];
           updateTatsumaMarkers();
-          // データベースに同期
-          updateTatsumaToDB(index);
         }
         updateMapView();
       }

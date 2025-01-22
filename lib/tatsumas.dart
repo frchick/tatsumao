@@ -1,3 +1,5 @@
+import 'dart:html';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_map/plugin_api.dart';
@@ -7,6 +9,7 @@ import 'package:file_selector/file_selector.dart';  // ファイル選択
 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_database/firebase_database.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'firebase_options.dart';
 import 'dart:async';    // for StreamSubscription<>
 
@@ -107,14 +110,10 @@ List<Marker> tatsumaMarkers = [];
 FirebaseDatabase database = FirebaseDatabase.instance;
 
 // 変更通知
-StreamSubscription<DatabaseEvent>? _changesTatsumaListener;
-StreamSubscription<DatabaseEvent>? _addTatsumaListener;
+StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _tatsumaUpdateListener;
 
-// 他のユーザーによるタツマデータの変更通知があった場合のコールバック
-Function(int)? _onTatsumaChanged;
-
-// 連続するタツマ追加イベントを一つにまとめるためのタイマー
-Timer? _tatsumaAddEventMergeTimer;
+// NOTE: リスナーコールバック内で、初回のデータ変更通知を拾うために参照
+bool _isFirstSyncEvent = true;
 
 // タツマアイコン画像
 // NOTE: 表示回数が多くて静的なので、事前に作成しておく
@@ -218,7 +217,7 @@ void saveAllTatsumasToDB()
 {
   // タツマデータをJSONの配列に変換
   List<Map<String, dynamic>> data = [];
-  tatsumas.forEach((tatsuma){
+  for(final tatsuma in tatsumas){
     data.add({
       "name": tatsuma.name,
       "latitude": tatsuma.pos.latitude,
@@ -227,47 +226,59 @@ void saveAllTatsumasToDB()
       "auxPoint": tatsuma.auxPoint,
       "areaBits": tatsuma.areaBits,
     });
-  });
+  }
 
   // データベースに上書き保存
-  final DatabaseReference ref = database.ref("tatsumas");
-  try { ref.set(data); } catch(e) {}
-}
-
-//----------------------------------------------------------------------------
-// タツマをデータベースへ保存(個別)
-void updateTatsumaToDB(int index)
-{
-  // タツマデータ
-  final TatsumaData tatsuma = tatsumas[index];
-  final Map<String, dynamic> data = {
-    "name": tatsuma.name,
-    "latitude": tatsuma.pos.latitude,
-    "longitude": tatsuma.pos.longitude,
-    "visible": tatsuma.visible,
-    "auxPoint": tatsuma.auxPoint,
-    "areaBits": tatsuma.areaBits,
-  };
-
-  // データベースに上書き保存
-  // ソートされている場合でも、元の順番で書き出す。
-  final String path = "tatsumas/" + tatsuma.originalIndex.toString();
-  final DatabaseReference ref = database.ref(path);
-  try { ref.set(data); } catch(e) {}
+  final colRef = FirebaseFirestore.instance.collection("tatsumas");
+  final docRef = colRef.doc("all");
+  docRef.set({ "list": data });
 }
 
 //----------------------------------------------------------------------------
 // データベースからタツマを読み込み
 Future loadTatsumaFromDB() async
 {
+  //!!!! Firestore にデータがなければ、RealtimeDatabase から取得して作成
+  //!!!! (過渡期の処理。最終的には Firestore のみにする)
+  final colRef = FirebaseFirestore.instance.collection("tatsumas");
+  final docRef = colRef.doc("all");
+/*
+  final snapshot = await docRef.get();
+  if(!snapshot.exists){
+    final DatabaseReference ref = database.ref("tatsumas");
+    final DataSnapshot snapshot = await ref.get();    
+    if(snapshot.exists){
+      try {
+        final data = snapshot.value as List<dynamic>;
+        docRef.set({ "list": data });
+      }catch(e){ /**/ }
+    }
+  }
+*/
+  // Firestore から変更通知を受け取るリスナーを設定
+  _isFirstSyncEvent = true;
+  _tatsumaUpdateListener = docRef.snapshots().listen((event){
+    _onChangeTatsumaFromDB(event);
+    _isFirstSyncEvent = false;
+  });
+}
+
+void _onChangeTatsumaFromDB(DocumentSnapshot<Map<String, dynamic>> snapshot)
+{
+  final localChange = snapshot.metadata.hasPendingWrites;
+  print("_onChangeTatsumaFromDB(): local=$localChange first=$_isFirstSyncEvent");
+
+  // ローカルの変更による通知では何もしない
+  // ただし、マーカーを初期化するために、ファイルを開いた直後のデータ変更通知は拾う
+  if(!_isFirstSyncEvent && localChange){
+    return;
+  }
+
   // データベースから読み込み
   // List<TatsumaData> を配列として記録してある。
-  final DatabaseReference ref = database.ref("tatsumas");
-  final DataSnapshot snapshot = await ref.get();
-  if(!snapshot.exists) return;
   List<dynamic> data;
   try {
-    data = snapshot.value as List<dynamic>;
+    data = snapshot.data()!["list"] as List<dynamic>;
   }catch(e){
     return;
   }
@@ -275,132 +286,45 @@ Future loadTatsumaFromDB() async
   // タツマデータを更新
   int index = 0;
   tatsumas.clear();
-  data.forEach((d){
-    Map<String, dynamic> t;
+  for(final d in data){
     try {
-      t = d as Map<String, dynamic>;
-    }catch(e){
-      return;
-    }
+      final t = d as Map<String, dynamic>;
 
-    // 禁猟区マークは読み込まない
-    // (レッドゾーンの表示に対応したので。)
-    var name = t["name"] as String;
-    if(name.contains("禁猟区")) return;
+      // 禁猟区マークは読み込まない
+      // (レッドゾーンの表示に対応したので。)
+      var name = t["name"] as String;
+      if(name.contains("禁猟区")) continue;
 
-    tatsumas.add(TatsumaData(
-      /*pos:*/ LatLng(t["latitude"] as double, t["longitude"] as double),
-      /*name:*/ name,
-      /*visible:*/ t["visible"] as bool,
-      /*areaBits:*/ t["areaBits"] as int,
-      /*auxPoint:*/ t["auxPoint"] as bool,
-      /*originalIndex*/ index));
-    index++;
-  });
+      tatsumas.add(TatsumaData(
+        /*pos:*/ LatLng(t["latitude"] as double, t["longitude"] as double),
+        /*name:*/ name,
+        /*visible:*/ t["visible"] as bool,
+        /*areaBits:*/ t["areaBits"] as int,
+        /*auxPoint:*/ t["auxPoint"] as bool,
+        /*originalIndex*/ index));
+      index++;
+    }catch(e){ /**/ }
+  }
 
   // タツマ一覧での表示順をリセット
   // 結果としてソートされていないことになる
   _tatsumaOrderArray = List<int>.generate(tatsumas.length, (i)=>i);
   _isListSorted = false;
 
-  // 他のユーザーからの変更通知
-  // 直前の変更通知を終了しておく
-  releaseTatsumasSync();
-  _changesTatsumaListener = ref.onChildChanged.listen(_onTatsumaChangedFromDB);
-  _addTatsumaListener = ref.onChildAdded.listen(_onTatsumaAddedFromDB);
+  // 再描画
+  // 初回はこの後のデフォルトファイルの読み込み処理で、タツママーカーが構築される
+  if(!_isFirstSyncEvent){
+    updateTatsumaMarkers();
+    updateMapView();
+  }
 }
 
 //----------------------------------------------------------------------------
 // データベースからの変更通知を停止
 void releaseTatsumasSync()
 {
-  _changesTatsumaListener?.cancel();
-  _changesTatsumaListener = null;
-  _addTatsumaListener?.cancel();
-  _addTatsumaListener = null;
-}
-
-//----------------------------------------------------------------------------
-// 他のユーザーによるタツマデータの変更通知
-void _onTatsumaChangedFromDB(DatabaseEvent event)
-{
-  DataSnapshot snapshot = event.snapshot;
-  if((snapshot.key == null) || (snapshot.value == null)) return;
-
-  // 変更のあったタツマに対して、
-  final int index = int.parse(snapshot.key!);
-  TatsumaData tatsuma = tatsumas[index];
-
-  // 変更通知から値を代入
-  var data = snapshot.value! as Map<String, dynamic>;
-  tatsuma.name = data["name"] as String;
-  tatsuma.visible = data["visible"] as bool;
-  tatsuma.areaBits = data["areaBits"] as int;
-  tatsuma.auxPoint = data["auxPoint"] as bool;
-  tatsuma.pos.latitude = data["latitude"] as double;
-  tatsuma.pos.longitude = data["longitude"] as double;
-
-  // 再描画
-  // コールバックが設定されていたらそちら、なければマップを再描画
-  updateTatsumaMarkers();
-  if(_onTatsumaChanged != null){
-    _onTatsumaChanged!(index);
-  }else{
-    updateMapView();
-  }
-}
-
-//----------------------------------------------------------------------------
-// 他のユーザーによるタツマデータの追加通知
-void _onTatsumaAddedFromDB(DatabaseEvent event)
-{
-  DataSnapshot snapshot = event.snapshot;
-  if((snapshot.key == null) || (snapshot.value == null)) return;
-
-  // すでに作成済みのタツマなら何もしない
-  final int index = int.parse(snapshot.key!);
-  if((index < tatsumas.length) && !tatsumas[index].isEmpty()) return;
-
-  // タツマを追加
-  var t = snapshot.value! as Map<String, dynamic>;
-  TatsumaData newTatsuma = TatsumaData(
-    /*pos:*/ LatLng(t["latitude"] as double, t["longitude"] as double),
-    /*name:*/ t["name"] as String,
-    /*visible:*/ t["visible"] as bool,
-    /*areaBits:*/ t["areaBits"] as int,
-    /*auxPoint:*/ t["auxPoint"] as bool,
-    /*originalIndex*/ index);
-  if(index < tatsumas.length){
-    // すでに確保済みの配列に代入
-    tatsumas[index] = newTatsuma;
-  }else{
-    // 配列を拡張
-    // もし非連続なインデックスがきたら、そこまでは空のデータで拡張する
-    for(int i = tatsumas.length; i < index; i++){
-      tatsumas.add(TatsumaData.empty());
-      _tatsumaOrderArray.add(i);
-    }
-    tatsumas.add(newTatsuma);
-    _tatsumaOrderArray.add(index);
-  }
-
-  // 連続するタツマ追加イベントを一つにまとめるためのタイマーを設定
-  // 1秒のタイマーを使うことで、次の通知が1秒以内であればまとめる。
-  if(_tatsumaAddEventMergeTimer != null){
-    _tatsumaAddEventMergeTimer!.cancel();
-    _tatsumaAddEventMergeTimer = null;
-  }
-  _tatsumaAddEventMergeTimer = Timer(Duration(seconds:1), (){
-    _tatsumaAddEventMergeTimer = null;
-    // コールバックが設定されていたらそちら、なければマップを再描画
-    updateTatsumaMarkers();
-    if(_onTatsumaChanged != null){
-      _onTatsumaChanged!(index);
-    }else{
-      updateMapView();
-      showTextBallonMessage("他のユーザーがタツマを追加");
-    }
-  });
+  _tatsumaUpdateListener?.cancel();
+  _tatsumaUpdateListener = null;
 }
 
 //----------------------------------------------------------------------------
@@ -417,7 +341,7 @@ Map<String,int>? readTatsumaFromGPX(String fileContent)
   List<TatsumaData> newTatsumas = [];
   final Iterable<XmlElement> wpts = gpx.findAllElements("wpt");
   int index = 0;
-  wpts.forEach((wpt){
+  for(final wpt in wpts){
     final String? lat = wpt.getAttribute("lat");
     final String? lon = wpt.getAttribute("lon");
     final XmlElement? name = wpt.getElement("name");
@@ -431,7 +355,7 @@ Map<String,int>? readTatsumaFromGPX(String fileContent)
         index));
       index++;
     }
-  });
+  }
 
   // タツマの属性をコピー
   var res = copyTatsumaAttribute(newTatsumas);
@@ -452,11 +376,11 @@ void deleteTatsuma(int index)
 
   // もとの表示順を先に詰めておく
   final int deleteOriginalIndex = tatsumas[index].originalIndex;
-  tatsumas.forEach((tatsuma){
+  for(var tatsuma in tatsumas){
     if(deleteOriginalIndex <= tatsuma.originalIndex){
       tatsuma.originalIndex--;
     }
-  });
+  }
   // 配列から削除
   tatsumas.removeAt(index);
 }
@@ -578,7 +502,7 @@ void updateTatsumaMarkers()
   tatsumaMarkers.clear();
   List<Marker> visibleMarkers = [];
   List<Marker> auxMarkers = [];
-  tatsumas.forEach((tatsuma) {
+  for(final tatsuma in tatsumas){
     // タツマ(オレンジ)、主要地点(グリーン)、非表示を表示(グレー)毎にマーカーを作り分け
     Image? icon;
     TextStyle ts = textStyle;
@@ -616,7 +540,7 @@ void updateTatsumaMarkers()
           mainAxisAlignment: MainAxisAlignment.start,
         )));
     }
-  });
+  }
   // グレー > 表示状態の順
   tatsumaMarkers.addAll(auxMarkers);
   tatsumaMarkers.addAll(visibleMarkers);
@@ -646,7 +570,7 @@ class TatsumasPageState extends State<TatsumasPage>
   List<Container> _hideAreaTags = [];
 
   // リストビューのスクロールコントロール
-  ScrollController _listScrollController = ScrollController();
+  var _listScrollController = ScrollController();
 
   @override
   initState() {
@@ -654,20 +578,20 @@ class TatsumasPageState extends State<TatsumasPage>
 
     // エリアラベルを作成
     // NOTE: 初回のみ
-    if(_areaTags.length == 0){
+    if(_areaTags.isEmpty){
       // 表示のスタイル
       final BoxDecoration visibleBoxDec = BoxDecoration(
         borderRadius: BorderRadius.circular(4),
         border: Border.all(color: Colors.orange, width:2),
         color: Colors.orange[200],
       );
-      final TextStyle visibleTexStyle = const TextStyle(color: Colors.white);
+      const visibleTexStyle = TextStyle(color: Colors.white);
       // 非表示のスタイル
       final BoxDecoration hideBoxDec = BoxDecoration(
         borderRadius: BorderRadius.circular(4),
         border: Border.all(color: Colors.grey, width:2),
       );
-      final TextStyle hideTexStyle = const TextStyle(color: Colors.grey);
+      const hideTexStyle = TextStyle(color: Colors.grey);
 
       for(int i = 0; i < areaNames.length; i++){
         // 表示のエリアラベル
@@ -700,14 +624,9 @@ class TatsumasPageState extends State<TatsumasPage>
   @override
   Widget build(BuildContext context)
   {
-    // 他のユーザーによるタツマ変更のコールバックを設定
-    _onTatsumaChanged = (_){ setState((){}); };
-
     return WillPopScope(
       // ページ閉じる際の処理
       onWillPop: (){
-        // 他のユーザーによるタツマ変更のコールバックをクリア
-        _onTatsumaChanged = null;
         // ページの戻り値
         Navigator.of(context).pop(changeFlag);
         return Future.value(false);
@@ -717,6 +636,15 @@ class TatsumasPageState extends State<TatsumasPage>
         appBar: AppBar(
           title: const Text("タツマ一覧"),
           actions: [
+            // データベースへ保存
+            IconButton(
+              icon: const Icon(Icons.cloud_upload),
+              onPressed:() {
+                saveAllTatsumasToDB();
+                showTextBallonMessage("アップロード完了");
+              },
+            ),
+
             // GPXファイル読み込み
             IconButton(
               icon: const Icon(Icons.file_open),
@@ -736,7 +664,7 @@ class TatsumasPageState extends State<TatsumasPage>
                 });
                 _listScrollController.animateTo(
                   0,
-                  duration: Duration(milliseconds: 500),
+                  duration: const Duration(milliseconds: 500),
                   curve: Curves.easeOut,
                 );
               }),
@@ -807,8 +735,6 @@ class TatsumasPageState extends State<TatsumasPage>
               setState((){
                 deleteTatsuma(index);
               });
-              // データベース全体を更新
-              saveAllTatsumasToDB();
             }else{
               // 変更
               setState((){
@@ -817,8 +743,6 @@ class TatsumasPageState extends State<TatsumasPage>
                 tatsuma.areaBits = res["areaBits"];
                 tatsuma.auxPoint = res["auxPoint"];
               });
-              // データベースに同期
-              updateTatsumaToDB(index);
             }
           }
         });
@@ -826,7 +750,7 @@ class TatsumasPageState extends State<TatsumasPage>
     ));
     
     // アイコンの選択
-    const Color hideColor = const Color(0xFFBDBDBD)/*Colors.grey[400]*/;
+    const hideColor = Color(0xFFBDBDBD)/*Colors.grey[400]*/;
     late Icon icon;
     if(!tatsuma.visible){
       icon = const Icon(Icons.visibility_off, color: hideColor);
@@ -854,8 +778,6 @@ class TatsumasPageState extends State<TatsumasPage>
             setState((){
               changeFlag = true;
               tatsuma.visible = !tatsuma.visible;
-              // データベースに同期
-              updateTatsumaToDB(index);
             });
           },
         ),
@@ -907,8 +829,6 @@ class TatsumasPageState extends State<TatsumasPage>
         if(zoom < zoomInTarget) zoom = zoomInTarget;
         final TatsumaData tatsuma = tatsumas[index];
         mainMapController!.move(tatsuma.pos, zoom);
-        // 他のユーザーによるタツマ変更のコールバックをクリア
-        _onTatsumaChanged = null;
         Navigator.pop(context);
         break;
       }
@@ -1155,25 +1075,54 @@ Future<Map<String,dynamic>?>
 // エリア表示フィルターの設定をデータベースへ保存
 void saveAreaFilterToDB(String uidPath)
 {
-  final String dbPath = "assign" + uidPath + "/areaFilter";
-  final DatabaseReference ref = database.ref(dbPath);
-  List<String> data = areaFilterToStrings();
-  ref.set(data);
+  // Firestore に保存
+  final dbDocId = uidPath.split("/").last;
+  final docRef = FirebaseFirestore.instance.collection("assign").doc(dbDocId);
+  final data = areaFilterToStrings();
+  docRef.update({ "areaFilter": data });
 }
 
 // エリア表示フィルターの設定をデータベースから読み込み
 Future loadAreaFilterFromDB(String uidPath) async
 {
-  final String dbPath = "assign" + uidPath + "/areaFilter";
-  final DatabaseReference ref = database.ref(dbPath);
-  final DataSnapshot snapshot = await ref.get();
-  if(snapshot.exists){
-    List<String> data = [];
-    try {
-      var temp = snapshot.value as List<dynamic>;
-      List<String> stringList = [];
-      temp.forEach((t){ data.add(t as String); });
-    } catch(e) {}
-    stringsToAreaFilter(data);
+  final dbDocId = uidPath.split("/").last;
+  final docRef = FirebaseFirestore.instance.collection("assign").doc(dbDocId);
+
+  //!!!! Firestore にデータがなければ、RealtimeDatabase から取得して作成
+  //!!!! (過渡期の処理。最終的には Firestore のみにする)
+/*
+  try{
+    bool existData = false;
+    final docSnapshot = await docRef.get();
+    if(docSnapshot.exists){
+      final doc = docSnapshot.data();
+      existData = doc!.containsKey("areaFilter");
+    }
+    if(!existData){
+      print(">  AreaFilter data was duplicated from RealtimeDatabase to Firestore.");
+      final ref = FirebaseDatabase.instance.ref("assign" + uidPath + "/areaFilter");
+      final s = await ref.get();
+      List<dynamic> data = [ "(未設定)" ];
+      if(s.exists){
+        data = s.value as List<dynamic>;
+      }
+      docRef.update({ "areaFilter": data });
+    }
+  }catch(e) { /**/ }
+*/
+  // Firestore から読み込み
+  bool existData = false;
+  final docSnapshot = await docRef.get();
+  if(docSnapshot.exists){
+    final doc = docSnapshot.data();
+    final data = doc!["areaFilter"];
+    if(data != null){
+      stringsToAreaFilter(data.cast<String>());
+      existData = true;
+    }
+  }
+  // データベース上になければ、直前の状態で保存する
+  if(!existData){
+    saveAreaFilterToDB(uidPath);
   }
 }

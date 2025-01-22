@@ -47,3 +47,16 @@ Future<bool> askAndCheckPassword(
 
   return res;
 }
+
+//----------------------------------------------------------------------------
+// 編集ロックパスワードの入力
+Future<bool> askEditingLockPassword(BuildContext context, String title) async
+{
+  bool authenOk = await askAndCheckPassword(context,
+    title, lockEditingPasswordHash, lockEditingPasswordKey);
+  // ハズレ
+  if(!authenOk){
+    showTextBallonMessage("ハズレ...");
+  }
+  return authenOk;
+}

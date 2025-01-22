@@ -242,6 +242,7 @@ class HomeIconWidget extends StatelessWidget
         if(goEveryoneHome()){
           updateMapView();
           HomeIconWidget.update();
+          showTextBallonMessage("全員家に帰った");
         }
         break;
       }

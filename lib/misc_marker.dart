@@ -4,6 +4,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_map/plugin_api.dart';
 import 'package:firebase_database/firebase_database.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'mydragmarker.dart';
 import 'globals.dart';
@@ -35,7 +36,7 @@ const double _iconHeight = 56;
 // 汎用マーカーのデータ
 class MiscMarker
 {
-  MiscMarker({ required this.position, this.iconType=0, this.memo="" });
+  MiscMarker({ required this.position, this.iconType=0, this.memo="", this.id="" });
 
   // 座標
   LatLng position;
@@ -43,6 +44,8 @@ class MiscMarker
   int iconType;
   // メモ
   String memo;
+  // ID(Firestore用)
+  String id;
 
   // マーカーの build に渡された BuildContext
   BuildContext? _context;
@@ -59,35 +62,25 @@ class MiscMarker
   }
 
   // データベースに保存されたMapデータから読み込み
-  bool fromMapData(Map<String,dynamic> map)
+  factory MiscMarker.fromMapData(Map<String,dynamic> map, String id)
   {
-    // 読み込みに失敗したら更新しない
-    bool ok = true;
-    late LatLng _position;
-    late int _iconType;
-    late String _memo;
     try {
       double latitude = map["latitude"] as double;
       double longitude = map["longitude"] as double;
-      _position = LatLng(latitude, longitude);
-      _iconType = map["iconType"] as int;
-      _memo = map["memo"] as String;
+      final position = LatLng(latitude, longitude);
+      final iconType = map["iconType"] as int;
+      final memo = map["memo"] as String;
+      return MiscMarker(position: position, iconType: iconType, memo: memo, id: id);
     } catch(e) {
-      ok = false;
+      return MiscMarker(position: LatLng(0,0));
     }
-    if(ok){
-      position = _position;
-      iconType = _iconType;
-      memo = _memo;
-    }
-    return ok;
   }
 
   // マップ上に表示する用のマーカーを作成
   MyDragMarker makeMapMarker(int index)
   {
     //!!!!
-    print(">MiscMarker.makeMapMarker(${index})");
+    print(">MiscMarker.makeMapMarker($index)");
 
     return MyDragMarker(
       point: position,
@@ -109,19 +102,19 @@ class MiscMarker
     );
   }
 
-
   LatLng onMapMarkerDragEnd(DragEndDetails detail, LatLng pos, Offset offset, int index, MapState? state)
   {
     //!!!!
-    print(">MiscMarker.onMapMarkerDragEnd(${index})");
+    print(">MiscMarker.onMapMarkerDragEnd($index)");
 
     position = pos;
-    miscMarkers.sync();
+    miscMarkers._syncModify(this);
 
     return pos;
   }
 }
 
+//-----------------------------------------------------------------------------
 //-----------------------------------------------------------------------------
 // 汎用マーカー
 class MiscMarkers
@@ -140,14 +133,49 @@ class MiscMarkers
   // マーカーを追加
   void addMarker(MiscMarker marker)
   {
+    // もし Firestore 用のIDが未設定なら、新規作成としてIDを設定
+    if(marker.id.isEmpty && (_colRef != null)){
+      marker.id = _colRef!.doc().id;
+      _syncModify(marker);
+    }
+
+    // マーカーを配列に追加
     final int index = _markers.length;
     _markers.add(marker);
     _mapOption.markers.add(marker.makeMapMarker(index));
   }
 
-  // クリア
-  void clear()
+  // マーカーの変更
+  bool modifyMarker(MiscMarker marker)
   {
+    int index = _markers.indexWhere((m) => (m.id == marker.id));
+    if(index < 0){
+      return false;
+    }
+    _markers[index] = marker;
+    _mapOption.markers[index] = marker.makeMapMarker(index);
+    return true;
+  }
+
+  // マーカーの削除
+  bool removeMarker(String id)
+  {
+    int index = _markers.indexWhere((m) => (m.id == id));
+    if(index < 0){
+      return false;
+    }
+    _markers.removeAt(index);
+    _mapOption.markers.removeAt(index);
+    for(int i=index; i<_markers.length; i++){
+      _mapOption.markers[i].index = i;
+    }
+    return true;
+  }
+
+  // ファイルを閉じる(ファイルを切り替え)
+  void close()
+  {
+    _colRef = null;
     releaseSync();
     _markers.clear();
     _mapOption.markers.clear();
@@ -168,103 +196,136 @@ class MiscMarkers
   // 変更の同期
   
   // 現在開いているファイルのパス
-  String _openedPath = "";
+  String _openedUIDPath = "";
+
+  // 現在開いているファイルの、マーカーのコレクションへの参照
+  CollectionReference<Map<String, dynamic>>? _colRef;
 
   // 変更通知を受け取るリスナー
-  StreamSubscription<DatabaseEvent>? _syncListener;
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _syncListener;
 
-  // 変更通知が initSync() による初期化によるものかを判定するフラグ
-  bool _firstOnSyncAfterOpenFile = true;
+  // 変更通知が openSync() による初期化によるものかを判定するフラグ
+  bool _isFirstSyncEvent = true;
 
   // 変更を送る
-  void sync()
+  void _syncModify(MiscMarker marker)
   {
     //!!!!
-    print(">MiscMarkers.sync(${_openedPath})");
+    print(">MiscMarkers._syncModify(${marker.id})");
 
-    // マーカー数が少ない想定なので、全マーカーを配列で一括で送る
-    final String path = "assign" + _openedPath + "/misc_markers";
-    final DatabaseReference ref = FirebaseDatabase.instance.ref(path);
-    List<Map<String,dynamic>> data = [];
-    _markers.forEach((marker){
-      data.add(marker.toMapData());
-    });
-    ref.set({
-      "sender_id": appInstKey,
-      "markers": data,
-    });
+    //!!!! Firestore にコピーを作成(過渡期の処理。最終的には Firestore のみにする)
+    var data = marker.toMapData();
+    _colRef?.doc(marker.id).set(data);
   }
 
-  // 変更通知の受信を設定
-  // ファイルを開いたタイミングで呼び出される
-  void initSync(String openedPath)
+  // 削除を送る
+  void _syncDelete(MiscMarker marker)
   {
     //!!!!
-    print(">MiscMarkers.initSync(${openedPath})");
+    print(">MiscMarkers._syncDelete(${marker.id})");
+
+    _colRef?.doc(marker.id).delete();
+  }
+
+  // ファイルを開く
+  void openSync(String uidPath) async
+  {
+    //!!!!
+    print(">MiscMarkers.openSync(${uidPath})");
   
     // 直前の変更通知リスナーを停止
     releaseSync();
 
-    _openedPath = openedPath;
-    final String path = "assign" + _openedPath + "/misc_markers";
-    final DatabaseReference ref = FirebaseDatabase.instance.ref(path);
-    _firstOnSyncAfterOpenFile = true;
-    _syncListener = ref.onValue.listen((DatabaseEvent event){
-      _onSync(event);
+    // Firestore のコレクションへの参照を取得
+    _openedUIDPath = uidPath;
+    final dbDocId = uidPath.split("/").last;
+    final docRef = FirebaseFirestore.instance.collection("assign").doc(dbDocId);
+    _colRef = docRef.collection("misc_markers");
+
+    //!!!! Firestore にデータがなければ、RealtimeDatabase から取得して作成
+/*
+    bool existData = false;
+    try {
+      var cnt = await _colRef!.count().get();
+      existData = (0 < (cnt.count ?? 0));
+    } catch(e) { /**/ }
+    if(!existData){
+      try {
+        final String path = "assign" + uidPath + "/misc_markers/markers";
+        final DatabaseReference ref = FirebaseDatabase.instance.ref(path);
+        final DataSnapshot snapshot = await ref.get();
+        if(snapshot.exists){
+          print(">  MiscMarkers data was duplicated from RealtimeDatabase to Firestore.");
+          final data = snapshot.value as List<dynamic>;
+          data.forEach((map){
+            _colRef!.doc().set(map);
+          });
+        }
+      } catch(e) { /**/ }
+    }
+*/
+    // Firestore から変更通知を受け取るリスナーを設定
+    _isFirstSyncEvent = true;
+    _syncListener = _colRef!.snapshots().listen((QuerySnapshot<Map<String, dynamic>> event) {
+      bool redraw = false;
+      for (var change in event.docChanges) {
+        redraw |= _onSync(change, uidPath);
+      }
+      // 再描画
+      if(redraw){
+        updateMapView();
+      }
+      _isFirstSyncEvent = false;
     });
   }
 
   // 同期リスナーを停止
   void releaseSync()
   {
+    _openedUIDPath = "";
     _syncListener?.cancel();
     _syncListener = null;
   }
 
   // 変更通知受けたときの処理
-  void _onSync(DatabaseEvent event)
+  bool _onSync(DocumentChange<Map<String, dynamic>> change, String uidPath)
   {
-    //!!!!
-    print(">MiscMarkers._onSync(${event.snapshot.ref.path})");
+    final doc = change.doc;
+    final localChange = doc.metadata.hasPendingWrites;
+    print(">MiscMarkers._onSync(): id=${doc.id}, type=${change.type}, local=$localChange, first=$_isFirstSyncEvent");
 
-    try {
-      var data = event.snapshot.value as Map<String, dynamic>;
-      // 自分自身からの変更通知ならば無視する
-      // ただしファイルオープン直後は初期化のために読み込む
-      if(_firstOnSyncAfterOpenFile){
-        //!!!!
-        print("> ... first sync.");
-      }else{
-        final String sender_id = data["sender_id"] as String;
-        if(sender_id == appInstKey){
-          //!!!!
-          print("> ... from myself.");
-          return;
-        }
-      }
-
-      // 他のユーザーからの通知、もしくはファイルオープン時の初期化ならば、マーカーリストを構築
-      _markers.clear();
-      _mapOption.markers.clear();
-      if(data.containsKey("markers")){
-        final List<dynamic> markers = data["markers"] as List<dynamic>;
-        markers.forEach((data){
-          var map = data as Map<String,dynamic>;
-          var marker = MiscMarker(position:LatLng(0,0));
-          bool ok = marker.fromMapData(map);
-          if(ok){
-            addMarker(marker);
-          }
-        });
-      }
-    } catch(e) {
-      //!!!!
-      print("> ... Exception !");
+    // 現在開いているファイルと異なるファイルの変更通知は無視
+    // ファイルの切り替え時に、前のファイルの変更通知が遅れてくることがあるため
+    if(_openedUIDPath != uidPath){
+      return false;
     }
-    // 再描画
-    updateMapView();
+  
+    // ローカルの変更による通知では何もしない
+    // ただし、マーカーを初期化するために、ファイルを開いた直後のデータ変更通知は拾う
+    if(!_isFirstSyncEvent && localChange){
+      return false;
+    }
 
-    _firstOnSyncAfterOpenFile = false;
+    bool redraw = false;
+    switch(change.type){
+      case  DocumentChangeType.added:
+        // マーカーの追加
+        final marker = MiscMarker.fromMapData(doc.data()!, doc.id);
+        addMarker(marker);
+        redraw = true;
+        break;
+      case DocumentChangeType.modified:
+        // 変更
+        final marker = MiscMarker.fromMapData(doc.data()!, doc.id);
+        redraw |= modifyMarker(marker);
+        break;
+      case DocumentChangeType.removed:
+        // 削除
+        // NOTE: 削除は自分からの削除でもリモート扱いで通知される
+        redraw |= removeMarker(doc.id);
+        break;
+    }
+    return redraw;
   }
 
   //----------------------------------------------------------------------------
@@ -272,31 +333,29 @@ class MiscMarkers
   void onMapMarkerTap(BuildContext context, LatLng position, int index)
   {
     //!!!!
-    print(">MiscMarkers.onMapMarkerTap(${index})");
+    var marker = _markers[index];
+    print(">MiscMarkers.onMapMarkerTap(${marker.id})");
 
     // タツマ名の変更ダイアログ
-    var marker = _markers[index];
     _showMiscMarkerDialog(context, marker).then((res){
       if(res != null){
         if(res.containsKey("delete")){
           // 削除
-          _markers.removeAt(index);
-          _mapOption.markers.clear();
-          for(int index = 0; index < _markers.length; index++){
-            _mapOption.markers.add(_markers[index].makeMapMarker(index));
-          }
-          //!!!!
-          print(">MiscMarkers.onMapMarkerTap(${index}) ... delete");
+          print(">MiscMarkers.onMapMarkerTap(${marker.id}) ... delete");
+          // 同期
+          _syncDelete(marker);
+          // NOTE: Firestore からの削除がリモート扱いになり、_onSync() でリストが
+          // 更新されるため、ここでのリストの更新は不要。
         }else{
+          // 変更
+          print(">MiscMarkers.onMapMarkerTap(${marker.id}) ... modify");
           // 変更
           marker.iconType = res["iconType"] as int;
           marker.memo     = res["memo"] as String;
           _mapOption.markers[index] = marker.makeMapMarker(index);
-          //!!!!
-          print(">MiscMarkers.onMapMarkerTap(${index}) ... modify");
+          // 同期
+          _syncModify(marker);
         }
-        // 同期
-        sync();
         // 再描画
         updateMapView();
       }

@@ -26,7 +26,7 @@ Tools • Dart 3.1.5 • DevTools 2.25.0
 
 > flutter build web --release --web-renderer canvaskit 
 > git apply flutter_service_worker.patch
-> cd build/web
+> cd C:\usr\projects\tatsumao\tatsumao\build\web
 > python -m http.server 8080
 
 Chromeで開く.
