@@ -243,6 +243,7 @@ class MiscMarkers
     _colRef = docRef.collection("misc_markers");
 
     //!!!! Firestore にデータがなければ、RealtimeDatabase から取得して作成
+/*
     bool existData = false;
     try {
       var cnt = await _colRef!.count().get();
@@ -262,7 +263,7 @@ class MiscMarkers
         }
       } catch(e) { /**/ }
     }
-
+*/
     // Firestore から変更通知を受け取るリスナーを設定
     _isFirstSyncEvent = true;
     _syncListener = _colRef!.snapshots().listen((QuerySnapshot<Map<String, dynamic>> event) {

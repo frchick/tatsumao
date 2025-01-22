@@ -692,6 +692,15 @@ class _MapViewState extends State<MapView>
                 child: makeGpsLocationSW(context),
               ),
             ),
+
+            // バージョン番号
+            Align(
+              alignment: Alignment.bottomRight,
+              child: Container(
+                margin: const EdgeInsets.fromLTRB(0, 0, 8, 2),
+                child: const Text("ver $appVersion", style: TextStyle(fontSize: 15)),
+              ),
+            ),
           ]
         ),
       ),

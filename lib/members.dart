@@ -144,6 +144,7 @@ Future openMemberSync(String uidPath, String name) async
   final dbDocId = uidPath.split("/").last;
   final assignDocRef = FirebaseFirestore.instance.collection("assign").doc(dbDocId);
   final attendeesColRef = assignDocRef.collection("attendees");
+/*
   final snapshot = await assignDocRef.get();
   if(!snapshot.exists){
     // まず名前を記録
@@ -175,6 +176,7 @@ Future openMemberSync(String uidPath, String name) async
       }
     }
   }
+*/
 
   // Firestore から変更通知を受け取るリスナーを設定
   _isFirstSyncEvent = true;

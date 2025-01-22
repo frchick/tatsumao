@@ -258,6 +258,7 @@ class FreehandDrawing
 
     //!!!! Firestore にデータがなければ、RealtimeDatabase から取得して作成
     //!!!! (過渡期の処理。最終的には Firestore のみにする)
+/*
     bool existData = false;
     try {
       var cnt = await _colRef!.count().get();
@@ -279,7 +280,7 @@ class FreehandDrawing
         }
       } catch(e) { /**/ }
     }
-
+*/
     _syncListener = _colRef!.snapshots().listen((QuerySnapshot<Map<String, dynamic>> event) {
       for (var change in event.docChanges) {
         switch (change.type) {

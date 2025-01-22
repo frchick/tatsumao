@@ -328,6 +328,7 @@ Future initFileTree() async
   // "デフォルトデータ"と共に登録。
   final colRef = FirebaseFirestore.instance.collection("directories");
   final rootDocRef = colRef.doc("0"); // ルートディレクトリ
+/*
   {
     final rootDoc = await rootDocRef.get();
     //!!!! ルートディレクトリがなければ、RealtimeDatabase から取得して初期化
@@ -372,7 +373,7 @@ Future initFileTree() async
       }
     }
   }
-
+*/      
   // データベースにルートディレクトリが記録されていなければ、
   // "デフォルトデータ"と共に登録。
   final rootDoc = await rootDocRef.get();

@@ -242,6 +242,7 @@ Future loadTatsumaFromDB() async
   //!!!! (過渡期の処理。最終的には Firestore のみにする)
   final colRef = FirebaseFirestore.instance.collection("tatsumas");
   final docRef = colRef.doc("all");
+/*
   final snapshot = await docRef.get();
   if(!snapshot.exists){
     final DatabaseReference ref = database.ref("tatsumas");
@@ -253,7 +254,7 @@ Future loadTatsumaFromDB() async
       }catch(e){ /**/ }
     }
   }
-
+*/
   // Firestore から変更通知を受け取るリスナーを設定
   _isFirstSyncEvent = true;
   _tatsumaUpdateListener = docRef.snapshots().listen((event){
@@ -1089,6 +1090,7 @@ Future loadAreaFilterFromDB(String uidPath) async
 
   //!!!! Firestore にデータがなければ、RealtimeDatabase から取得して作成
   //!!!! (過渡期の処理。最終的には Firestore のみにする)
+/*
   try{
     bool existData = false;
     final docSnapshot = await docRef.get();
@@ -1107,7 +1109,7 @@ Future loadAreaFilterFromDB(String uidPath) async
       docRef.update({ "areaFilter": data });
     }
   }catch(e) { /**/ }
-
+*/
   // Firestore から読み込み
   bool existData = false;
   final docSnapshot = await docRef.get();

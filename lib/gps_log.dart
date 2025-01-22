@@ -350,6 +350,7 @@ class GPSLog
     } catch(e) { /**/ }
 
     // なければ、RealtimeDatabase から読み込んで Firestore にコピー
+/*
     if(!existData && !recurcive){
       try {
         final String dbPath = "assign" + uidPath + "/gps_log/deviceIDs";
@@ -363,6 +364,7 @@ class GPSLog
         }
       } catch(e) { /**/ }
     }
+*/
   }
 
   //----------------------------------------------------------------------------
@@ -685,6 +687,7 @@ class GPSLog
     } catch(e) { /**/ }
 
     // なければ、RealtimeDatabase から読み込んで Firestore にコピー
+/*
     if(refUIDPath == null){
       try {
         final String dbPath = "assign" + thisUIDPath + "/gps_log";
@@ -700,8 +703,9 @@ class GPSLog
         }
       } catch(e) { /**/ }
     }
+*/
     // 他のデータへの参照がなければ、自分のパスを返す
-    if(refUIDPath == null) refUIDPath = thisUIDPath;
+    refUIDPath ??= thisUIDPath;
   
     print(">GPSLog.getReferencePath($thisUIDPath) -> $refUIDPath");
 
@@ -750,6 +754,7 @@ class GPSLog
     } catch(e) { /**/ }
   
     // なければ、RealtimeDatabase から読み込んで Firestore にコピー
+/*
     if(!existData && !recurcive){
       try {
         final String dbPath = "assign" + uidPath + "/gps_log";
@@ -770,6 +775,7 @@ class GPSLog
         }
       } catch(e) { /**/ }
     }
+  */
   }
 
   //----------------------------------------------------------------------------
