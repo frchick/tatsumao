@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:math'; // min,max
+import 'dart:html'; // Web Local Storage
 
 import 'package:flutter/material.dart';
 import 'package:latlong2/latlong.dart';
@@ -43,12 +44,29 @@ List<MyDragMarker> memberMarkers = [];
 
 // メンバーマーカーのサイズ指定
 // [0:大 / 1:小 / それ以外:非表示]
-int memberMarkerSizeSelector = 0;
+int _memberMarkerSizeSelector = 0;
+
+int get memberMarkerSizeSelector => _memberMarkerSizeSelector;
+
+set memberMarkerSizeSelector(int value)
+{
+  _memberMarkerSizeSelector = value;
+  window.localStorage["memberMarkerSizeSelector"] = value.toString();
+}
+
+void loadMemberMarkerSizeSelectorSetting()
+{
+  String? value = window.localStorage["memberMarkerSizeSelector"];
+  _memberMarkerSizeSelector = (value != null)? int.parse(value): 0;
+  if(!isShowMemberMarker()){
+    _memberMarkerSizeSelector = 1;
+  }
+}
 
 // メンバーマーカーの表示/非表示フラグ
 bool isShowMemberMarker()
 {
-  return (memberMarkerSizeSelector < 2);
+  return (_memberMarkerSizeSelector < 2);
 }
 
 //----------------------------------------------------------------------------
@@ -573,8 +591,8 @@ void createMemberMarkers()
   // サイズを決定
   const widthTable = [ 64.0, 42.0 ];
   const heightTable = [ 72.0, 48.0 ];
-  final width  = widthTable[min(memberMarkerSizeSelector, 1)];
-  final height = heightTable[min(memberMarkerSizeSelector, 1)];
+  final width  = widthTable[min(_memberMarkerSizeSelector, 1)];
+  final height = heightTable[min(_memberMarkerSizeSelector, 1)];
 
   // メンバーデータからマーカー配列を作成
   memberMarkers.clear();

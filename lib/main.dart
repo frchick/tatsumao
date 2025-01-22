@@ -126,6 +126,10 @@ class _MapViewState extends State<MapView>
   {
     super.initState();
 
+    // アプリの設定を読み込む
+    // メンバーマーカーのサイズ
+    loadMemberMarkerSizeSelectorSetting();
+
     // 家アイコン作成
     homeIconWidget = HomeIconWidget();
 
