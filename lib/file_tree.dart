@@ -331,7 +331,7 @@ class FileResult
 
 //----------------------------------------------------------------------------
 // 初期化
-Future initFileTree() async
+Future<bool> initFileTree() async
 {
   // データベースにルートディレクトリが記録されていなければ、
   // "デフォルトデータ"と共に登録。
@@ -385,24 +385,31 @@ Future initFileTree() async
 */      
   // データベースにルートディレクトリが記録されていなければ、
   // "デフォルトデータ"と共に登録。
-  final rootDoc = await rootDocRef.get();
-  if(!rootDoc.exists){
-    var defaultFile = FileItem(uid:_defaultFileUID, name:"デフォルトデータ", isFolder:false);
-    final List<Map<String,dynamic>> files = [ defaultFile.getDBData() ];
-    rootDocRef.set({
-      "items": files,
-    });
-  }
-  // ファイル/フォルダのユニークIDを発行するためのパスも作成
-  final nextUIDdocRef = FirebaseFirestore.instance.collection("misc").doc("fileItemNextUID");
-  final nextUIDdoc = await nextUIDdocRef.get();
-  if(!nextUIDdoc.exists){
-    nextUIDdocRef.set({ "uid": _firstUserFileID });
+  try {
+    final rootDoc = await rootDocRef.get(); // オフラインかつキャッシュ無いとここで例外
+    if(!rootDoc.exists){
+      var defaultFile = FileItem(uid:_defaultFileUID, name:"デフォルトデータ", isFolder:false);
+      final List<Map<String,dynamic>> files = [ defaultFile.getDBData() ];
+      rootDocRef.set({
+        "items": files,
+      });
+    }
+    // ファイル/フォルダのユニークIDを発行するためのパスも作成
+    final nextUIDdocRef = FirebaseFirestore.instance.collection("misc").doc("fileItemNextUID");
+    final nextUIDdoc = await nextUIDdocRef.get();
+    if(!nextUIDdoc.exists){
+      nextUIDdocRef.set({ "uid": _firstUserFileID });
+    }
+  }catch(e){
+    print(">initFileTree(): Error: Offline and data in not cache.");
+    return false;
   }
 
   // ルートディレクトリをデータベースから読み込み
   // NOTE: 直後に最初のファイル読み込みで moveAbsUIDPathDir() が呼ばれるので、それに任す
   // await _moveDir(_rootDirId);
+
+  return true;
 }
 
 //----------------------------------------------------------------------------

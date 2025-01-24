@@ -153,45 +153,6 @@ class _MapViewState extends State<MapView>
     await FirebaseFirestore.instance.enablePersistence(
       const PersistenceSettings(synchronizeTabs: true));
 
-    // メンバーデータをデータベースから取得
-    await loadMembersListFromDB();
-  
-    // メンバーデータからマーカー配列を作成
-    createMemberMarkers();
-
-    // 初期状態で開くファイルパスを取得
-    String openPath = "/1";
-    final queryParams = Uri.base.queryParameters;
-    if(queryParams.containsKey("open")){
-      openPath = queryParams["open"]!;
-      openPath = openPath.replaceAll("~", "/");
-    }
-    print(">initStateSub() fullURL=${Uri.base.toString()} openPath=${openPath}");
-
-    // ファイルツリーのデータベースを初期化
-    await initFileTree();
-    // 初期状態で開くファイルの位置までカレントディレクトリを移動
-    // 失敗していたら標準ファイル("/1")を開く
-    bool res = await moveAbsUIDPathDir(openPath);
-    if(!res){
-      openPath = "/1";
-      await moveAbsUIDPathDir(openPath);
-    }
-    // タツマデータをデータベースから取得
-    await loadTatsumaFromDB();
-
-    // 初期状態のファイルを読み込み
-    await openFile(openPath);
-    // 編集ロックに設定
-    lockEditing = true;
-
-    // 初期化完了(GPSログ除く)
-    // 一通りの処理が終わるので、処理中インジケータを消す
-    if(_progressIndicatorState == ProgressIndicatorState.Showing){
-      Navigator.of(context).pop();
-      _progressIndicatorState = ProgressIndicatorState.NoIndicate;
-    }
-
     // パスワードチェック
     bool authenOk = false;
     do{
@@ -204,8 +165,66 @@ class _MapViewState extends State<MapView>
       }
     }while(!authenOk);
 
-    // 一瞬待って表示開始
-    await Future.delayed(new Duration(milliseconds: 500));
+    var stopwatch = Stopwatch();
+    stopwatch.start();
+
+    // メンバーデータをデータベースから取得
+    await loadMembersListFromDB();
+    // メンバーデータからマーカー配列を作成
+    createMemberMarkers();
+
+    // タツマデータをデータベースから取得
+    await loadTatsumaFromDB();
+
+    // 初期状態で開くファイルパスを取得
+    String openPath = "/1";
+    final queryParams = Uri.base.queryParameters;
+    if(queryParams.containsKey("open")){
+      openPath = queryParams["open"]!;
+      openPath = openPath.replaceAll("~", "/");
+    }
+    print(">initStateSub() fullURL=${Uri.base.toString()} openPath=${openPath}");
+
+    // 初期状態のファイルを読み込み
+    bool ok = await openFile(openPath);
+    if(!ok){
+      // ファイルが開けなかったら、標準ファイルを開く
+      openPath = "/1";
+      await openFile(openPath);
+    }
+    // 編集ロックに設定
+    lockEditing = true;
+
+    // 残りの非同期処理
+    // ファイルツリーのデータベースを初期化
+    await initFileTree();
+    // 初期状態で開くファイルの位置までカレントディレクトリを移動
+    await moveAbsUIDPathDir(openPath);
+    
+    // 初期化完了(GPSログ除く)
+    // 一通りの処理が終わるので、処理中インジケータを消す
+    // ただし、最低1秒は表示しておく(非同期処理が終わった感を出すため)
+    stopwatch.stop();
+    int t = 1000 - stopwatch.elapsedMilliseconds;
+    if(0 < t){
+      await Future.delayed(Duration(milliseconds: t));
+    }
+    if(_progressIndicatorState == ProgressIndicatorState.Showing){
+      Navigator.of(context).pop();
+      _progressIndicatorState = ProgressIndicatorState.NoIndicate;
+    }
+
+    // 最初のファイルを開けなかった場合のエラー表示
+    if(!ok){
+      await showDialog(
+        context: context,
+        builder: (_){
+          return AlertDialog(content: const Text("ファイルを開けませんでした。"));
+        }
+      );               
+    }
+
+    // 表示開始
     setState((){
       // 初期化完了フラグをセット
       _initializingApp = false;
