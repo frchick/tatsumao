@@ -223,7 +223,8 @@ class _MapViewState extends State<MapView>
   
     // タツマのエリアフィルターを取得(表示/非表示)
     // これはオフラインでかつキャッシュに無い場合の判定も兼ねる
-    final dataRefAvailable = await loadAreaFilterFromDB(fileUIDPath);
+    final fileUID = fileUIDPath.split("/").last;
+    final dataRefAvailable = await loadAreaFilterFromDB(fileUID);
     if(!dataRefAvailable){
       print(">  Aborted because offline and data in not cache.");
       return false;
@@ -252,25 +253,25 @@ class _MapViewState extends State<MapView>
     updateTatsumaMarkers();
   
     // メンバーの配置データをデータベースから取得
-    String name = getOpenedFileName();
-    await openMemberSync(fileUIDPath, name);
+    final name = getOpenedFileName();
+    await openMemberSync(fileUID, name);
 
     // GPSログをクリア、デバイスIDと犬の対応を取得
-    await gpsLog.loadDeviceID2DogFromDB(fileUIDPath);
+    await gpsLog.loadDeviceID2DogFromDB(fileUID);
 
     // 汎用マーカーを読み込み(非同期)
-    miscMarkers.openSync(fileUIDPath);
+    miscMarkers.openSync(fileUID);
   
     // 手書き図を読み込み(非同期)
-    freehandDrawing.open(fileUIDPath);
+    freehandDrawing.open(fileUID);
   
     // GPSログを読み込み(非同期)
     final String gpsLogPath = await gpsLog.getReferencePath(fileUIDPath);
     final bool refLink = (gpsLogPath != fileUIDPath);
     gpsLog.downloadFromCloudStorage(gpsLogPath, refLink).then((res) async {
       if(res){
-        await gpsLog.loadGPSLogTrimRangeFromDB(fileUIDPath);
-        gpsLog.saveDeviceID2DogToDB(fileUIDPath);
+        await gpsLog.loadGPSLogTrimRangeFromDB(fileUID);
+        gpsLog.saveDeviceID2DogToDB(fileUID);
       }
       gpsLog.makePolyLines();
       gpsLog.makeDogMarkers();
@@ -551,7 +552,7 @@ class _MapViewState extends State<MapView>
         updateTatsumaMarkers();
         updateMapView();
         // エリアフィルターの設定をデータベースへ保存
-        saveAreaFilterToDB(getOpenedFileUIDPath());
+        saveAreaFilterToDB(openedFileUID.toString());
       }
     });
   }

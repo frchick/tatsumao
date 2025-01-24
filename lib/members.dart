@@ -107,8 +107,8 @@ class Member {
 //---------------------------------------------------------------------------
 //---------------------------------------------------------------------------
 
-// 現在開いているファイルのパス
-String _openedUIDPath = "";
+// 現在開いているファイルのUID(Firestore のドキュメントID)
+String _openedFileUID = "";
 
 // Firestore の通知変更リスナー
 StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _membersUpdateListener;
@@ -142,9 +142,9 @@ Future loadMembersListFromDB() async
 
 //---------------------------------------------------------------------------
 // 初期化
-Future openMemberSync(String uidPath, String name) async
+Future openMemberSync(String fileUID, String name) async
 {
-  print(">openMemberSync($uidPath:$name)");
+  print(">openMemberSync($fileUID:$name)");
 
   // 直前のリスナーは停止しておく
   releaseMemberSync();
@@ -154,13 +154,12 @@ Future openMemberSync(String uidPath, String name) async
     members[index].attended = false;
     memberMarkers[index].visible = false;
   }
-  // ファイルパスを保存
-  _openedUIDPath = uidPath;
+  // ファイルUIDを保存
+  _openedFileUID = fileUID;
 
   //!!!! Firestore にデータがなければ、RealtimeDatabase から取得して作成
   //!!!! (過渡期の処理。最終的には Firestore のみにする)
-  final dbDocId = uidPath.split("/").last;
-  final assignDocRef = FirebaseFirestore.instance.collection("assign").doc(dbDocId);
+  final assignDocRef = FirebaseFirestore.instance.collection("assign").doc(_openedFileUID);
   final attendeesColRef = assignDocRef.collection("attendees");
 /*
   final snapshot = await assignDocRef.get();
@@ -199,7 +198,7 @@ Future openMemberSync(String uidPath, String name) async
   // Firestore から変更通知を受け取るリスナーを設定
   _isFirstSyncEvent = true;
   _membersUpdateListener = attendeesColRef.snapshots().listen((QuerySnapshot<Map<String, dynamic>> event) {
-    _onChangeMemberState(event, uidPath);
+    _onChangeMemberState(event);
     _isFirstSyncEvent = false;
   });
 }
@@ -207,13 +206,12 @@ Future openMemberSync(String uidPath, String name) async
 //---------------------------------------------------------------------------
 // 現在のメンバーの状態で、新しくファイルを作成
 // NOTE: 現在のファイルを切り替えたりはしない
-void createNewAssignFile(String uidPath, String name)
+void createNewAssignFile(String fileUID, String name)
 {
-  print(">createNewAssignFile($uidPath:$name)");
+  print(">createNewAssignFile($fileUID:$name)");
 
   // ドキュメントに名前を記録
-  final dbDocId = uidPath.split("/").last;
-  final assignDocRef = FirebaseFirestore.instance.collection("assign").doc(dbDocId);
+  final assignDocRef = FirebaseFirestore.instance.collection("assign").doc(fileUID);
   assignDocRef.set({ "name": name });
 
   // 参加メンバーをコピー
@@ -231,7 +229,7 @@ void createNewAssignFile(String uidPath, String name)
   }
 
   // タツマのエリア表示フィルターもコピー
-  saveAreaFilterToDB(uidPath);
+  saveAreaFilterToDB(fileUID);
 }
 
 //---------------------------------------------------------------------------
@@ -252,8 +250,7 @@ void syncMemberState(final int index)
   // Firestore のデータを更新
   final Member member = members[index];
   final String id = index.toString().padLeft(3, '0');
-  final dbDocId = _openedUIDPath.split("/").last;
-  final assignRef = FirebaseFirestore.instance.collection("assign").doc(dbDocId);
+  final assignRef = FirebaseFirestore.instance.collection("assign").doc(_openedFileUID);
   final memberRef = assignRef.collection("attendees").doc(id);
   if(member.attended){
     memberRef.set({
@@ -267,7 +264,7 @@ void syncMemberState(final int index)
 
 //---------------------------------------------------------------------------
 // 他の利用者からの変更通知を受け取ったときの処理
-void _onChangeMemberState(QuerySnapshot<Map<String, dynamic>> event, String uidPath)
+void _onChangeMemberState(QuerySnapshot<Map<String, dynamic>> event)
 {
   // 「全員家に帰った」表示を判定するため、変更前に参加していた人数を数えておく
   int lastAttendedCount = 0;
@@ -280,7 +277,7 @@ void _onChangeMemberState(QuerySnapshot<Map<String, dynamic>> event, String uidP
   bool membersChanged = false;
   int gohomeMemberIndex = -1;
   for (var change in event.docChanges) {
-    bool res = _onChangeMemberStateSub(change, uidPath);
+    bool res = _onChangeMemberStateSub(change);
     modify |= res;
 
     // 帰った人を記録
@@ -329,7 +326,7 @@ void _onChangeMemberState(QuerySnapshot<Map<String, dynamic>> event, String uidP
   }
 }
 
-bool _onChangeMemberStateSub(DocumentChange<Map<String, dynamic>> change, String uidPath)
+bool _onChangeMemberStateSub(DocumentChange<Map<String, dynamic>> change)
 {
   // ログ出力
   final doc = change.doc;
@@ -411,8 +408,7 @@ bool goEveryoneHome()
 
 Future<void> goEveryoneHomeAsync() async
 {
-  final dbDocId = _openedUIDPath.split("/").last;
-  final assignDocRef = FirebaseFirestore.instance.collection("assign").doc(dbDocId);
+  final assignDocRef = FirebaseFirestore.instance.collection("assign").doc(_openedFileUID);
   final snapshot = await assignDocRef.collection("attendees").get();
   List<DocumentReference> batchDocs = [];
   for (var doc in snapshot.docs) {

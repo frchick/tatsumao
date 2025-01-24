@@ -323,13 +323,12 @@ class GPSLog
 
   //----------------------------------------------------------------------------
   // デバイスIDと犬の対応を読み込む
-  Future<void> loadDeviceID2DogFromDB(String uidPath, { bool recurcive=false }) async
+  Future<void> loadDeviceID2DogFromDB(String fileUID, { bool recurcive=false }) async
   {
-    print(">GPSLog.loadDeviceID2DogFromDB($uidPath) recurcive=$recurcive");
+    print(">GPSLog.loadDeviceID2DogFromDB($fileUID) recurcive=$recurcive");
 
     //!!!! Firestore から優先的に読み込む。
-    final dbDocId = uidPath.split("/").last;
-    final docRef = FirebaseFirestore.instance.collection("assign").doc(dbDocId);
+    final docRef = FirebaseFirestore.instance.collection("assign").doc(fileUID);
     bool existData = false;
     try {
       final docSnapshot = await docRef.get();
@@ -344,7 +343,7 @@ class GPSLog
             _deviceID2Dogs[id] = value as String;
           });
           existData = true;
-          print(">GPSLog.loadDeviceID2DogFromDB($uidPath) $_deviceID2Dogs");
+          print(">GPSLog.loadDeviceID2DogFromDB($fileUID) $_deviceID2Dogs");
         }
       }
     } catch(e) { /**/ }
@@ -369,10 +368,10 @@ class GPSLog
 
   //----------------------------------------------------------------------------
   // デバイスIDと犬の対応を保存
-  void saveDeviceID2DogToDB(String uidPath)
+  void saveDeviceID2DogToDB(String fileUID)
   {
     //!!!!
-    print(">GPSLog.saveDeviceID2DogToDB($uidPath)");
+    print(">GPSLog.saveDeviceID2DogToDB($fileUID)");
 
     // 変更がなければ保存しない
     if(!_modifyDeviceID2Dogs) return;
@@ -385,11 +384,10 @@ class GPSLog
       });
 
       //!!!! Firestore にコピーを作成(過渡期の処理。最終的には Firestore のみにする)
-      final dbDocId = uidPath.split("/").last;
-      final ref = FirebaseFirestore.instance.collection("assign").doc(dbDocId);
+      final ref = FirebaseFirestore.instance.collection("assign").doc(fileUID);
       ref.update({ "gps_log.deviceIDs": data });
 
-      print(">GPSLog.saveDeviceID2DogToDB($uidPath) $data");
+      print(">GPSLog.saveDeviceID2DogToDB($fileUID) $data");
     } catch(e) { /**/ }
 }
 
@@ -546,7 +544,7 @@ class GPSLog
   Future<bool> downloadFromCloudStorage(String path, bool referenceLink) async
   {
     //!!!!
-    print(">GPSLog.downloadFromCloudStorage(${path})");
+    print(">GPSLog.downloadFromCloudStorage($path)");
 
     // ストレージ上のファイルパスを参照
     final gpxRef = _getRef(path);
@@ -559,7 +557,8 @@ class GPSLog
       // 他のファイルからの参照の場合、デバイスIDと犬の対応表も読み込む
       // addLogFromGPX() より前で。
       if(res && referenceLink){
-        await loadDeviceID2DogFromDB(path);
+        final fileUID = path.split("/").last;
+        await loadDeviceID2DogFromDB(fileUID);
       }
       if(res){
         var gpxText = utf8.decode(data);
@@ -570,7 +569,7 @@ class GPSLog
         _thisUpdateTime = meta.updated;
       }
     } catch (e) {
-      print(">GPSLog.downloadFromCloudStorage(${path}) GPS Log couldn't be downloaded.");
+      print(">GPSLog.downloadFromCloudStorage($path) GPS Log couldn't be downloaded.");
       res = false;
     }
 
@@ -581,7 +580,7 @@ class GPSLog
     }
 
     //!!!!
-    print(">GPSLog.downloadFromCloudStorage(${path}) ${res}");
+    print(">GPSLog.downloadFromCloudStorage($path) $res");
 
     return res;
   }
@@ -716,26 +715,24 @@ class GPSLog
   // トリミング範囲
   void Function(void Function())? bottomSheetSetState;
 
-  void saveGPSLogTrimRangeToDB(String uidPath)
+  void saveGPSLogTrimRangeToDB(String fileUID)
   {
-    print(">GPSLog.saveGPSLogTrimRangeToDB($uidPath)");
+    print(">GPSLog.saveGPSLogTrimRangeToDB($fileUID)");
 
     // Firestore に保存
-    final dbDocId = uidPath.split("/").last;
-    final docRef = FirebaseFirestore.instance.collection("assign").doc(dbDocId);
+    final docRef = FirebaseFirestore.instance.collection("assign").doc(fileUID);
     docRef.update({
       "gps_log.trimStartTime": _trimStartTime.toIso8601String(),
       "gps_log.trimEndTime": _trimEndTime.toIso8601String(),
     });
   }
 
-  Future<void> loadGPSLogTrimRangeFromDB(String uidPath, { bool recurcive=false }) async
+  Future<void> loadGPSLogTrimRangeFromDB(String fileUID, { bool recurcive=false }) async
   {
-    print(">GPSLog.loadGPSLogTrimRangeFromDB($uidPath), recurcive=$recurcive");
+    print(">GPSLog.loadGPSLogTrimRangeFromDB($fileUID), recurcive=$recurcive");
 
     //!!!! Firestore から優先的に読み込む。
-    final dbDocId = uidPath.split("/").last;
-    final docRef = FirebaseFirestore.instance.collection("assign").doc(dbDocId);
+    final docRef = FirebaseFirestore.instance.collection("assign").doc(fileUID);
     bool existData = false;
     try {
       final docSnapshot = await docRef.get();
@@ -1388,16 +1385,15 @@ void showTrimmingBottomSheet(BuildContext context)
           // 他のフィルを参照していれば、参照先のファイル名を表示
           Widget? refFileName;
           if(gpsLog.isReferenceLink){
-            String uidPath = gpsLog.getOpenedPath() ?? "";
-            final int t = uidPath.lastIndexOf("/");
-            if(0 <= t){
-              uidPath = uidPath.substring(t);
-              final String fileName = convertUIDPath2NamePath(uidPath);
+            final uidPath = gpsLog.getOpenedPath();
+            if(uidPath != null){
+              final uid = uidPath.split("/").last;
+              final fileName = convertUID2Name(uid);
               refFileName = Row(children:[
-                Text("["),
+                const Text("["),
                 const Icon(Icons.link, size:20),
                 Text(
-                  " " + fileName.substring(1) + "]",
+                  " $fileName]",
                   style: const TextStyle(fontSize: 16),
                 ),
               ]);
@@ -1425,8 +1421,7 @@ void showTrimmingBottomSheet(BuildContext context)
                       },
                       onChangeEnd: (value) {
                         // トリム範囲の変更をデータベースへ保存
-                        final filePath = getOpenedFileUIDPath();
-                        gpsLog.saveGPSLogTrimRangeToDB(filePath);
+                        gpsLog.saveGPSLogTrimRangeToDB(openedFileUID.toString());
                       },
                     ),
                   ),

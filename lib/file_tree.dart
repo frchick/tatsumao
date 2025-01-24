@@ -149,7 +149,7 @@ List<int> _directoryUIDStack = [ ];
 String _openedFileUIDPath = "/$_defaultFileUID";
 
 // 現在開いているファイルのUIDを取得
-int get _openedFileUID {
+int get openedFileUID {
   try{
     return int.parse(_openedFileUIDPath.split("/").last);
   }catch(e){
@@ -259,11 +259,20 @@ String convertUIDPath2NamePath(String uidPath)
   return namePath;
 }
 
+// UIDから表示名へ変換
+String convertUID2Name(String uid)
+{
+  // カラ文字列はエラー
+  if(uid.isEmpty) return "";
+
+  // UIDを名前に変換
+  return _uid2name[int.parse(uid)] ?? uid;
+}
+
 // 現在開いているファイル名を取得
 String getOpenedFileName()
 {
-  int uid = _openedFileUID;
-  return _uid2name[uid] ?? "";
+  return _uid2name[openedFileUID] ?? "";
 }
 
 // 開いたファイルへのUIDフルパスを設定
@@ -586,7 +595,7 @@ FileResult _deleteFile(FileItem item)
   if(!_canDelete(item.uid)){
     return FileResult(res:false, message:"'デフォルトデータ'等は削除できません");
   }
-  if(item.uid == _openedFileUID){
+  if(item.uid == openedFileUID){
     return FileResult(res:false, message:"開いているファイルは削除できません");
   }
 
@@ -828,7 +837,7 @@ void setOpenedFileGPSLogFlag(bool gpsLog)
 {
   // 現在のディレクトリに開いているファイルがあれば、フラグをセットする
   // 現在のディレクトリが開いているファイルと別の位置なら、moveDir() でセットされる
-  final currentFileUID = _openedFileUID;
+  final currentFileUID = openedFileUID;
   List<FileItem> files = getCurrentDir();
   files.forEach((file){
     if(file.uid == currentFileUID){
@@ -1062,7 +1071,7 @@ class FilesPageState extends State<FilesPage>
     late bool isOpenedFile;
     if(fileItem.isFile){
       // ファイルの場合はIDの一致で判定
-      isOpenedFile = (_openedFileUID == fileItem.uid);
+      isOpenedFile = (openedFileUID == fileItem.uid);
     }else{
       // フォルダの場合は、パスにIDが含まれるかで判定
       isOpenedFile = _openedFileUIDPath.contains("/${fileItem.uid}/");
@@ -1201,7 +1210,8 @@ class FilesPageState extends State<FilesPage>
     var res = await createNewFile(name);
     if(res.res){
       // 実際に配置ファイルを作成
-      createNewAssignFile(res.uidPath, name);
+      final fileUID = res.uidPath.split("/").last;
+      createNewAssignFile(fileUID, name);
       // 作成が成功したら、切り替えてマップに戻る
       widget.onSelectFile(res.uidPath);
       Navigator.pop(context);

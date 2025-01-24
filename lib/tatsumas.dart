@@ -682,7 +682,7 @@ class TatsumasPageState extends State<TatsumasPage>
                       changeFlag = true;
                     });
                     // エリアフィルターの設定をデータベースへ保存
-                    saveAreaFilterToDB(getOpenedFileUIDPath());
+                    saveAreaFilterToDB(openedFileUID.toString());
                   }
                 });
               },
@@ -1073,21 +1073,19 @@ Future<Map<String,dynamic>?>
 //----------------------------------------------------------------------------
 //----------------------------------------------------------------------------
 // エリア表示フィルターの設定をデータベースへ保存
-void saveAreaFilterToDB(String uidPath)
+void saveAreaFilterToDB(String fileUID)
 {
   // Firestore に保存
-  final dbDocId = uidPath.split("/").last;
-  final docRef = FirebaseFirestore.instance.collection("assign").doc(dbDocId);
+  final docRef = FirebaseFirestore.instance.collection("assign").doc(fileUID);
   final data = areaFilterToStrings();
   docRef.update({ "areaFilter": data });
 }
 
 // エリア表示フィルターの設定をデータベースから読み込み
 // オフラインでかつ、キャッシュにデータが無い場合は false。
-Future<bool> loadAreaFilterFromDB(String uidPath) async
+Future<bool> loadAreaFilterFromDB(String fileUID) async
 {
-  final dbDocId = uidPath.split("/").last;
-  final docRef = FirebaseFirestore.instance.collection("assign").doc(dbDocId);
+  final docRef = FirebaseFirestore.instance.collection("assign").doc(fileUID);
 
   //!!!! Firestore にデータがなければ、RealtimeDatabase から取得して作成
   //!!!! (過渡期の処理。最終的には Firestore のみにする)

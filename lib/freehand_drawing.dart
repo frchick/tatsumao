@@ -247,13 +247,12 @@ class FreehandDrawing
 
   //---------------------------------------------------------------------------
   // 配置ファイルを開く
-  void open(String uidPath) async
+  void open(String fileUID) async
   {
     //!!!!
-    print(">FreehandDrawing.open($uidPath)");
+    print(">FreehandDrawing.open($fileUID)");
 
-    final dbDocId = uidPath.split("/").last;
-    final docRef = FirebaseFirestore.instance.collection("assign").doc(dbDocId);
+    final docRef = FirebaseFirestore.instance.collection("assign").doc(fileUID);
     _colRef = docRef.collection("freehand_drawing");
 
     //!!!! Firestore にデータがなければ、RealtimeDatabase から取得して作成
@@ -329,7 +328,7 @@ class FreehandDrawing
   
     // データベースから切断
     _colRef = null;
-}
+  }
 
   // 追加イベント
   void _onStrokeAdded(Map<String, dynamic> data, String id, { bool isMyself = false })

@@ -195,8 +195,8 @@ class MiscMarkers
   //-----------------------------------------------------------------------------
   // 変更の同期
   
-  // 現在開いているファイルのパス
-  String _openedUIDPath = "";
+  // 現在開いているファイルのUID
+  String _openedFileUID = "";
 
   // 現在開いているファイルの、マーカーのコレクションへの参照
   CollectionReference<Map<String, dynamic>>? _colRef;
@@ -228,18 +228,17 @@ class MiscMarkers
   }
 
   // ファイルを開く
-  void openSync(String uidPath) async
+  void openSync(String fileUID) async
   {
     //!!!!
-    print(">MiscMarkers.openSync(${uidPath})");
+    print(">MiscMarkers.openSync($fileUID)");
   
     // 直前の変更通知リスナーを停止
     releaseSync();
 
     // Firestore のコレクションへの参照を取得
-    _openedUIDPath = uidPath;
-    final dbDocId = uidPath.split("/").last;
-    final docRef = FirebaseFirestore.instance.collection("assign").doc(dbDocId);
+    _openedFileUID = fileUID;
+    final docRef = FirebaseFirestore.instance.collection("assign").doc(fileUID);
     _colRef = docRef.collection("misc_markers");
 
     //!!!! Firestore にデータがなければ、RealtimeDatabase から取得して作成
@@ -269,7 +268,7 @@ class MiscMarkers
     _syncListener = _colRef!.snapshots().listen((QuerySnapshot<Map<String, dynamic>> event) {
       bool redraw = false;
       for (var change in event.docChanges) {
-        redraw |= _onSync(change, uidPath);
+        redraw |= _onSync(change, fileUID);
       }
       // 再描画
       if(redraw){
@@ -282,13 +281,13 @@ class MiscMarkers
   // 同期リスナーを停止
   void releaseSync()
   {
-    _openedUIDPath = "";
+    _openedFileUID = "";
     _syncListener?.cancel();
     _syncListener = null;
   }
 
   // 変更通知受けたときの処理
-  bool _onSync(DocumentChange<Map<String, dynamic>> change, String uidPath)
+  bool _onSync(DocumentChange<Map<String, dynamic>> change, String fileUID)
   {
     final doc = change.doc;
     final localChange = doc.metadata.hasPendingWrites;
@@ -296,7 +295,7 @@ class MiscMarkers
 
     // 現在開いているファイルと異なるファイルの変更通知は無視
     // ファイルの切り替え時に、前のファイルの変更通知が遅れてくることがあるため
-    if(_openedUIDPath != uidPath){
+    if(_openedFileUID != fileUID){
       return false;
     }
   
