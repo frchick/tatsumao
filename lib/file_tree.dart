@@ -722,7 +722,7 @@ Future<bool> moveDir(int uid) async
     _blockingMoveDir = true;
     res = await _moveDir(uid);
     _blockingMoveDir = false;
-    print(">FileTree.moveDir($uid) $res " + getCurrentDirUIDPath());
+    print(">FileTree.moveDir($uid) $res ${getCurrentDirUIDPath()}$uid/");
   }else{
     print("  Blocking!");
   }
@@ -767,20 +767,26 @@ Future<bool> _moveDir(int uid) async
 
   // 移動先ディレクトリの構成をデータベースから取得
   final docRef = FirebaseFirestore.instance.collection("directories").doc("$nextUID");
-  final doc = await docRef.get();
-  if(!doc.exists){
-    print(">FileTree._moveDir(): Error: Doc of directory(uid:$nextUID) does not exist in DB.");
+  List<FileItem> directory = [];
+  try{
+    final doc = await docRef.get(); // オフラインかつキャッシュ無いとここで例外
+    if(!doc.exists){
+      print(">FileTree._moveDir(): Error: Doc of directory(uid:$nextUID) does not exist in DB.");
+      return false;
+    }
+    // ルート階層以外なら、「親ディレクトリ」を追加
+    if(nextUID != _rootDirId){
+      directory.add(_parentFolder);
+    }
+    final data = doc.data();
+    for(var item in data!["items"] as List<dynamic>){
+      directory.add(FileItem.fromMap(item));
+    }
+  }catch(e){
+    print(">FileTree._moveDir(): Error: Offline and data in not cache.");
     return false;
   }
-  // ルート階層以外なら、「親ディレクトリ」を追加
-  List<FileItem> directory = [];
-  if(nextUID != _rootDirId){
-    directory.add(_parentFolder);
-  }
-  final data = doc.data();
-  for(var item in data!["items"] as List<dynamic>){
-    directory.add(FileItem.fromMap(item));
-  }
+
   // ソートしておく
   sortDir(directory);
 
@@ -1109,13 +1115,23 @@ class FilesPageState extends State<FilesPage>
             }
           }else{
             // ディレクトリ移動
-            await moveDir(fileItem.uid);
+            final ok = await moveDir(fileItem.uid);
             // GPSログ参照モードなら、現在のディレクトリのファイル毎に、GPSログの有無を更新
-            if(widget.referGPSLogMode){
+            if(ok && widget.referGPSLogMode){
               await updateGpsLogFlagForCurrentDir();
             }
-            // 再描画
-            setState((){});
+            if(ok){
+              // 再描画
+              setState((){});
+            }else{
+              // 読み込み失敗メッセージ
+              showDialog(
+                context: context,
+                builder: (_){
+                  return AlertDialog(content: const Text("フォルダを開けませんでした。"));
+                }
+              );               
+            }
           }
         },
       ),

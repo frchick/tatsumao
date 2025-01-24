@@ -11,6 +11,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';  // カレン
 
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:async';
 import 'package:google_fonts/google_fonts.dart';  // フォント
 import 'mydragmarker.dart';   // マップ上のメンバーマーカー
@@ -148,6 +149,10 @@ class _MapViewState extends State<MapView>
   // 初期化(読み込み関連)
   Future initStateSub() async
   {
+    // Firestore のオフライン対応を有効化
+    await FirebaseFirestore.instance.enablePersistence(
+      const PersistenceSettings(synchronizeTabs: true));
+
     // メンバーデータをデータベースから取得
     await loadMembersListFromDB();
   
@@ -211,11 +216,19 @@ class _MapViewState extends State<MapView>
   //----------------------------------------------------------------------------
   // ファイルを読み込み、切り替え
   // 指定されたファイルがカレントディレクトリになければエラー
-  Future<void> openFile(String fileUIDPath) async
+  Future<bool> openFile(String fileUIDPath) async
   {
     print("----------------------------------------");
     print(">openFile($fileUIDPath)");
   
+    // タツマのエリアフィルターを取得(表示/非表示)
+    // これはオフラインでかつキャッシュに無い場合の判定も兼ねる
+    final dataRefAvailable = await loadAreaFilterFromDB(fileUIDPath);
+    if(!dataRefAvailable){
+      print(">  Aborted because offline and data in not cache.");
+      return false;
+    }
+
     // メンバーマーカーの表示設定が非表示なら、表示に戻す。
     if(!isShowMemberMarker()){
       memberMarkerSizeSelector = 1;
@@ -226,7 +239,7 @@ class _MapViewState extends State<MapView>
     
     // 「現在のファイル」のパスを設定
     if(!setOpenedFileUIDPath(fileUIDPath)){
-      return;
+      return false;
     }
 
     // GPSログをクリア
@@ -235,15 +248,12 @@ class _MapViewState extends State<MapView>
     miscMarkers.close();
     // 直前の手書き図を削除
     freehandDrawing.close();
+    // エリアフィルター(表示/非表示)に従って、タツマのマーカー配列を作成
+    updateTatsumaMarkers();
   
     // メンバーの配置データをデータベースから取得
     String name = getOpenedFileName();
     await openMemberSync(fileUIDPath, name);
-
-    // タツマのエリアフィルターを取得(表示/非表示)
-    // それに応じてマーカー配列を作成
-    await loadAreaFilterFromDB(fileUIDPath);
-    updateTatsumaMarkers();
 
     // GPSログをクリア、デバイスIDと犬の対応を取得
     await gpsLog.loadDeviceID2DogFromDB(fileUIDPath);
@@ -266,6 +276,8 @@ class _MapViewState extends State<MapView>
       gpsLog.makeDogMarkers();
       gpsLog.redraw();
     });
+
+    return true;
   }
 
   //----------------------------------------------------------------------------
@@ -475,7 +487,7 @@ class _MapViewState extends State<MapView>
   
     // ファイルを読み込み
     // NOTE: 非同期読み込みの処理は、この後に実行される可能性あり
-    await openFile(uidPath);
+    final ok = await openFile(uidPath);
 
     // クルクルを消す    
     Navigator.of(context).pop();
@@ -487,9 +499,19 @@ class _MapViewState extends State<MapView>
     // 再描画
     setState((){});
 
-    // ファイル名をバルーン表示
-    final String path = getOpenedFilePath();
-    showTextBallonMessage(path);
+    if(ok){
+      // ファイル名をバルーン表示
+      final String path = getOpenedFilePath();
+      showTextBallonMessage(path);
+    }else{
+      // 読み込み失敗メッセージ
+      showDialog(
+        context: context,
+        builder: (_){
+          return AlertDialog(content: const Text("ファイルを開けませんでした。"));
+        }
+      );      
+    }
   }
 
   //----------------------------------------------------------------------------
