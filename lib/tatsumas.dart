@@ -1083,7 +1083,7 @@ void saveAreaFilterToDB(String fileUID)
 
 // エリア表示フィルターの設定をデータベースから読み込み
 // オフラインでかつ、キャッシュにデータが無い場合は false。
-Future<bool> loadAreaFilterFromDB(String fileUID) async
+Future<Map<String,bool>> loadAreaFilterFromDB(String fileUID) async
 {
   final docRef = FirebaseFirestore.instance.collection("assign").doc(fileUID);
 
@@ -1111,6 +1111,7 @@ Future<bool> loadAreaFilterFromDB(String fileUID) async
 */
   // Firestore から読み込み
   bool existData = false;
+  bool isFromCache = false;
   try{
     final docSnapshot = await docRef.get(); // オフラインかつキャッシュ無いとここで例外
     if(docSnapshot.exists){
@@ -1119,9 +1120,10 @@ Future<bool> loadAreaFilterFromDB(String fileUID) async
       existData = (data != null);
       if(existData){
         stringsToAreaFilter(data.cast<String>());
+        isFromCache = docSnapshot.metadata.isFromCache;
       }
     }
   }catch(e) { /**/ }
 
-  return existData;
+  return { "existData": existData, "isFromCache": isFromCache };
 }

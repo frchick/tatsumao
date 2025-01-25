@@ -243,10 +243,16 @@ class _MapViewState extends State<MapView>
     // タツマのエリアフィルターを取得(表示/非表示)
     // これはオフラインでかつキャッシュに無い場合の判定も兼ねる
     final fileUID = fileUIDPath.split("/").last;
-    final dataRefAvailable = await loadAreaFilterFromDB(fileUID);
-    if(!dataRefAvailable){
+    final res = await loadAreaFilterFromDB(fileUID);
+    if(!(res["existData"] ?? false)){
       print(">  Aborted because offline and data in not cache.");
       return false;
+    }
+
+    // Firestore キャッシュから読み込んでいるか確認
+    final isFromCache = res["isFromCache"] ?? false;
+    if(isFromCache){
+      print(">openFile($fileUIDPath): isFromCache=true");
     }
 
     // メンバーマーカーの表示設定が非表示なら、表示に戻す。
@@ -285,17 +291,20 @@ class _MapViewState extends State<MapView>
     freehandDrawing.open(fileUID);
   
     // GPSログを読み込み(非同期)
-    final String gpsLogPath = await gpsLog.getReferencePath(fileUIDPath);
-    final bool refLink = (gpsLogPath != fileUIDPath);
-    gpsLog.downloadFromCloudStorage(gpsLogPath, refLink).then((res) async {
-      if(res){
-        await gpsLog.loadGPSLogTrimRangeFromDB(fileUID);
-        gpsLog.saveDeviceID2DogToDB(fileUID);
-      }
-      gpsLog.makePolyLines();
-      gpsLog.makeDogMarkers();
-      gpsLog.redraw();
-    });
+    // オフラインキャッシュから読み込まれている場合には、GPSログは読み込まない
+    if(!isFromCache){
+      final String gpsLogPath = await gpsLog.getReferencePath(fileUIDPath);
+      final bool refLink = (gpsLogPath != fileUIDPath);
+      gpsLog.downloadFromCloudStorage(gpsLogPath, refLink).then((res) async {
+        if(res){
+          await gpsLog.loadGPSLogTrimRangeFromDB(fileUID);
+          gpsLog.saveDeviceID2DogToDB(fileUID);
+        }
+        gpsLog.makePolyLines();
+        gpsLog.makeDogMarkers();
+        gpsLog.redraw();
+      });
+    }
 
     return true;
   }
