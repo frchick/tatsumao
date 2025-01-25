@@ -1,8 +1,8 @@
-diff --git a/build/web/flutter_service_worker.js b/build/web/flutter_service_worker.js
-index df198fb..a4398c7 100644
+diff --git a/test/flutter_service_worker.js b/test/flutter_service_worker.js
+index a47bf66..264f9af 100644
 --- a/build/web/flutter_service_worker.js
 +++ b/build/web/flutter_service_worker.js
-@@ -136,9 +136,12 @@ self.addEventListener("fetch", (event) => {
+@@ -136,9 +136,14 @@ self.addEventListener("fetch", (event) => {
    if (event.request.url == origin || event.request.url.startsWith(origin + '/#') || key == '') {
      key = '/';
    }
@@ -14,7 +14,9 @@ index df198fb..a4398c7 100644
 +  var resourcceFile = (RESOURCES[key] != null);
 +  var mapTile = event.request.url.startsWith("https://cyberjapandata.gsi.go.jp/xyz/");
 +  var cloudAssets = event.request.url.startsWith("https://storage.googleapis.com/tatsumao-976e2.appspot.com/assets/");
-+  if (!resourcceFile && !mapTile && !cloudAssets) {
++  var fontAssets = event.request.url.startsWith("https://fonts.gstatic.com/s/roboto/v20/");
++  var firebaseJS = event.request.url.startsWith("https://www.gstatic.com/firebasejs/10.7.0/");
++  if (!resourcceFile && !mapTile && !cloudAssets && !fontAssets && !firebaseJS) {
      return;
    }
    // If the URL is the index.html, perform an online-first request.

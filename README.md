@@ -78,4 +78,4 @@ Cloud Storage からアクセスすると、より多くの設定が可能。
 ※ローカルでリリースビルドして更新する。
 
 書き換えて、以下でパッチファイルを作成
->git diff /test/flutter_service_worker.js > flutter_service_worker.patch
+>git diff test/flutter_service_worker.js > flutter_service_worker.patch
