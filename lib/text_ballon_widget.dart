@@ -5,7 +5,7 @@ OverlayEntry? _overlayEntry;
 
 //-----------------------------------------------------------------------------
 // ポップアップメッセージの表示
-void showTextBallonMessage(String message, { BuildContext? context })
+void showTextBallonMessage(String message, { BuildContext? context, bool? start_ellipsis })
 {
   // 呼び出し元から BuildContext が渡されていない場合は、グローバルから参照
   context ??= appScaffoldKey.currentContext;
@@ -16,39 +16,81 @@ void showTextBallonMessage(String message, { BuildContext? context })
   // 直前のオーバーレイを消去
   resetTextBallonMessage();
 
+  // 文字スタイル
+  final textStyle = TextStyle(
+    fontSize: 18,
+    fontWeight: FontWeight.bold,
+    color: Colors.grey.shade200,
+    decoration: TextDecoration.none,
+  );
+
+  // 長いテキストの省略のために、テキストの最大幅を計算
+  final sidePadding = 25.0;
+  final maxTextWidth = MediaQuery.of(context).size.width - (2 * sidePadding);
+
+  // 文字列が画面幅より長かった場合、
+  TextOverflow? overflow;
+  bool? softWrap;
+  if((start_ellipsis != null) && start_ellipsis){
+    // 最大幅を越えていたら、前側を切って省略記号
+    var size = _getTextSize(message, textStyle);
+    if(maxTextWidth < size.width){
+      String t = "…";
+      for(int i = 1; i < message.length; i++){
+        t = "…" + message.substring(i);
+        size = _getTextSize(t, textStyle);
+        if(size.width <= maxTextWidth){
+          break;
+        }
+      }
+      message = t;
+    }
+  }else if((start_ellipsis != null) && !start_ellipsis){
+    // 後ろ側を切って省略記号
+    overflow = TextOverflow.ellipsis;
+  }else{
+    // 画面幅を超えるときは折り返し
+    softWrap = true;
+  }
+
   // 画面中央に表示されるテキスト・ポップアップメッセージ
   _overlayEntry = OverlayEntry(
-    builder: (cntx) => Align(  // AlignとRowで中央に表示
+    builder: (cntx) => Align(  // 中央に表示
       alignment: Alignment.center,
-      child: Row(                 // このRowがないと、なぜかテキストが全画面サイズに…
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [ 
-          MyFadeOut(              // 消えるときのフェードアウトアニメーション
-            child: Container(     // テキスト背景のボックス
-              padding: const EdgeInsets.fromLTRB(25, 8, 25, 8),
-              decoration: BoxDecoration(
-                color: Colors.black,
-                borderRadius: BorderRadius.circular(5),
-              ),
-              child:Text(
-                message,
-                style:TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.grey.shade200,
-                  decoration: TextDecoration.none,
-                ),
-                textAlign: TextAlign.center,
-              ),
+      child: MyFadeOut(       // 消えるときのフェードアウトアニメーション
+        child: Container(     // テキスト背景のボックス
+          padding: EdgeInsets.fromLTRB(sidePadding, 8, sidePadding, 8),
+          decoration: BoxDecoration(
+            color: Colors.black,
+            borderRadius: BorderRadius.circular(5),
+          ),
+          child: ConstrainedBox(  // 画面幅より長いテキストの制限
+            constraints: BoxConstraints(maxWidth: maxTextWidth),
+            child:Text(
+              message,
+              style: textStyle,
+              overflow: overflow,
+              softWrap: softWrap,
             ),
           ),
-        ]),
+        ),
+      ),
     ),
   );
-  
+
   // オーバーレイ表示を開始
   // 上の MyFadeOut でフェードアウトし、それが完了したら remove() される。
   Overlay.of(context).insert(_overlayEntry!);
+}
+
+Size _getTextSize(String text, TextStyle style)
+{
+  final TextPainter textPainter = TextPainter(
+      text: TextSpan(text: text, style: style),
+      maxLines: 1,
+      textDirection: TextDirection.ltr)
+      ..layout();
+  return textPainter.size;
 }
 
 //-----------------------------------------------------------------------------

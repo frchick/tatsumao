@@ -531,7 +531,7 @@ class _MapViewState extends State<MapView>
     if(ok){
       // ファイル名をバルーン表示
       final String path = getOpenedFilePath();
-      showTextBallonMessage(path);
+      showTextBallonMessage(path, start_ellipsis:true);
     }else{
       // 読み込み失敗メッセージ
       showDialog(
