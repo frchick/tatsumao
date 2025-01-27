@@ -33,18 +33,8 @@ void showTextBallonMessage(String message, { BuildContext? context, bool? start_
   bool? softWrap;
   if((start_ellipsis != null) && start_ellipsis){
     // 最大幅を越えていたら、前側を切って省略記号
-    var size = _getTextSize(message, textStyle);
-    if(maxTextWidth < size.width){
-      String t = "…";
-      for(int i = 1; i < message.length; i++){
-        t = "…" + message.substring(i);
-        size = _getTextSize(t, textStyle);
-        if(size.width <= maxTextWidth){
-          break;
-        }
-      }
-      message = t;
-    }
+    final r = ellipsisTextStart(message, textStyle, maxTextWidth);
+    message = r["text"] as String;
   }else if((start_ellipsis != null) && !start_ellipsis){
     // 後ろ側を切って省略記号
     overflow = TextOverflow.ellipsis;
@@ -81,16 +71,6 @@ void showTextBallonMessage(String message, { BuildContext? context, bool? start_
   // オーバーレイ表示を開始
   // 上の MyFadeOut でフェードアウトし、それが完了したら remove() される。
   Overlay.of(context).insert(_overlayEntry!);
-}
-
-Size _getTextSize(String text, TextStyle style)
-{
-  final TextPainter textPainter = TextPainter(
-      text: TextSpan(text: text, style: style),
-      maxLines: 1,
-      textDirection: TextDirection.ltr)
-      ..layout();
-  return textPainter.size;
 }
 
 //-----------------------------------------------------------------------------

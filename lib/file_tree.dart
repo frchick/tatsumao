@@ -978,10 +978,6 @@ class FilesPageState extends State<FilesPage>
   @override
   Widget build(BuildContext context)
   {
-    // 幅が狭ければ、文字を小さくする
-    var screenSize = MediaQuery.of(context).size;
-    final bool narrowWidth = (screenSize.width < 640);
-
     final List<FileItem> currentDir = getCurrentDir();
 
     return WillPopScope(
@@ -996,7 +992,6 @@ class FilesPageState extends State<FilesPage>
           titleLine: [
             Text(
               getCurrentDirPath(),
-              textScaleFactor: (narrowWidth? 0.8: null),
             ),
           ],
           actionsLine: [

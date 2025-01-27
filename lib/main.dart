@@ -409,10 +409,6 @@ class _MapViewState extends State<MapView>
 
   AppBar makeAppBar(BuildContext context)
   {
-    // 幅が狭ければ、文字を小さくする
-    var screenSize = MediaQuery.of(context).size;
-    final bool narrowWidth = (screenSize.width < 640);
-  
     // AppBar-Action領域の、編集ロックボタン
     _lockEditingButton = OnOffIconButton(
       icon: const Icon(Icons.edit_square),
@@ -430,7 +426,7 @@ class _MapViewState extends State<MapView>
       _lockEditingButton,
       // クリップボードへコピーボタン
       IconButton(
-        icon: Icon(Icons.content_copy),
+        icon: const Icon(Icons.content_copy),
         onPressed:() {
           copyAssignToClipboard(context);
         },
@@ -462,14 +458,12 @@ class _MapViewState extends State<MapView>
     List<Widget> titleLine = [
       // ファイル一覧ボタン
       IconButton(
-        icon: Icon(Icons.folder),
+        icon: const Icon(Icons.folder),
         onPressed: () => fileIconFunc(context),
       ),
       // ファイルパス
-      // 狭い画面なら文字小さく
       Text(
         getOpenedFilePath(),
-        textScaleFactor: (narrowWidth? 0.8: null),
       ),
     ];
 

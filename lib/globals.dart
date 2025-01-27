@@ -5,7 +5,7 @@ import 'distance_circle_layer.dart';
 
 //----------------------------------------------------------------------------
 // バージョン表示
-const appVersion = "2.1.3";
+const appVersion = "2.1.4";
 
 //----------------------------------------------------------------------------
 // 地図関連
@@ -60,6 +60,37 @@ double getScreenWidth()
 double getScreenHeight()
 {
   return (appScaffoldKey.currentContext?.size?.height ?? 0.0);
+}
+
+//----------------------------------------------------------------------------
+// 画面幅を越えるテキストの、前側を省略表示
+Map<String,dynamic> ellipsisTextStart(
+  String text, TextStyle textStyle, double maxTextWidth, { double scaleFactor = 1.0})
+{
+  var size = getTextLineSize(text, textStyle, scaleFactor);
+  if(maxTextWidth < size.width){
+    String t = "…";
+    for(int i = 1; i < text.length; i++){
+      t = "…" + text.substring(i);
+      size = getTextLineSize(t, textStyle, scaleFactor);
+      if(size.width <= maxTextWidth){
+        break;
+      }
+    }
+    text = t;
+  }
+  return { "text":text, "size":size };
+}
+
+Size getTextLineSize(String text, TextStyle style, double scaleFactor)
+{
+  final TextPainter textPainter = TextPainter(
+      text: TextSpan(text: text, style: style),
+      maxLines: 1,
+      textDirection: TextDirection.ltr,
+      textScaleFactor: scaleFactor)
+      ..layout();
+  return textPainter.size;
 }
 
 //----------------------------------------------------------------------------
