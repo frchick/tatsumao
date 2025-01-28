@@ -1161,7 +1161,7 @@ Future<bool> readGPSLog(BuildContext context) async
 void showGPSLogPopupMenu(BuildContext context)
 {
   // メニューの座標
-  final double x = getScreenWidth() - 200;
+  final double x = getScreenWidth();  // 画面右寄せ
   final double y = 60;
 
   // Note: アイコンカラーは ListTile のデフォルトカラー合わせ

@@ -33,6 +33,7 @@ import 'area_data.dart';
 import 'globals.dart';
 import 'area_filter_dialog.dart';
 import 'mylocation_marker.dart';
+import 'map_view.dart';
 
 //----------------------------------------------------------------------------
 // グローバル変数
@@ -424,25 +425,11 @@ class _MapViewState extends State<MapView>
     List<Widget> actionsLine = [
       // 編集ロックボタン
       _lockEditingButton,
-      // クリップボードへコピーボタン
-      IconButton(
-        icon: const Icon(Icons.content_copy),
-        onPressed:() {
-          copyAssignToClipboard(context);
-        },
-      ),
       // ログ関連
       IconButton(
-        icon: const Icon(Icons.timeline),
+        icon: const Icon(Icons.pets),
         onPressed:() {
           showGPSLogPopupMenu(context);
-        },
-      ),
-      // タツマの編集と読み込み
-      IconButton(
-        icon: const Icon(Icons.map),
-        onPressed:() {
-          tatsumaIconFunc(context);
         },
       ),
       // エリアフィルター
@@ -450,6 +437,14 @@ class _MapViewState extends State<MapView>
         icon: const Icon(Icons.visibility),
         onPressed:() {
           areaIconFunc(context);
+        },
+      ),
+      // ツールサブメニュー
+      IconButton(
+//      icon: const Icon(Icons.home_repair_service),
+        icon: const Icon(Icons.construction),
+        onPressed:() {
+          _showPopupSubMenu(context);
         },
       ),
     ];
@@ -475,6 +470,39 @@ class _MapViewState extends State<MapView>
       opacity: 0.4,
       automaticallyImplyLeading: false,
       setState: setState);
+  }
+
+  //----------------------------------------------------------------------------
+  // ツール系メニュー用のポップアップメニューを開く
+  void _showPopupSubMenu(BuildContext context)
+  {
+    // メニューの座標
+    final double x = getScreenWidth();  // 画面右寄せ
+    final double y = 60;
+
+    // Note: アイコンカラーは ListTile のデフォルトカラー合わせ
+    showMenu<int>(
+      context: context,
+      position: RelativeRect.fromLTRB(x, y, x, y),
+      elevation: 8.0,
+      items: [
+        makePopupMenuItem(0, "タツマ配り", Icons.content_copy), 
+        makePopupMenuItem(1, "タツマ一覧", Icons.map),
+        makePopupMenuItem(2, "地図キャッシュ", Icons.download_for_offline),
+      ],
+    ).then((value) async {
+      switch(value ?? -1){
+      case 0: // タツマ配り
+        copyAssignToClipboard(context);
+        break;
+      case 1: // タツマ一覧
+        tatsumaIconFunc(context);
+        break;
+      case 2: // 地図キャッシュ
+        cacheMapTiles(context);
+        break;
+      }
+    });
   }
 
   //----------------------------------------------------------------------------
