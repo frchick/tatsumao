@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:latlong2/latlong.dart';
 import 'text_ballon_widget.dart';
@@ -22,6 +23,12 @@ Future<void> cacheMapTilesSub(BuildContext context) async
   final s = bounds.south;
   print(">cacheMapTiles(): zoom=$zoom, W=$w, E=$e, N=$n, S=$s");
 
+  // 画面幅から、プログレスバー(ダイアログコンテンツ)の幅を計算
+  // NOTE: AlertDialog は content の左右にデフォルトで24pxのパディング
+  // NOTE: ダイアログの外側は、デフォルトで40pxのマージン(_defaultInsetPadding)
+  const sidePadding = 24 + 40;
+  final double contentWidth = min(400, (getScreenWidth() - (2 * sidePadding)));
+
   // プログレスバーをもつ進捗表示ダイアログ
   // 描画更新用
   final updateStream = StreamController<bool>();
@@ -41,21 +48,21 @@ Future<void> cacheMapTilesSub(BuildContext context) async
       return AlertDialog(
         key: dialogKey,
         title: const Text('地図キャッシュ処理中'),
-        content: StreamBuilder<bool>(
-          stream: updateStream.stream,
-          builder: (context, snapshot) {
-            final infoText =
-              "Zoom:$currentLevel Step:($currentStep/$currentTotalStep)";
-            return Container(
-              width: 400,
-              child: Column(
+        content: Container(
+          width: contentWidth,
+          child: StreamBuilder<bool>(
+            stream: updateStream.stream,
+            builder: (context, snapshot) {
+              final infoText =
+                "Zoom:$currentLevel Step:($currentStep/$currentTotalStep)";
+              return Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       SizedBox( // プログレスバーは明示的にサイズを指定する必要あり
-                        width: 350,
+                        width: (contentWidth - 40),
                         child: LinearProgressIndicator(value: progress)
                       ),
                       Text('${(progress * 100).toInt()}%'),
@@ -64,12 +71,12 @@ Future<void> cacheMapTilesSub(BuildContext context) async
                   const SizedBox(height: 8),
                   Text(infoText),
                 ]
-              ),
-            );
-          },
+              );
+            },
+          ),
         ),
         actions: [
-          TextButton(
+          ElevatedButton(
             onPressed: () {
               Navigator.pop(context);
               cancelFlag = true;
