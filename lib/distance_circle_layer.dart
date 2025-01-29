@@ -166,25 +166,6 @@ class DistanceCirclePainter extends CustomPainter
     textPainter.paint(canvas, pos + Offset(4, 2));
   }
 
-  // 緯度経度で表される2地点間の距離を計算
-  double calculateDistance(LatLng? pos1, LatLng? pos2)
-  {
-    if((pos1 == null) || (pos2 == null)) return 1.0;
-
-    var a = (0.5 - _cos(pos2.latitude - pos1.latitude)/2) + 
-          _cos(pos1.latitude) *
-          _cos(pos2.latitude) * 
-          (1 - _cos(pos2.longitude - pos1.longitude))/2;
-    const R = 12742000;        // 地球の直径
-    return R * asin(sqrt(a));  // [m]
-  }
-
-  double _cos(double deg)
-  {
-    var p = 0.017453292519943295; // π/180
-    return cos(deg * p);
-  }
-
   // 画面幅に応じた距離サークルの半径の選択
   double selectCircleR(double screenW)
   {
@@ -211,4 +192,25 @@ class DistanceCirclePainter extends CustomPainter
   {
     return true;
   }
+}
+
+//----------------------------------------------------------------------------
+
+// 緯度経度で表される2地点間の距離を計算
+double calculateDistance(LatLng? pos1, LatLng? pos2)
+{
+  if((pos1 == null) || (pos2 == null)) return 1.0;
+
+  var a = (0.5 - _cos(pos2.latitude - pos1.latitude)/2) + 
+        _cos(pos1.latitude) *
+        _cos(pos2.latitude) * 
+        (1 - _cos(pos2.longitude - pos1.longitude))/2;
+  const R = 12742000;        // 地球の直径
+  return R * asin(sqrt(a));  // [m]
+}
+
+double _cos(double deg)
+{
+  var p = 0.017453292519943295; // π/180
+  return cos(deg * p);
 }

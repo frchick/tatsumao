@@ -5,6 +5,8 @@ import 'package:latlong2/latlong.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_map/plugin_api.dart';
 import 'package:location/location.dart';
+import 'distance_circle_layer.dart';  // 二点間の距離の計算
+import 'mypolyline_layer.dart'; // マップ上のカスタムポリライン
 
 class MyLocationMarker
 {
@@ -31,7 +33,7 @@ class MyLocationMarker
   // 地図上に表示するマーカー
   List<Marker> _markers = [];
   // 地図上に表示するライン
-  List<Polyline> _polylines = [];
+  List<MyPolyline> _polylines = [];
   // 地図へのアクセス
   final MapController _mapController;
 
@@ -48,9 +50,9 @@ class MyLocationMarker
   }
 
   // Flutter_map のレイヤーオプションを返す
-  PolylineLayerOptions getLineLayerOptions()
+  MyPolylineLayerOptions getLineLayerOptions()
   {
-    return PolylineLayerOptions(
+    return MyPolylineLayerOptions(
       polylines: _polylines,
       rebuild: _updateMyLocationStream.stream,  // 再描画のトリガー
     );
@@ -176,27 +178,42 @@ class MyLocationMarker
     if(!_enable) return;
 
     // GPS位置マーカーが画面外なら、ラインを消す
+    // NOTE: 非表示なら、始点終点をマーカー位置にする(距離表示のため)
     final myPos = LatLng(_myLocation.latitude!, _myLocation.longitude!);
     final bounds = _mapController.bounds;
     final showLine = (bounds != null)? !bounds.contains(myPos) : true;
-    if(showLine){
-      // 画面中央とGPS位置マーカーを結ぶラインを引く
-      var line = Polyline(
-        points: [
-          center,
-          myPos,
-        ],
-        strokeWidth: 4,
-        isDotted: true,
-        color: Colors.red,
-      );
-      if(_polylines.isEmpty){
-        _polylines.add(line);
-      }else{
-        _polylines[0] = line;
-      }
+
+    // マーカーと画面中心の距離を計算
+    final distance = calculateDistance(myPos, _mapController.center);
+    late String text;
+    if(distance < 1000){
+      text = distance.toStringAsFixed(0) + "m";
     }else{
-      _polylines.clear();
+      text = (distance / 1000).toStringAsFixed(2) + "Km";
+    }
+
+    // 画面中央とGPS位置マーカーを結ぶラインを引く
+    var line = MyPolyline(
+      points: [
+        (showLine? center: myPos),
+        myPos,
+      ],
+      labelTexts: [ "", text ],
+      labelTextOffset: const Offset(0, 16),
+      labelTextAlign: TextAlign.center,
+      labelTextStyle: const TextStyle(
+        color: Colors.black,
+        fontSize: 16,
+        fontWeight: FontWeight.bold,
+      ),
+      strokeWidth: 4,
+      isDotted: true,
+      color: Colors.red,
+    );
+    if(_polylines.isEmpty){
+      _polylines.add(line);
+    }else{
+      _polylines[0] = line;
     }
   }
 }

@@ -778,7 +778,13 @@ class _MapViewState extends State<MapView>
               alignment: Alignment.bottomRight,
               child: Container(
                 margin: const EdgeInsets.fromLTRB(0, 0, 8, 2),
-                child: const Text("ver $appVersion", style: TextStyle(fontSize: 15)),
+                child: const Text(
+                  "ver $appVersion",
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                  )
+                ),
               ),
             ),
           ]

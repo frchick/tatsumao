@@ -55,7 +55,10 @@ class MyPolyline {
   final bool endCapMarker;
   late LatLngBounds boundingBox;
   final bool shouldRepaint;
-
+  final List<String> ?labelTexts;
+  final TextAlign labelTextAlign;
+  final Offset labelTextOffset;
+  final TextStyle labelTextStyle;
   MyPolyline({
     required this.points,
     this.strokeWidth = 1.0,
@@ -70,6 +73,14 @@ class MyPolyline {
     this.startCapMarker = false,
     this.endCapMarker = false,
     this.shouldRepaint = false,
+    this.labelTexts,
+    this.labelTextAlign = TextAlign.center,
+    this.labelTextOffset = Offset.zero,
+    this.labelTextStyle = const TextStyle(
+      color: Colors.black,
+      fontSize: 14,
+      fontWeight: FontWeight.bold,
+    ),
   });
 }
 
@@ -198,7 +209,6 @@ class MyPolylinePainter extends CustomPainter {
             canvas, polylineOpt.offsets, radius, spacing, filterPaint);
       }
       _paintDottedLine(canvas, polylineOpt.offsets, radius, spacing, paint);
-      if (saveLayers) canvas.restore();
     } else {
       paint.style = PaintingStyle.stroke;
       if (saveLayers) canvas.saveLayer(rect, Paint());
@@ -216,8 +226,38 @@ class MyPolylinePainter extends CustomPainter {
       if(polylineOpt.endCapMarker){
         _paintCapCircle(canvas, paint, polylineOpt.offsets.last, "E");
       }
-      if (saveLayers) canvas.restore();
     }
+    // ラベルテキストを描画
+    if(polylineOpt.labelTexts != null){
+      final n = min(polylineOpt.offsets.length, polylineOpt.labelTexts!.length);
+      for(int i = 0; i < n; i++){
+        final text = polylineOpt.labelTexts![i];
+        if(text.isEmpty) continue;
+
+        final textPainter = TextPainter(
+          text: TextSpan(
+            text: text,
+            style: polylineOpt.labelTextStyle,
+          ),
+          textDirection: TextDirection.ltr,
+        );
+        textPainter.layout();
+        // TextPainter.textAlign がなぜか効かないので、自前でオフセット
+        var offset = polylineOpt.offsets[i] + polylineOpt.labelTextOffset;
+        switch(polylineOpt.labelTextAlign){
+          case TextAlign.right:
+            offset -= Offset(textPainter.width, 0);
+            break;
+          case TextAlign.center:
+            offset -= Offset(textPainter.width / 2, 0);
+            break;
+          default:
+            break;
+        }
+        textPainter.paint(canvas, offset);
+      }
+    }
+    if (saveLayers) canvas.restore();
   }
 
   void _paintDottedLine(Canvas canvas, List<Offset> offsets, double radius,
