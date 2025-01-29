@@ -102,6 +102,7 @@ class OnOffIconButton2 extends StatefulWidget
     this.offBackgroundColor,
     this.isOn = false,
     this.onChange,
+    this.onLongPress,
   });
 
   // アイコン
@@ -115,6 +116,8 @@ class OnOffIconButton2 extends StatefulWidget
   final bool isOn;
   // ON/OFF切り替え処理
   final Function(bool, OnOffIconButton2State)? onChange;
+  // 長押し
+  final Function()? onLongPress;
 
   @override
   OnOffIconButton2State createState() => OnOffIconButton2State();
@@ -147,6 +150,7 @@ class OnOffIconButton2State extends State<OnOffIconButton2> {
             padding: const EdgeInsets.all(0),
             shape: const CircleBorder(),
           ),
+          // タップ
           onPressed: () {
             // 自分自身を再描画
             setState(() {
@@ -156,6 +160,10 @@ class OnOffIconButton2State extends State<OnOffIconButton2> {
               }
             });
           },
+          // 長押し
+          onLongPress:(){
+            widget.onLongPress?.call();
+          }
         );
       }
     );

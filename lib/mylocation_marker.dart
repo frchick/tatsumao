@@ -156,7 +156,7 @@ class MyLocationMarker
       }
 
       // マーカーが画面外なら、地図の中心からのラインをひく
-      updateLine(_mapController.center);
+      _updateLine(_mapController.center);
     
       // 再描画
       _updateMyLocationStream.sink.add(null);
@@ -167,13 +167,13 @@ class MyLocationMarker
   void moveMap(MapController mapController, MapPosition position)
   {
     // ラインの始点を画面中央に固定
-    updateLine(position.center!);
+    _updateLine(position.center!);
     // 再描画
     _updateMyLocationStream.sink.add(null);
   }
 
   // ライン表示の更新
-  void updateLine(LatLng center)
+  void _updateLine(LatLng center)
   {
     if(!_enable) return;
 
@@ -215,5 +215,14 @@ class MyLocationMarker
     }else{
       _polylines[0] = line;
     }
+  }
+
+  // GPS位置に地図を移動
+  void moveMapToMyLocation()
+  {
+    if(!_enable) return;
+
+    final myPos = LatLng(_myLocation.latitude!, _myLocation.longitude!);
+    _mapController.move(myPos, _mapController.zoom);
   }
 }

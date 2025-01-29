@@ -802,6 +802,7 @@ class _MapViewState extends State<MapView>
       offIcon: Icon(Icons.gps_off, size:40, color:Colors.grey.shade700),
       offBackgroundColor: Colors.grey.withOpacity(0.70),
       isOn: _myLocMarker.enabled,
+      // タップ
       onChange: (bool onoff, OnOffIconButton2State state) {
         // GPS位置情報が無効なら、以降スイッチをONにさせない。
         if(_gpsLocationNotAvailable){
@@ -819,6 +820,13 @@ class _MapViewState extends State<MapView>
           _myLocMarker.disable();
         }
         return onoff;
+      },
+      // 長押し
+      onLongPress: () {
+        // GPS位置に地図を移動
+        if(_myLocMarker.enabled){
+          _myLocMarker.moveMapToMyLocation();
+        }
       },
     );
   }
