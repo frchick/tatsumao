@@ -487,7 +487,7 @@ class _MapViewState extends State<MapView>
       elevation: 8.0,
       items: [
         makePopupMenuItem(0, "タツマ配り", Icons.content_copy), 
-        makePopupMenuItem(1, "タツマ一覧", Icons.map),
+        makePopupMenuItem(1, "タツマ一覧", Icons.map, enabled: !lockEditing),
         makePopupMenuItem(2, "地図キャッシュ", Icons.download_for_offline),
       ],
     ).then((value) async {
