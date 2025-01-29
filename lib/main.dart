@@ -602,7 +602,10 @@ class _MapViewState extends State<MapView>
         updateTatsumaMarkers();
         updateMapView();
         // エリアフィルターの設定をデータベースへ保存
-        saveAreaFilterToDB(openedFileUID.toString());
+        // NOTE: 編集ロックの場合は、ローカルでの変更だけで保存しない
+        if(!lockEditing){
+          saveAreaFilterToDB(openedFileUID.toString());
+        }
       }
     });
   }
