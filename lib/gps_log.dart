@@ -148,7 +148,8 @@ class GPSLog
   {
     if(_routes.isEmpty) return _dummyStartTime;
 
-    var t = DateTime(2100); // 適当な遠い未来の時間
+    // ルートから最も早い開始時間を取得
+    var t = DateTime(2100); // 適当な遠い未来の時間(西暦2100年)
     _routes.forEach((id, route){
       if(route.startTime.isBefore(t)){
         t = route.startTime;
@@ -164,7 +165,8 @@ class GPSLog
   {
     if(_routes.isEmpty) return _dummyEndTime;
 
-    var t = DateTime(2000); // 適当な過去の時間
+    // ルートから最も遅い終了時間を取得
+    var t = DateTime(2000); // 適当な過去の時間(西暦2000年)
     _routes.forEach((id, route){
       if(t.isBefore(route.endTime)){
         t = route.endTime;
@@ -292,7 +294,7 @@ class GPSLog
 
   //----------------------------------------------------------------------------
   // 再描画用の Stream
-  var _stream = StreamController<void>.broadcast();
+  final _stream = StreamController<void>.broadcast();
   // 再描画用のストリームを取得
   Stream<void> get reDrawStream => _stream.stream;
   // 再描画
@@ -393,7 +395,7 @@ class GPSLog
 
   //----------------------------------------------------------------------------
   // GPXファイルからログを読み込む
-  bool addLogFromGPX(String fileContent)
+  bool _addLogFromGPX(String fileContent)
   {
     // XMLパース
     final XmlDocument gpxDoc = XmlDocument.parse(fileContent);
@@ -418,9 +420,9 @@ class GPSLog
       if(0 <= i){
         deviceId = int.tryParse(name.substring(i + 3)) ?? 0;
       }
-      String dogName = getID2Name(deviceId);
+      String dogName = getID2Name(deviceId);  // IDと犬の対応変更は、ここで反映する
       GPSDeviceParam deviceParam = _deviceParams[dogName] ?? _undefDeviceParam;
-      print("name=${name}, deviceId=${deviceId}, dogName=${dogName}, deviceParam=${deviceParam.name}");
+      print("name=$name, deviceId=$deviceId, dogName=$dogName, deviceParam=${deviceParam.name}");
 
       // 登録されているデバイスのログのみを読み込み
       if(deviceParam.name != "未定義"){
@@ -555,14 +557,14 @@ class GPSLog
       final Uint8List? data = await gpxRef.getData();
       res = (data != null);
       // 他のファイルからの参照の場合、デバイスIDと犬の対応表も読み込む
-      // addLogFromGPX() より前で。
+      // _addLogFromGPX() より前で。
       if(res && referenceLink){
         final fileUID = path.split("/").last;
         await loadDeviceID2DogFromDB(fileUID);
       }
       if(res){
         var gpxText = utf8.decode(data);
-        res = addLogFromGPX(gpxText);
+        res = _addLogFromGPX(gpxText);
       }
       if(res){
         FullMetadata meta = await gpxRef.getMetadata();
@@ -595,7 +597,7 @@ class GPSLog
     final gpxRef = _getRef(path);
     try {
       gpxRef.delete();
-    } catch(e){}
+    } catch(e){ /**/ }
   }
 
   // クラウドストレージのデータが更新されているか？
@@ -608,8 +610,7 @@ class GPSLog
     try {
       FullMetadata meta = await gpxRef.getMetadata();
       cloudUpdateTime = meta.updated;
-    } catch(e) {
-    }
+    } catch(e) { /**/ }
     if(cloudUpdateTime == null) return false;
 
     // クラウド上にデータがあって、ローカルが空なら、必ず true になる。
@@ -837,19 +838,21 @@ class _Route
   // ID(nameに書かれている端末ID)
   int _deviceId = 0;
   // パスの描画用パラメータ
-  GPSDeviceParam _deviecParam = GPSDeviceParam(
+  // NOTE: ログファイルには保存されない
+  var _deviecParam = GPSDeviceParam(
     name: "",
     color: const Color.fromARGB(255,128,128,128));
   // アイコンイメージ
-  Image? _iconImage = null;
+  // NOTE: ログファイルには保存されない
+  Image? _iconImage;
 
   //----------------------------------------------------------------------------
   // 開始時間
   DateTime get startTime =>
-    (0 < _points.length)? _points.first.time: _dummyStartTime;
+    (_points.isNotEmpty? _points.first.time: _dummyStartTime);
   // 終了時間
   DateTime get endTime =>
-    (0 < _points.length)? _points.last.time: _dummyEndTime;
+    (_points.isNotEmpty? _points.last.time: _dummyEndTime);
 
   // トリミングに対応した開始インデックス
   int _trimStartIndex = -1;
@@ -868,25 +871,24 @@ class _Route
     // ルートの通過ポイントを読み取り
     bool ok = true;
     final Iterable<XmlElement> rtepts_ = rte_.findElements("rtept");
-    rtepts_.forEach((pt){
+    for(final pt in rtepts_){
       final String? lat = pt.getAttribute("lat");
       final String? lon = pt.getAttribute("lon");
       final XmlElement? time = pt.getElement("time");
-      if((lat != null) && (lon != null) && (time != null)){
-        // 時間はUTCから日本時間に変換しておく
-        late DateTime dateTime;
-        try { dateTime = DateTime.parse(time.text).toLocal(); }
-        catch(e){ ok = false; }
-        if(!ok) return;
-        
-        _points.add(_Point(
-          LatLng(double.parse(lat), double.parse(lon)),
-          dateTime));
-      }else{
-        ok = false;
-        return;
+      ok = (lat != null) && (lon != null) && (time != null);
+      if(ok){
+        try {
+          // 時間はUTCから日本時間に変換しておく
+          final dateTime = DateTime.parse(time.text).toLocal();
+          _points.add(_Point(
+            LatLng(double.parse(lat), double.parse(lon)),
+            dateTime));
+        }catch(e){
+          ok = false;
+        }
       }
-    });
+      if(!ok) break;
+    }
 
     // なんらか失敗していたらデータを破棄
     if(!ok){
@@ -924,13 +926,13 @@ class _Route
     _points.sort((a,b) { return a.time.compareTo(b.time); });
     int prev = 0;
     int seek = 1;
-    final distance = Distance();
+    const distance = Distance();
     while(seek < _points.length)
     {
       // 直前の通過ポイントから、5[m]以上離れているか、60[秒]以上経過していれば採用
       final pt0 = _points[prev]; 
       final pt1 = _points[seek]; 
-      double D = distance(pt0.pos, pt1.pos);
+      final D = distance(pt0.pos, pt1.pos);
       int S = pt1.time.difference(pt0.time).inSeconds;
       if((5.0 <= D) || (60 <= S)){
         prev++;
@@ -1089,12 +1091,7 @@ class _Route
   Marker? makeDogMarker(DateTime time)
   {
     // アイコン画像を読み込んでおく
-    if(_iconImage == null){
-      var path = _deviecParam.iconImagePath;
-      if(path != null){
-        _iconImage = Image.asset(path);
-      }
-    }
+    _iconImage ??= Image.asset(_deviecParam.iconImagePath);
     if(_iconImage == null) return null;
   
     return Marker(
@@ -1135,7 +1132,7 @@ class _Point
 //----------------------------------------------------------------------------
 //----------------------------------------------------------------------------
 // GPSログの読み込み処理
-Future<bool> readGPSLog(BuildContext context) async
+Future<bool> _readGPSLogFromLocalFile(BuildContext context) async
 {
   // .pgx ファイルを選択して開く
   final XTypeGroup typeGroup = XTypeGroup(
@@ -1149,7 +1146,7 @@ Future<bool> readGPSLog(BuildContext context) async
   final String fileContent = await file.readAsString();
 
   // XMLパース
-  final bool res = gpsLog.addLogFromGPX(fileContent);
+  final bool res = gpsLog._addLogFromGPX(fileContent);
   if(!res) return false;
 
   return true;
@@ -1192,11 +1189,11 @@ void showGPSLogPopupMenu(BuildContext context)
   ).then((value) async {
     switch(value ?? -1){
     case 0: // GPSログの読み込み
-      loadGPSLogFunc(context);
+      _loadGPSLogFromLocalFileFunc(context);
       break;
 
     case 1: // ログ参照
-      linkGPSLogFunc(context);
+      _linkGPSLogFunc(context);
       break;
     case 2: // ログ参照の解除
       gpsLog.stopAnim();
@@ -1229,7 +1226,7 @@ void showGPSLogPopupMenu(BuildContext context)
 
 //----------------------------------------------------------------------------
 // GPSログ読み込み
-void loadGPSLogFunc(BuildContext context) async
+void _loadGPSLogFromLocalFileFunc(BuildContext context) async
 {
   // アニメーション停止
   gpsLog.stopAnim();
@@ -1254,7 +1251,7 @@ void loadGPSLogFunc(BuildContext context) async
     return;
   }
 
-  bool res = await readGPSLog(context);
+  bool res = await _readGPSLogFromLocalFile(context);
   // 読み込み成功したらマップを再描画
   if(res){
     gpsLog.makePolyLines();
@@ -1272,7 +1269,7 @@ void loadGPSLogFunc(BuildContext context) async
 
 //----------------------------------------------------------------------------
 // GPSログ参照
-void linkGPSLogFunc(BuildContext context) async
+void _linkGPSLogFunc(BuildContext context) async
 {
   // アニメーション停止
   gpsLog.stopAnim();
@@ -1287,7 +1284,7 @@ void linkGPSLogFunc(BuildContext context) async
 
       onSelectFile: (refUIDPath) async {
         //!!!!
-        print("linkGPSLogFunc.onSelectFile(${refUIDPath})");
+        print("_linkGPSLogFunc.onSelectFile($refUIDPath)");
 
         // 今と同じGPSログを選択した場合には、何もしない
         if(gpsLog.getOpenedPath() == refUIDPath) return;
