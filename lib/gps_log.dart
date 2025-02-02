@@ -35,7 +35,8 @@ final Map<String, GPSDeviceParam> _deviceParams = {
   "ロト": GPSDeviceParam(
     name: "ロト",
     color:const Color.fromARGB(255,128,0,255),
-    iconImagePath: "assets/dog_icon/002.png"),
+    iconImagePath: "assets/dog_icon/002.png",
+    actice: false),
   "トノ": GPSDeviceParam(
     name: "トノ",
     color: const Color.fromARGB(255, 142, 85, 62),
@@ -47,7 +48,8 @@ final Map<String, GPSDeviceParam> _deviceParams = {
   "アオ": GPSDeviceParam(
     name:"アオ",
     color:const Color.fromARGB(255,255,216,0),
-    iconImagePath: "assets/dog_icon/003.png"),
+    iconImagePath: "assets/dog_icon/003.png",
+    actice: false),
   "ルウ": GPSDeviceParam(
     name:"ルウ",
     color:Color.fromARGB(255, 0, 255, 200),
@@ -60,19 +62,22 @@ final Map<String, GPSDeviceParam> _deviceParams = {
   "パパっち": GPSDeviceParam(
     name:"パパっち",
     color:const Color.fromARGB(255,0,192,0),
-    iconImagePath: "assets/member_icon/002.png"),
+    iconImagePath: "assets/member_icon/002.png",
+    actice: false),
   "ママっち": GPSDeviceParam(
     name:"ママっち",
     color:const Color.fromARGB(255,0,0,240),
-    iconImagePath: "assets/member_icon/000.png"),
+    iconImagePath: "assets/member_icon/000.png",
+    actice: false),
 
   "未定義": _undefDeviceParam,
 };
 // 未定義のGPS端末のパラメータ
 final _undefDeviceParam = GPSDeviceParam(
   name:"未定義",
-  color:const Color.fromARGB(255,128,128,128),
-  iconImagePath: "assets/dog_icon/999.png"
+  color: const Color.fromARGB(255,128,128,128),
+  iconImagePath: "assets/dog_icon/999.png",
+  actice: false,
 );
 
 // GPS端末IDと犬の対応(最新のデフォルト値)
@@ -148,7 +153,8 @@ class GPSLog
   {
     if(_routes.isEmpty) return _dummyStartTime;
 
-    var t = DateTime(2100); // 適当な遠い未来の時間
+    // ルートから最も早い開始時間を取得
+    var t = DateTime(2100); // 適当な遠い未来の時間(西暦2100年)
     _routes.forEach((id, route){
       if(route.startTime.isBefore(t)){
         t = route.startTime;
@@ -164,7 +170,8 @@ class GPSLog
   {
     if(_routes.isEmpty) return _dummyEndTime;
 
-    var t = DateTime(2000); // 適当な過去の時間
+    // ルートから最も遅い終了時間を取得
+    var t = DateTime(2000); // 適当な過去の時間(西暦2000年)
     _routes.forEach((id, route){
       if(t.isBefore(route.endTime)){
         t = route.endTime;
@@ -292,7 +299,7 @@ class GPSLog
 
   //----------------------------------------------------------------------------
   // 再描画用の Stream
-  var _stream = StreamController<void>.broadcast();
+  final _stream = StreamController<void>.broadcast();
   // 再描画用のストリームを取得
   Stream<void> get reDrawStream => _stream.stream;
   // 再描画
@@ -323,7 +330,7 @@ class GPSLog
 
   //----------------------------------------------------------------------------
   // デバイスIDと犬の対応を読み込む
-  Future<void> loadDeviceID2DogFromDB(String fileUID, { bool recurcive=false }) async
+  Future<bool> loadDeviceID2DogFromDB(String fileUID, { bool recurcive=false }) async
   {
     print(">GPSLog.loadDeviceID2DogFromDB($fileUID) recurcive=$recurcive");
 
@@ -334,7 +341,7 @@ class GPSLog
       final docSnapshot = await docRef.get();
       if(docSnapshot.exists){
         final data = docSnapshot.data();
-        final deviceIDs = data!["gps_log.deviceIDs"];
+        final deviceIDs = data!["gps_log"]["deviceIDs"];
         if(deviceIDs != null){
           _deviceID2Dogs.clear();
           _modifyDeviceID2Dogs = false;
@@ -348,6 +355,7 @@ class GPSLog
       }
     } catch(e) { /**/ }
 
+    return existData;
     // なければ、RealtimeDatabase から読み込んで Firestore にコピー
 /*
     if(!existData && !recurcive){
@@ -393,7 +401,7 @@ class GPSLog
 
   //----------------------------------------------------------------------------
   // GPXファイルからログを読み込む
-  bool addLogFromGPX(String fileContent)
+  bool _addLogFromGPX(String fileContent)
   {
     // XMLパース
     final XmlDocument gpxDoc = XmlDocument.parse(fileContent);
@@ -418,9 +426,9 @@ class GPSLog
       if(0 <= i){
         deviceId = int.tryParse(name.substring(i + 3)) ?? 0;
       }
-      String dogName = getID2Name(deviceId);
+      String dogName = getID2Name(deviceId);  // IDと犬の対応変更は、ここで反映する
       GPSDeviceParam deviceParam = _deviceParams[dogName] ?? _undefDeviceParam;
-      print("name=${name}, deviceId=${deviceId}, dogName=${dogName}, deviceParam=${deviceParam.name}");
+      print("name=$name, deviceId=$deviceId, dogName=$dogName, deviceParam=${deviceParam.name}");
 
       // 登録されているデバイスのログのみを読み込み
       if(deviceParam.name != "未定義"){
@@ -439,14 +447,18 @@ class GPSLog
       }
     });
 
-    // トリム時間を新しい範囲に合わせる(トリムの設定がない場合のみ)
     if(0 < addCount){
+      // 全体の開始終了時間を更新
       _startTime = _getStartTime();
       _endTime = _getEndTime();
+      // トリミングが未設定の場合、トリム時間を新しい範囲に合わせる
+      // NOTE: トリミングが設定されている場合には、それを維持する意味
       if(!changeTrimSrart) _trimStartTime = _startTime;
       if(!changeTrimEnd)  _trimEndTime = _endTime;
+      // 再生時間をトリム範囲に維持する
+      setCurrentTime(_currentTime);
     }
-    
+  
     return true;
   }
 
@@ -468,9 +480,22 @@ class GPSLog
   }
 
   // 子機のデバイスIDと犬の対応を設定
-  void setDeviceID2Dogs(Map<int,String> deviceID2Dogs)
+  bool changeDeviceID2DogName(int id, String name)
   {
-    //!!!! TODO
+    // GPS端末に登録されてい名前でなければ何もしない
+    // 表示されているデバイスIDでなければ何もしない
+    if(!_deviceID2Dogs.containsKey(id) ||
+       !_deviceParams.containsKey(name) ||
+       !_routes.containsKey(id)){
+      print(">GPSLog.changeDeviceID2DogName($id, $name) failed.");
+      return false;
+    }
+  
+    _deviceID2Dogs[id] = name;
+    _routes[id]!.changeDeviceParam(_deviceParams[name]!);
+    _modifyDeviceID2Dogs = true;
+
+    return true;
   }
 
   // ログを削除
@@ -554,15 +579,14 @@ class GPSLog
     try {
       final Uint8List? data = await gpxRef.getData();
       res = (data != null);
-      // 他のファイルからの参照の場合、デバイスIDと犬の対応表も読み込む
-      // addLogFromGPX() より前で。
-      if(res && referenceLink){
+      // デバイスIDと犬の対応表も読み込む(_addLogFromGPX() より前で)
+      if(res){
         final fileUID = path.split("/").last;
         await loadDeviceID2DogFromDB(fileUID);
       }
       if(res){
         var gpxText = utf8.decode(data);
-        res = addLogFromGPX(gpxText);
+        res = _addLogFromGPX(gpxText);
       }
       if(res){
         FullMetadata meta = await gpxRef.getMetadata();
@@ -595,7 +619,7 @@ class GPSLog
     final gpxRef = _getRef(path);
     try {
       gpxRef.delete();
-    } catch(e){}
+    } catch(e){ /**/ }
   }
 
   // クラウドストレージのデータが更新されているか？
@@ -608,8 +632,7 @@ class GPSLog
     try {
       FullMetadata meta = await gpxRef.getMetadata();
       cloudUpdateTime = meta.updated;
-    } catch(e) {
-    }
+    } catch(e) { /**/ }
     if(cloudUpdateTime == null) return false;
 
     // クラウド上にデータがあって、ローカルが空なら、必ず true になる。
@@ -818,6 +841,7 @@ class GPSDeviceParam
     this.name = "",
     this.color = Colors.green,
     this.iconImagePath = "",
+    this.actice = true,
   });
   // 犬の名前
   String name;
@@ -825,6 +849,8 @@ class GPSDeviceParam
   Color color;
   // アイコン用画像
   String iconImagePath;
+  // 現役か？(犬選択ダイアログに表示するか)
+  bool actice;
 }
 
 //----------------------------------------------------------------------------
@@ -837,19 +863,29 @@ class _Route
   // ID(nameに書かれている端末ID)
   int _deviceId = 0;
   // パスの描画用パラメータ
-  GPSDeviceParam _deviecParam = GPSDeviceParam(
+  // NOTE: ログファイルには保存されない
+  var _deviecParam = GPSDeviceParam(
     name: "",
     color: const Color.fromARGB(255,128,128,128));
   // アイコンイメージ
-  Image? _iconImage = null;
+  // NOTE: ログファイルには保存されない
+  Image? _iconImage;
+
+  //----------------------------------------------------------------------------
+  // パスの描画用パラメータ(犬情報)を変更
+  void changeDeviceParam(GPSDeviceParam param)
+  {
+    _deviecParam = param;
+    _iconImage = null;
+  }
 
   //----------------------------------------------------------------------------
   // 開始時間
   DateTime get startTime =>
-    (0 < _points.length)? _points.first.time: _dummyStartTime;
+    (_points.isNotEmpty? _points.first.time: _dummyStartTime);
   // 終了時間
   DateTime get endTime =>
-    (0 < _points.length)? _points.last.time: _dummyEndTime;
+    (_points.isNotEmpty? _points.last.time: _dummyEndTime);
 
   // トリミングに対応した開始インデックス
   int _trimStartIndex = -1;
@@ -868,25 +904,24 @@ class _Route
     // ルートの通過ポイントを読み取り
     bool ok = true;
     final Iterable<XmlElement> rtepts_ = rte_.findElements("rtept");
-    rtepts_.forEach((pt){
+    for(final pt in rtepts_){
       final String? lat = pt.getAttribute("lat");
       final String? lon = pt.getAttribute("lon");
       final XmlElement? time = pt.getElement("time");
-      if((lat != null) && (lon != null) && (time != null)){
-        // 時間はUTCから日本時間に変換しておく
-        late DateTime dateTime;
-        try { dateTime = DateTime.parse(time.text).toLocal(); }
-        catch(e){ ok = false; }
-        if(!ok) return;
-        
-        _points.add(_Point(
-          LatLng(double.parse(lat), double.parse(lon)),
-          dateTime));
-      }else{
-        ok = false;
-        return;
+      ok = (lat != null) && (lon != null) && (time != null);
+      if(ok){
+        try {
+          // 時間はUTCから日本時間に変換しておく
+          final dateTime = DateTime.parse(time.text).toLocal();
+          _points.add(_Point(
+            LatLng(double.parse(lat), double.parse(lon)),
+            dateTime));
+        }catch(e){
+          ok = false;
+        }
       }
-    });
+      if(!ok) break;
+    }
 
     // なんらか失敗していたらデータを破棄
     if(!ok){
@@ -924,13 +959,13 @@ class _Route
     _points.sort((a,b) { return a.time.compareTo(b.time); });
     int prev = 0;
     int seek = 1;
-    final distance = Distance();
+    const distance = Distance();
     while(seek < _points.length)
     {
       // 直前の通過ポイントから、5[m]以上離れているか、60[秒]以上経過していれば採用
       final pt0 = _points[prev]; 
       final pt1 = _points[seek]; 
-      double D = distance(pt0.pos, pt1.pos);
+      final D = distance(pt0.pos, pt1.pos);
       int S = pt1.time.difference(pt0.time).inSeconds;
       if((5.0 <= D) || (60 <= S)){
         prev++;
@@ -1089,12 +1124,7 @@ class _Route
   Marker? makeDogMarker(DateTime time)
   {
     // アイコン画像を読み込んでおく
-    if(_iconImage == null){
-      var path = _deviecParam.iconImagePath;
-      if(path != null){
-        _iconImage = Image.asset(path);
-      }
-    }
+    _iconImage ??= Image.asset(_deviecParam.iconImagePath);
     if(_iconImage == null) return null;
   
     return Marker(
@@ -1135,7 +1165,7 @@ class _Point
 //----------------------------------------------------------------------------
 //----------------------------------------------------------------------------
 // GPSログの読み込み処理
-Future<bool> readGPSLog(BuildContext context) async
+Future<bool> _readGPSLogFromLocalFile(BuildContext context) async
 {
   // .pgx ファイルを選択して開く
   final XTypeGroup typeGroup = XTypeGroup(
@@ -1149,7 +1179,7 @@ Future<bool> readGPSLog(BuildContext context) async
   final String fileContent = await file.readAsString();
 
   // XMLパース
-  final bool res = gpsLog.addLogFromGPX(fileContent);
+  final bool res = gpsLog._addLogFromGPX(fileContent);
   if(!res) return false;
 
   return true;
@@ -1192,11 +1222,11 @@ void showGPSLogPopupMenu(BuildContext context)
   ).then((value) async {
     switch(value ?? -1){
     case 0: // GPSログの読み込み
-      loadGPSLogFunc(context);
+      _loadGPSLogFromLocalFileFunc(context);
       break;
 
     case 1: // ログ参照
-      linkGPSLogFunc(context);
+      _linkGPSLogFunc(context);
       break;
     case 2: // ログ参照の解除
       gpsLog.stopAnim();
@@ -1229,7 +1259,7 @@ void showGPSLogPopupMenu(BuildContext context)
 
 //----------------------------------------------------------------------------
 // GPSログ読み込み
-void loadGPSLogFunc(BuildContext context) async
+void _loadGPSLogFromLocalFileFunc(BuildContext context) async
 {
   // アニメーション停止
   gpsLog.stopAnim();
@@ -1254,7 +1284,7 @@ void loadGPSLogFunc(BuildContext context) async
     return;
   }
 
-  bool res = await readGPSLog(context);
+  bool res = await _readGPSLogFromLocalFile(context);
   // 読み込み成功したらマップを再描画
   if(res){
     gpsLog.makePolyLines();
@@ -1263,6 +1293,11 @@ void loadGPSLogFunc(BuildContext context) async
     showTextBallonMessage("GPSログの読み込み成功");
     // 裏でクラウドストレージへのアップロードを実行
     gpsLog.uploadToCloudStorage(gpsLogPath);
+    // デバイスIDと犬の対応を保存
+    // NOTE: シーズンによって犬が使う子機が変わることがある
+    // _defaultDeviceID2Dogs は、シーズンで変わる可能性があるので、ログ作成時の状態を保存する
+    final fileUID = gpsLogPath.split("/").last;
+    gpsLog.saveDeviceID2DogToDB(fileUID);
     // 開いているファイルのGPSログの有無フラグを更新
     setOpenedFileGPSLogFlag(true);
   }else{
@@ -1272,7 +1307,7 @@ void loadGPSLogFunc(BuildContext context) async
 
 //----------------------------------------------------------------------------
 // GPSログ参照
-void linkGPSLogFunc(BuildContext context) async
+void _linkGPSLogFunc(BuildContext context) async
 {
   // アニメーション停止
   gpsLog.stopAnim();
@@ -1287,7 +1322,7 @@ void linkGPSLogFunc(BuildContext context) async
 
       onSelectFile: (refUIDPath) async {
         //!!!!
-        print("linkGPSLogFunc.onSelectFile(${refUIDPath})");
+        print("_linkGPSLogFunc.onSelectFile($refUIDPath)");
 
         // 今と同じGPSログを選択した場合には、何もしない
         if(gpsLog.getOpenedPath() == refUIDPath) return;
@@ -1672,7 +1707,28 @@ class _DogIDDialogState extends State<_DogIDDialog>
         height: 55,
         width: 320,
         child: ListTile(
-          leading: Image.asset(param.iconImagePath),
+          // 犬アイコン
+          leading: IconButton(
+            icon: Image.asset(param.iconImagePath),
+            padding: const EdgeInsets.all(0),
+            iconSize: 48,
+            onPressed: () async {
+              final changeName = await _showDogSelectDialog(context,
+                title: "犬の変更(ID:$id $dogName)", excludeName: dogName);
+              if(changeName != null){
+                setState((){
+                  gpsLog.changeDeviceID2DogName(id, changeName);
+                });
+                // 描画
+                gpsLog.makePolyLines();
+                gpsLog.makeDogMarkers();
+                gpsLog.redraw();
+                // 保存
+                gpsLog.saveDeviceID2DogToDB(openedFileUID.toString());
+              }
+            },
+          ),
+          // 犬名とログの年月日
           title: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -1706,8 +1762,6 @@ class _DogIDDialogState extends State<_DogIDDialog>
     return WillPopScope(
       // ページの戻り値
       onWillPop: (){
-        // 変更があるかを返す
-//!!!!        final bool changeFilter = (widget._areaFilterBits0 != areaFilterBits); 
         Navigator.of(context).pop(false);
         return Future.value(false);
       },
@@ -1760,6 +1814,66 @@ Future<bool?> _showDogIDDialog(BuildContext context)
     useRootNavigator: true,
     builder: (context){
       return _DogIDDialog();
+    },
+  );
+}
+
+//----------------------------------------------------------------------------
+//----------------------------------------------------------------------------
+// 犬選択ダイアログ
+class _DogSelectDialog extends StatelessWidget
+{
+  _DogSelectDialog({
+    required this.title,
+    this.excludeName = "",
+  });
+
+  final String title;
+  final String excludeName;
+
+  @override
+  Widget build(BuildContext context)
+  {
+    List<Container> dogs = [];
+    _deviceParams.forEach((name, param){
+      // 現役の犬のみを表示
+      if(!param.actice) return;
+      // 指定された犬は除外
+      if(name == excludeName) return;
+
+      dogs.add(Container(
+        height: 55,
+        width: 200,
+        child: ListTile(
+          // 犬アイコン
+          leading: Image.asset(param.iconImagePath),
+          // 犬名
+          title: Text(name),
+          onTap: (){
+            Navigator.pop(context, name);
+          },
+        ),
+      ));
+    });
+  
+    // ダイアログ表示
+    return SimpleDialog(
+      // ヘッダ部
+      title: Text(title),
+      // 犬一覧
+      children: dogs,
+    );
+  }
+}
+
+// ダイアログを表示
+Future<String?> _showDogSelectDialog(
+  BuildContext context, { required String title, String excludeName="" })
+{
+  return showDialog<String>(
+    context: context,
+    builder: (BuildContext context) {
+      return _DogSelectDialog(title:title, excludeName:excludeName);
     },
   );
 }
