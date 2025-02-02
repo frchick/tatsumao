@@ -282,9 +282,6 @@ class _MapViewState extends State<MapView>
     final name = getOpenedFileName();
     await openMemberSync(fileUID, name);
 
-    // GPSログをクリア、デバイスIDと犬の対応を取得
-    await gpsLog.loadDeviceID2DogFromDB(fileUID);
-
     // 汎用マーカーを読み込み(非同期)
     miscMarkers.openSync(fileUID);
   
@@ -299,7 +296,6 @@ class _MapViewState extends State<MapView>
       gpsLog.downloadFromCloudStorage(gpsLogPath, refLink).then((res) async {
         if(res){
           await gpsLog.loadGPSLogTrimRangeFromDB(fileUID);
-          gpsLog.saveDeviceID2DogToDB(fileUID);
         }
         gpsLog.makePolyLines();
         gpsLog.makeDogMarkers();

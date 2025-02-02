@@ -35,7 +35,8 @@ final Map<String, GPSDeviceParam> _deviceParams = {
   "ロト": GPSDeviceParam(
     name: "ロト",
     color:const Color.fromARGB(255,128,0,255),
-    iconImagePath: "assets/dog_icon/002.png"),
+    iconImagePath: "assets/dog_icon/002.png",
+    actice: false),
   "トノ": GPSDeviceParam(
     name: "トノ",
     color: const Color.fromARGB(255, 142, 85, 62),
@@ -47,7 +48,8 @@ final Map<String, GPSDeviceParam> _deviceParams = {
   "アオ": GPSDeviceParam(
     name:"アオ",
     color:const Color.fromARGB(255,255,216,0),
-    iconImagePath: "assets/dog_icon/003.png"),
+    iconImagePath: "assets/dog_icon/003.png",
+    actice: false),
   "ルウ": GPSDeviceParam(
     name:"ルウ",
     color:Color.fromARGB(255, 0, 255, 200),
@@ -60,19 +62,22 @@ final Map<String, GPSDeviceParam> _deviceParams = {
   "パパっち": GPSDeviceParam(
     name:"パパっち",
     color:const Color.fromARGB(255,0,192,0),
-    iconImagePath: "assets/member_icon/002.png"),
+    iconImagePath: "assets/member_icon/002.png",
+    actice: false),
   "ママっち": GPSDeviceParam(
     name:"ママっち",
     color:const Color.fromARGB(255,0,0,240),
-    iconImagePath: "assets/member_icon/000.png"),
+    iconImagePath: "assets/member_icon/000.png",
+    actice: false),
 
   "未定義": _undefDeviceParam,
 };
 // 未定義のGPS端末のパラメータ
 final _undefDeviceParam = GPSDeviceParam(
   name:"未定義",
-  color:const Color.fromARGB(255,128,128,128),
-  iconImagePath: "assets/dog_icon/999.png"
+  color: const Color.fromARGB(255,128,128,128),
+  iconImagePath: "assets/dog_icon/999.png",
+  actice: false,
 );
 
 // GPS端末IDと犬の対応(最新のデフォルト値)
@@ -325,7 +330,7 @@ class GPSLog
 
   //----------------------------------------------------------------------------
   // デバイスIDと犬の対応を読み込む
-  Future<void> loadDeviceID2DogFromDB(String fileUID, { bool recurcive=false }) async
+  Future<bool> loadDeviceID2DogFromDB(String fileUID, { bool recurcive=false }) async
   {
     print(">GPSLog.loadDeviceID2DogFromDB($fileUID) recurcive=$recurcive");
 
@@ -336,7 +341,7 @@ class GPSLog
       final docSnapshot = await docRef.get();
       if(docSnapshot.exists){
         final data = docSnapshot.data();
-        final deviceIDs = data!["gps_log.deviceIDs"];
+        final deviceIDs = data!["gps_log"]["deviceIDs"];
         if(deviceIDs != null){
           _deviceID2Dogs.clear();
           _modifyDeviceID2Dogs = false;
@@ -350,6 +355,7 @@ class GPSLog
       }
     } catch(e) { /**/ }
 
+    return existData;
     // なければ、RealtimeDatabase から読み込んで Firestore にコピー
 /*
     if(!existData && !recurcive){
@@ -441,14 +447,18 @@ class GPSLog
       }
     });
 
-    // トリム時間を新しい範囲に合わせる(トリムの設定がない場合のみ)
     if(0 < addCount){
+      // 全体の開始終了時間を更新
       _startTime = _getStartTime();
       _endTime = _getEndTime();
+      // トリミングが未設定の場合、トリム時間を新しい範囲に合わせる
+      // NOTE: トリミングが設定されている場合には、それを維持する意味
       if(!changeTrimSrart) _trimStartTime = _startTime;
       if(!changeTrimEnd)  _trimEndTime = _endTime;
+      // 再生時間をトリム範囲に維持する
+      setCurrentTime(_currentTime);
     }
-    
+  
     return true;
   }
 
@@ -470,9 +480,22 @@ class GPSLog
   }
 
   // 子機のデバイスIDと犬の対応を設定
-  void setDeviceID2Dogs(Map<int,String> deviceID2Dogs)
+  bool changeDeviceID2DogName(int id, String name)
   {
-    //!!!! TODO
+    // GPS端末に登録されてい名前でなければ何もしない
+    // 表示されているデバイスIDでなければ何もしない
+    if(!_deviceID2Dogs.containsKey(id) ||
+       !_deviceParams.containsKey(name) ||
+       !_routes.containsKey(id)){
+      print(">GPSLog.changeDeviceID2DogName($id, $name) failed.");
+      return false;
+    }
+  
+    _deviceID2Dogs[id] = name;
+    _routes[id]!.changeDeviceParam(_deviceParams[name]!);
+    _modifyDeviceID2Dogs = true;
+
+    return true;
   }
 
   // ログを削除
@@ -556,9 +579,8 @@ class GPSLog
     try {
       final Uint8List? data = await gpxRef.getData();
       res = (data != null);
-      // 他のファイルからの参照の場合、デバイスIDと犬の対応表も読み込む
-      // _addLogFromGPX() より前で。
-      if(res && referenceLink){
+      // デバイスIDと犬の対応表も読み込む(_addLogFromGPX() より前で)
+      if(res){
         final fileUID = path.split("/").last;
         await loadDeviceID2DogFromDB(fileUID);
       }
@@ -819,6 +841,7 @@ class GPSDeviceParam
     this.name = "",
     this.color = Colors.green,
     this.iconImagePath = "",
+    this.actice = true,
   });
   // 犬の名前
   String name;
@@ -826,6 +849,8 @@ class GPSDeviceParam
   Color color;
   // アイコン用画像
   String iconImagePath;
+  // 現役か？(犬選択ダイアログに表示するか)
+  bool actice;
 }
 
 //----------------------------------------------------------------------------
@@ -845,6 +870,14 @@ class _Route
   // アイコンイメージ
   // NOTE: ログファイルには保存されない
   Image? _iconImage;
+
+  //----------------------------------------------------------------------------
+  // パスの描画用パラメータ(犬情報)を変更
+  void changeDeviceParam(GPSDeviceParam param)
+  {
+    _deviecParam = param;
+    _iconImage = null;
+  }
 
   //----------------------------------------------------------------------------
   // 開始時間
@@ -1260,6 +1293,11 @@ void _loadGPSLogFromLocalFileFunc(BuildContext context) async
     showTextBallonMessage("GPSログの読み込み成功");
     // 裏でクラウドストレージへのアップロードを実行
     gpsLog.uploadToCloudStorage(gpsLogPath);
+    // デバイスIDと犬の対応を保存
+    // NOTE: シーズンによって犬が使う子機が変わることがある
+    // _defaultDeviceID2Dogs は、シーズンで変わる可能性があるので、ログ作成時の状態を保存する
+    final fileUID = gpsLogPath.split("/").last;
+    gpsLog.saveDeviceID2DogToDB(fileUID);
     // 開いているファイルのGPSログの有無フラグを更新
     setOpenedFileGPSLogFlag(true);
   }else{
@@ -1669,7 +1707,28 @@ class _DogIDDialogState extends State<_DogIDDialog>
         height: 55,
         width: 320,
         child: ListTile(
-          leading: Image.asset(param.iconImagePath),
+          // 犬アイコン
+          leading: IconButton(
+            icon: Image.asset(param.iconImagePath),
+            padding: const EdgeInsets.all(0),
+            iconSize: 48,
+            onPressed: () async {
+              final changeName = await _showDogSelectDialog(context,
+                title: "犬の変更(ID:$id $dogName)", excludeName: dogName);
+              if(changeName != null){
+                setState((){
+                  gpsLog.changeDeviceID2DogName(id, changeName);
+                });
+                // 描画
+                gpsLog.makePolyLines();
+                gpsLog.makeDogMarkers();
+                gpsLog.redraw();
+                // 保存
+                gpsLog.saveDeviceID2DogToDB(openedFileUID.toString());
+              }
+            },
+          ),
+          // 犬名とログの年月日
           title: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -1703,8 +1762,6 @@ class _DogIDDialogState extends State<_DogIDDialog>
     return WillPopScope(
       // ページの戻り値
       onWillPop: (){
-        // 変更があるかを返す
-//!!!!        final bool changeFilter = (widget._areaFilterBits0 != areaFilterBits); 
         Navigator.of(context).pop(false);
         return Future.value(false);
       },
@@ -1757,6 +1814,66 @@ Future<bool?> _showDogIDDialog(BuildContext context)
     useRootNavigator: true,
     builder: (context){
       return _DogIDDialog();
+    },
+  );
+}
+
+//----------------------------------------------------------------------------
+//----------------------------------------------------------------------------
+// 犬選択ダイアログ
+class _DogSelectDialog extends StatelessWidget
+{
+  _DogSelectDialog({
+    required this.title,
+    this.excludeName = "",
+  });
+
+  final String title;
+  final String excludeName;
+
+  @override
+  Widget build(BuildContext context)
+  {
+    List<Container> dogs = [];
+    _deviceParams.forEach((name, param){
+      // 現役の犬のみを表示
+      if(!param.actice) return;
+      // 指定された犬は除外
+      if(name == excludeName) return;
+
+      dogs.add(Container(
+        height: 55,
+        width: 200,
+        child: ListTile(
+          // 犬アイコン
+          leading: Image.asset(param.iconImagePath),
+          // 犬名
+          title: Text(name),
+          onTap: (){
+            Navigator.pop(context, name);
+          },
+        ),
+      ));
+    });
+  
+    // ダイアログ表示
+    return SimpleDialog(
+      // ヘッダ部
+      title: Text(title),
+      // 犬一覧
+      children: dogs,
+    );
+  }
+}
+
+// ダイアログを表示
+Future<String?> _showDogSelectDialog(
+  BuildContext context, { required String title, String excludeName="" })
+{
+  return showDialog<String>(
+    context: context,
+    builder: (BuildContext context) {
+      return _DogSelectDialog(title:title, excludeName:excludeName);
     },
   );
 }
