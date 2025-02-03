@@ -5,7 +5,6 @@ import 'dart:html'; // Web Local Storage
 import 'package:flutter/material.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:flutter_map/plugin_api.dart';
-import 'package:firebase_database/firebase_database.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/services.dart';   // for クリップボード
 
@@ -33,7 +32,7 @@ const String _iconPath = "assets/member_icon/";
 final Image _loadingIcon = Image.asset(_iconPath + 'loading.png', width:64, height:72);
 
 // メンバー一覧データ
-// loadMembersListFromDB() で firebase realtime database から読み込まれる。
+// loadMembersListFromDB() で firebase Firestore から読み込まれる。
 // この配列の並び順が配置データと関連しているので、順番を変えないこと！
 // TODO: メンバー一覧 BottomSheet でのメンバーアイコンの並び順を変えられるようにする。
 List<Member> members = [];
@@ -157,43 +156,10 @@ Future openMemberSync(String fileUID, String name) async
   // ファイルUIDを保存
   _openedFileUID = fileUID;
 
-  //!!!! Firestore にデータがなければ、RealtimeDatabase から取得して作成
-  //!!!! (過渡期の処理。最終的には Firestore のみにする)
+  // Firestore から読み込む
+  // 配置ファイルのサブコレクション
   final assignDocRef = FirebaseFirestore.instance.collection("assign").doc(_openedFileUID);
   final attendeesColRef = assignDocRef.collection("attendees");
-/*
-  final snapshot = await assignDocRef.get();
-  if(!snapshot.exists){
-    // まず名前を記録
-    assignDocRef.set({ "name": name });
-
-    // メンバーの配置データを RealtimeDatabase から取得
-    print(">  Attendees data was duplicated from RealtimeDatabase to Firestore.");
-    final DatabaseReference ref = FirebaseDatabase.instance.ref("assign" + uidPath);
-    final DataSnapshot snapshot = await ref.get();
-    for(int index = 0; index < members.length; index++)
-    {
-      final memberId = index.toString().padLeft(3, '0');
-
-      if (snapshot.hasChild(memberId)) {
-        // メンバーデータがデータベースにあれば、初期値として取得(直前の状態)
-        // NOTE: 退会者かどうかのフラグは、配置データとは関係ない。
-        // NOTE: 過去の配置データに参加していれば、退会後もその配置データでは表示される。
-        final attended = snapshot.child("${memberId}/attended").value as bool;
-        final lat = snapshot.child("${memberId}/latitude").value as double;
-        final lon = snapshot.child("${memberId}/longitude").value as double;
-
-        // Firestore にコピーを作成
-        if(attended){
-          attendeesColRef.doc(memberId).set({
-            "latitude": lat,
-            "longitude": lon,
-          });
-        }
-      }
-    }
-  }
-*/
 
   // Firestore から変更通知を受け取るリスナーを設定
   _isFirstSyncEvent = true;

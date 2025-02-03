@@ -1,13 +1,10 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_database/firebase_database.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';  // 年月日のフォーマット
 import 'ok_cancel_dialog.dart';
 import 'text_edit_dialog.dart';
 import 'text_edit_icon_dialog.dart';
-import 'text_ballon_widget.dart';
 import 'text_item_list_dialog.dart';
 import 'members.dart';
 import 'gps_log.dart';
@@ -337,52 +334,7 @@ Future<bool> initFileTree() async
   // "デフォルトデータ"と共に登録。
   final colRef = FirebaseFirestore.instance.collection("directories");
   final rootDocRef = colRef.doc("0"); // ルートディレクトリ
-/*
-  {
-    final rootDoc = await rootDocRef.get();
-    //!!!! ルートディレクトリがなければ、RealtimeDatabase から取得して初期化
-    if(!rootDoc.exists){
-      FirebaseDatabase.instance.ref("fileTree2").get().then((value){
-        if(value.exists){
-          Map<String, String> nameTable = { "0": "root" };
-          final items = value.value as Map<String, dynamic>;
-          for(var item in items.entries){
-            print("Path=${item.key}");
-            final list = item.value as List<dynamic>;
-            int i = 0;
-            for(var data in list){
-              print("  [$i]: uid=${data["uid"]}, name=${data["name"]}, folder=${data["folder"]}");
-              nameTable[data["uid"].toString()] = data["name"];
-              i++;
-            }
 
-            String id = "0";
-            final path = item.key.split("~");
-            if(3 <= path.length){
-              id = path[path.length - 2];
-            }
-            colRef.doc(id).set({
-              "items": list,
-            });
-          }
-        }
-      });
-    }
-    {
-      final docRef = FirebaseFirestore.instance.collection("misc").doc("fileItemNextUID");
-      final doc = await docRef.get();
-      if(!doc.exists){
-        FirebaseDatabase.instance.ref("fileTreeNextUID").get().then((value){
-          if(value.exists){
-            final uid = value.value as int;
-            print("fileItemNextUID=${uid}");
-            docRef.set({ "uid": uid });
-          }
-        });
-      }
-    }
-  }
-*/      
   // データベースにルートディレクトリが記録されていなければ、
   // "デフォルトデータ"と共に登録。
   try {

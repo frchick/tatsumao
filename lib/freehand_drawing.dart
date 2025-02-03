@@ -3,11 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';  // DragStartBehavior
 import 'package:latlong2/latlong.dart';
 import 'package:flutter_map/flutter_map.dart';
-import 'mypolyline_layer.dart';
-
-import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_database/firebase_database.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'mypolyline_layer.dart';
 
 //-----------------------------------------------------------------------------
 //-----------------------------------------------------------------------------
@@ -252,34 +249,10 @@ class FreehandDrawing
     //!!!!
     print(">FreehandDrawing.open($fileUID)");
 
+    // 配置ファイルのサブコレクションを開く
     final docRef = FirebaseFirestore.instance.collection("assign").doc(fileUID);
     _colRef = docRef.collection("freehand_drawing");
 
-    //!!!! Firestore にデータがなければ、RealtimeDatabase から取得して作成
-    //!!!! (過渡期の処理。最終的には Firestore のみにする)
-/*
-    bool existData = false;
-    try {
-      var cnt = await _colRef!.count().get();
-      existData = (0 < (cnt.count ?? 0));
-    } catch(e) { /**/ }
-    if(!existData){
-      try {
-        final path = "assign" + uidPath + "/freehand_drawing";
-        final ref = FirebaseDatabase.instance.ref(path);
-        final snapshot = await ref.get();
-        if(snapshot.exists){
-          print(">  FreehandDrawing data was duplicated from RealtimeDatabase to Firestore.");
-          final data = snapshot.value as Map<String,dynamic>;
-          data.forEach((key, figure){
-            _colRef!.add(figure).then((ref){
-              _onStrokeAdded(figure, ref.id);
-            });
-          });
-        }
-      } catch(e) { /**/ }
-    }
-*/
     _syncListener = _colRef!.snapshots().listen((QuerySnapshot<Map<String, dynamic>> event) {
       for (var change in event.docChanges) {
         switch (change.type) {

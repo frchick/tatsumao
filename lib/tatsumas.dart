@@ -7,10 +7,7 @@ import 'package:latlong2/latlong.dart';
 
 import 'package:file_selector/file_selector.dart';  // ファイル選択
 
-import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_database/firebase_database.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'firebase_options.dart';
 import 'dart:async';    // for StreamSubscription<>
 
 import 'package:xml/xml.dart';  // GPXの読み込み
@@ -105,9 +102,6 @@ bool showFilteredIcon = false;
 
 // マップ上のタツマのマーカー配列
 List<Marker> tatsumaMarkers = [];
-
-// タツマデータの保存と読み込みデータベース
-FirebaseDatabase database = FirebaseDatabase.instance;
 
 // 変更通知
 StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _tatsumaUpdateListener;
@@ -238,23 +232,10 @@ void saveAllTatsumasToDB()
 // データベースからタツマを読み込み
 Future loadTatsumaFromDB() async
 {
-  //!!!! Firestore にデータがなければ、RealtimeDatabase から取得して作成
-  //!!!! (過渡期の処理。最終的には Firestore のみにする)
+  // Firestore から取得して作成
   final colRef = FirebaseFirestore.instance.collection("tatsumas");
   final docRef = colRef.doc("all");
-/*
-  final snapshot = await docRef.get();
-  if(!snapshot.exists){
-    final DatabaseReference ref = database.ref("tatsumas");
-    final DataSnapshot snapshot = await ref.get();    
-    if(snapshot.exists){
-      try {
-        final data = snapshot.value as List<dynamic>;
-        docRef.set({ "list": data });
-      }catch(e){ /**/ }
-    }
-  }
-*/
+
   // Firestore から変更通知を受け取るリスナーを設定
   _isFirstSyncEvent = true;
   _tatsumaUpdateListener = docRef.snapshots().listen((event){
@@ -1085,30 +1066,9 @@ void saveAreaFilterToDB(String fileUID)
 // オフラインでかつ、キャッシュにデータが無い場合は false。
 Future<Map<String,bool>> loadAreaFilterFromDB(String fileUID) async
 {
+  // Firestore から取得して作成
   final docRef = FirebaseFirestore.instance.collection("assign").doc(fileUID);
 
-  //!!!! Firestore にデータがなければ、RealtimeDatabase から取得して作成
-  //!!!! (過渡期の処理。最終的には Firestore のみにする)
-/*
-  try{
-    bool existData = false;
-    final docSnapshot = await docRef.get();
-    if(docSnapshot.exists){
-      final doc = docSnapshot.data();
-      existData = doc!.containsKey("areaFilter");
-    }
-    if(!existData){
-      print(">  AreaFilter data was duplicated from RealtimeDatabase to Firestore.");
-      final ref = FirebaseDatabase.instance.ref("assign" + uidPath + "/areaFilter");
-      final s = await ref.get();
-      List<dynamic> data = [ "(未設定)" ];
-      if(s.exists){
-        data = s.value as List<dynamic>;
-      }
-      docRef.update({ "areaFilter": data });
-    }
-  }catch(e) { /**/ }
-*/
   // Firestore から読み込み
   bool existData = false;
   bool isFromCache = false;

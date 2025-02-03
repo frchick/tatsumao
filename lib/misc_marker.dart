@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dart:async';  // データベースの同期
 import 'package:latlong2/latlong.dart';
-import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_map/plugin_api.dart';
-import 'package:firebase_database/firebase_database.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'mydragmarker.dart';
@@ -237,32 +235,11 @@ class MiscMarkers
     releaseSync();
 
     // Firestore のコレクションへの参照を取得
+    // 配置ファイルのサブコレクション
     _openedFileUID = fileUID;
     final docRef = FirebaseFirestore.instance.collection("assign").doc(fileUID);
     _colRef = docRef.collection("misc_markers");
 
-    //!!!! Firestore にデータがなければ、RealtimeDatabase から取得して作成
-/*
-    bool existData = false;
-    try {
-      var cnt = await _colRef!.count().get();
-      existData = (0 < (cnt.count ?? 0));
-    } catch(e) { /**/ }
-    if(!existData){
-      try {
-        final String path = "assign" + uidPath + "/misc_markers/markers";
-        final DatabaseReference ref = FirebaseDatabase.instance.ref(path);
-        final DataSnapshot snapshot = await ref.get();
-        if(snapshot.exists){
-          print(">  MiscMarkers data was duplicated from RealtimeDatabase to Firestore.");
-          final data = snapshot.value as List<dynamic>;
-          data.forEach((map){
-            _colRef!.doc().set(map);
-          });
-        }
-      } catch(e) { /**/ }
-    }
-*/
     // Firestore から変更通知を受け取るリスナーを設定
     _isFirstSyncEvent = true;
     _syncListener = _colRef!.snapshots().listen((QuerySnapshot<Map<String, dynamic>> event) {
