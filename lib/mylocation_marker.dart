@@ -1,11 +1,9 @@
 import 'dart:async';   // Stream使った再描画
-import 'dart:html';
 import 'package:flutter/material.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_map/plugin_api.dart';
 import 'package:location/location.dart';
-import 'distance_circle_layer.dart';  // 二点間の距離の計算
 import 'mypolyline_layer.dart'; // マップ上のカスタムポリライン
 
 class MyLocationMarker
@@ -184,12 +182,13 @@ class MyLocationMarker
     final showLine = (bounds != null)? !bounds.contains(myPos) : true;
 
     // マーカーと画面中心の距離を計算
-    final distance = calculateDistance(myPos, _mapController.center);
+    const distance = Distance();
+    final D = distance(myPos, _mapController.center);
     late String text;
-    if(distance < 1000){
-      text = distance.toStringAsFixed(0) + "m";
+    if(D < 1000){
+      text = D.toStringAsFixed(0) + "m";
     }else{
-      text = (distance / 1000).toStringAsFixed(2) + "Km";
+      text = (D / 1000).toStringAsFixed(2) + "Km";
     }
 
     // 画面中央とGPS位置マーカーを結ぶラインを引く

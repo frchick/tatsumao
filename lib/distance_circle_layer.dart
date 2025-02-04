@@ -104,7 +104,9 @@ class DistanceCirclePainter extends CustomPainter
       pos0 = map.pointToLatLng(CustomPoint(0, halfHeight));
       pos1 = map.pointToLatLng(CustomPoint(screenWidth, halfHeight));
     }
-    final screenDist = calculateDistance(pos0, pos1);
+    if((pos0 == null) || (pos1 == null)) return;
+    const distance = Distance();
+    final screenDist = distance(pos0, pos1);
 
     // 距離サークルの半径を計算
     final double R = selectCircleR(screenDist);
@@ -192,25 +194,4 @@ class DistanceCirclePainter extends CustomPainter
   {
     return true;
   }
-}
-
-//----------------------------------------------------------------------------
-
-// 緯度経度で表される2地点間の距離を計算
-double calculateDistance(LatLng? pos1, LatLng? pos2)
-{
-  if((pos1 == null) || (pos2 == null)) return 1.0;
-
-  var a = (0.5 - _cos(pos2.latitude - pos1.latitude)/2) + 
-        _cos(pos1.latitude) *
-        _cos(pos2.latitude) * 
-        (1 - _cos(pos2.longitude - pos1.longitude))/2;
-  const R = 12742000;        // 地球の直径
-  return R * asin(sqrt(a));  // [m]
-}
-
-double _cos(double deg)
-{
-  var p = 0.017453292519943295; // π/180
-  return cos(deg * p);
 }
