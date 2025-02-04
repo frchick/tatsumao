@@ -50,8 +50,6 @@ ProgressIndicatorState _progressIndicatorState = ProgressIndicatorState.NoIndica
 bool _initializingApp = true;
 // 初回の Map ビルド
 bool _firstMapBuild = true;
-// iOS版 Safari の謎クラッシュ対策
-double _mapViewWidthRate = 0.5;
 
 
 //----------------------------------------------------------------------------
@@ -229,7 +227,6 @@ class _MapViewState extends State<MapView>
     setState((){
       // 初期化完了フラグをセット
       _initializingApp = false;
-      _mapViewWidthRate = 1;
     });
   }
 
@@ -671,121 +668,111 @@ class _MapViewState extends State<MapView>
       });
     }
   
-    // iOS版 Safari の謎クラッシュ対策用の、MapView幅制御
-    final Size screenSize = MediaQuery.of(context).size;
-    final double mapViewWidth = screenSize.width * _mapViewWidthRate;
-  
-    return Center(
-      child: SizedBox(
-        width: mapViewWidth,
-        height: screenSize.height,
-        child: Stack(
-          children: [
-            // 地図
-            FlutterMap(
-              mapController: mainMapController,
-              options: MapOptions(
-                allowPanningOnScrollingParent: false,
-                interactiveFlags: InteractiveFlag.all & ~InteractiveFlag.rotate,
-                plugins: [
-                  DistanceCircleLayerPlugin(),
-                  MyDragMarkerPlugin(),
-                  MyPolylineLayerPlugin(),
-                ],
-                center: LatLng(35.309934, 139.076056),  // 丸太の森P
-                zoom: 16,
-                maxZoom: 18,
-                onTap: (TapPosition tapPos, LatLng point) => tapOnMap(context, tapPos),
-                // 表示位置の変更に合わせた処理
-                onPositionChanged: (MapPosition position, bool hasGesture){
-                  _myLocMarker.moveMap(mainMapController!, position);
-                }                
-              ),
-              nonRotatedLayers: [
-                // 高さ陰影図
-                TileLayerOptions(
-                  urlTemplate: "https://cyberjapandata.gsi.go.jp/xyz/hillshademap/{z}/{x}/{y}.png",
-                  maxNativeZoom: 16,
-                ),
-                // 標準地図
-                TileLayerOptions(
-                  urlTemplate: "https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png",
-                  opacity: 0.64
-                ),
-                // ポリゴン(禁猟区)
-                PolygonLayerOptions(
-                  polygons: areaData.makePolygons(),
-                  polygonCulling: true,
-                ),
-                // 距離同心円
-                distanceCircle!,
-                // GPSログのライン
-                MyPolylineLayerOptions(
-                  polylines: gpsLog.makePolyLines(),
-                  rebuild: gpsLog.reDrawStream,
-                  polylineCulling: false,
-                ),
-                // 手書き図形レイヤー
-                // NOTE: 各マーカーより上に持っていくと、図形があるときにドラッグできなくなる！？
-                freehandDrawing.getFiguresLayerOptions(),
-                // タツママーカー
-                MarkerLayerOptions(
-                  markers: tatsumaMarkers,
-                  // NOTE: usePxCache=trueだと、非表示グレーマーカーで並び順が変わったときにバグる
-                  usePxCache: false,
-                ),
-                // GPS現在位置のライン描画
-                _myLocMarker.getLineLayerOptions(),
-                // メンバーマーカー
-                mainMapDragMarkerPluginOptions,
-                // その他のマーカー
-                miscMarkers.getMapLayerOptions(),
-                // GPSログの犬マーカー
-                MarkerLayerOptions(
-                  markers: gpsLog.makeDogMarkers(),
-                  rebuild: gpsLog.reDrawStream,
-                  // NOTE: usePxCache=trueだと、ストリーム経由の再描画で位置が変わらない
-                  usePxCache: false,
-                ),
-                // 手書きの今引いている最中のライン
-                freehandDrawing.getCurrentStrokeLayerOptions(),
-                // GPSの現在位置
-                _myLocMarker.getLayerOptions(),
-              ],
+    return Stack(
+      children: [
+        // 地図
+        FlutterMap(
+          mapController: mainMapController,
+          options: MapOptions(
+            allowPanningOnScrollingParent: false,
+            interactiveFlags: InteractiveFlag.all & ~InteractiveFlag.rotate,
+            plugins: [
+              DistanceCircleLayerPlugin(),
+              MyDragMarkerPlugin(),
+              MyPolylineLayerPlugin(),
+            ],
+            center: LatLng(35.309934, 139.076056),  // 丸太の森P
+            zoom: 16,
+            maxZoom: 18,
+            onTap: (TapPosition tapPos, LatLng point) => tapOnMap(context, tapPos),
+            // 表示位置の変更に合わせた処理
+            onPositionChanged: (MapPosition position, bool hasGesture){
+              _myLocMarker.moveMap(mainMapController!, position);
+            }                
+          ),
+          nonRotatedLayers: [
+            // 高さ陰影図
+            TileLayerOptions(
+              urlTemplate: "https://cyberjapandata.gsi.go.jp/xyz/hillshademap/{z}/{x}/{y}.png",
+              maxNativeZoom: 16,
             ),
-
-            // 家アイコン
-            homeIconWidget,
-
-            // 手書き図
-            FreehandDrawingOnMap(key:_freehandDrawingOnMapKey),
-
-            // GPSスイッチ
-            Align(
-              alignment: Alignment.bottomLeft,
-              child: Container(
-                margin: const EdgeInsets.fromLTRB(5, 0, 0, 15),
-                child: makeGpsLocationSW(context),
-              ),
+            // 標準地図
+            TileLayerOptions(
+              urlTemplate: "https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png",
+              opacity: 0.64
             ),
-
-            // バージョン番号
-            Align(
-              alignment: Alignment.bottomRight,
-              child: Container(
-                margin: const EdgeInsets.fromLTRB(0, 0, 8, 2),
-                child: const Text(
-                  "ver $appVersion",
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.bold,
-                  )
-                ),
-              ),
+            // ポリゴン(禁猟区)
+            PolygonLayerOptions(
+              polygons: areaData.makePolygons(),
+              polygonCulling: true,
             ),
-          ]
+            // 距離同心円
+            distanceCircle!,
+            // GPSログのライン
+            MyPolylineLayerOptions(
+              polylines: gpsLog.makePolyLines(),
+              rebuild: gpsLog.reDrawStream,
+              polylineCulling: false,
+            ),
+            // 手書き図形レイヤー
+            // NOTE: 各マーカーより上に持っていくと、図形があるときにドラッグできなくなる！？
+            freehandDrawing.getFiguresLayerOptions(),
+            // タツママーカー
+            MarkerLayerOptions(
+              markers: tatsumaMarkers,
+              // NOTE: usePxCache=trueだと、非表示グレーマーカーで並び順が変わったときにバグる
+              usePxCache: false,
+            ),
+            // GPS現在位置のライン描画
+            _myLocMarker.getLineLayerOptions(),
+            // メンバーマーカー
+            mainMapDragMarkerPluginOptions,
+            // その他のマーカー
+            miscMarkers.getMapLayerOptions(),
+            // GPSログの犬マーカー
+            MarkerLayerOptions(
+              markers: gpsLog.makeDogMarkers(),
+              rebuild: gpsLog.reDrawStream,
+              // NOTE: usePxCache=trueだと、ストリーム経由の再描画で位置が変わらない
+              usePxCache: false,
+            ),
+            // 手書きの今引いている最中のライン
+            freehandDrawing.getCurrentStrokeLayerOptions(),
+            // GPSの現在位置
+            _myLocMarker.getLayerOptions(),
+          ],
         ),
-      ),
+
+        // 家アイコン
+        homeIconWidget,
+
+        // 手書き図
+        FreehandDrawingOnMap(key:_freehandDrawingOnMapKey),
+
+        // GPSスイッチ
+        Align(
+          alignment: Alignment.bottomLeft,
+          child: Container(
+            margin: const EdgeInsets.fromLTRB(5, 0, 0, 15),
+            child: makeGpsLocationSW(context),
+          ),
+        ),
+
+        // バージョン番号
+        Align(
+          alignment: Alignment.bottomRight,
+          child: Container(
+            margin: const EdgeInsets.fromLTRB(0, 0, 8, 2),
+            child: const Text(
+              "ver $appVersion",
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.bold,
+              )
+            ),
+          ),
+        ),
+      ]
     );
   }
 
