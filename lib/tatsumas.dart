@@ -14,12 +14,9 @@ import 'package:xml/xml.dart';  // GPXの読み込み
 import 'mydragmarker.dart';
 //!!!! import 'my_list_tile.dart';
 
-import 'members.dart';  // メンバーマーカーのサイズ
-import 'gps_log.dart';  // GPSログの表示/非表示
 import 'onoff_icon_button.dart';
 import 'file_tree.dart';
 import 'text_ballon_widget.dart';
-import 'distance_circle_layer.dart';
 import 'globals.dart';
 import 'area_filter_dialog.dart';
 
@@ -33,6 +30,7 @@ class TatsumaData {
     this.visible,
     this.areaBits,
     this.auxPoint,
+    this.gpxSlot,
     this.originalIndex,
   );
   // 空のタツマデータ
@@ -42,8 +40,8 @@ class TatsumaData {
     visible = false,
     areaBits = 0,
     auxPoint = false,
-    originalIndex = -1
-  {}
+    gpxSlot = 0,
+    originalIndex = -1;
 
   // 座標
   LatLng pos;
@@ -55,6 +53,8 @@ class TatsumaData {
   int areaBits;
   // 「補助地点」
   bool auxPoint;
+  // GPXファイル読み込みのスロット番号
+  int gpxSlot;
   // データベース上での番号(表示ソートの影響を受けない)
   int originalIndex;
 
@@ -219,6 +219,7 @@ void saveAllTatsumasToDB()
       "visible": tatsuma.visible,
       "auxPoint": tatsuma.auxPoint,
       "areaBits": tatsuma.areaBits,
+      "gpxSlot": tatsuma.gpxSlot,
     });
   }
 
@@ -282,6 +283,7 @@ void _onChangeTatsumaFromDB(DocumentSnapshot<Map<String, dynamic>> snapshot)
         /*visible:*/ t["visible"] as bool,
         /*areaBits:*/ t["areaBits"] as int,
         /*auxPoint:*/ t["auxPoint"] as bool,
+        /*gpxSlot:*/ t["gpxSlot"] as int,
         /*originalIndex*/ index));
       index++;
     }catch(e){ /**/ }
@@ -310,7 +312,7 @@ void releaseTatsumasSync()
 
 //----------------------------------------------------------------------------
 // GPXファイルからタツマを読み込む
-Map<String,int>? readTatsumaFromGPX(String fileContent)
+Map<String,List<TatsumaData>>? readTatsumaFromGPX(String fileContent, int gpxSlot)
 {
   // XMLパース
   final XmlDocument gpxDoc = XmlDocument.parse(fileContent);
@@ -318,7 +320,7 @@ Map<String,int>? readTatsumaFromGPX(String fileContent)
   final XmlElement? gpx = gpxDoc.getElement("gpx");
   if(gpx == null) return null;
 
-  // タツマを読み取り
+  // GPXからタツマを読み取り
   List<TatsumaData> newTatsumas = [];
   final Iterable<XmlElement> wpts = gpx.findAllElements("wpt");
   int index = 0;
@@ -327,24 +329,40 @@ Map<String,int>? readTatsumaFromGPX(String fileContent)
     final String? lon = wpt.getAttribute("lon");
     final XmlElement? name = wpt.getElement("name");
     if((lat != null) && (lon != null) && (name != null)){
+      // 禁猟区マークは読み込まない
+      // (レッドゾーンの表示に対応したので。)
+      if(name.text.contains("禁猟区")) continue;
+
       newTatsumas.add(TatsumaData(
         LatLng(double.parse(lat), double.parse(lon)),
         name.text,
         true,     // visible
         0,        // areaBits
         false,    // auxPoint
+        gpxSlot,  // gpxSlot
         index));
       index++;
     }
   }
 
+  // 既存のタツマデータを、対象スロットとそれ以外に分割
+  List<TatsumaData> targetTatsumas = [];
+  List<TatsumaData> otherTatsumas = [];
+  for(final tatsuma in tatsumas){
+    if(tatsuma.gpxSlot == gpxSlot){
+      targetTatsumas.add(tatsuma);
+    }else{
+      otherTatsumas.add(tatsuma);
+    }
+  }
+
   // タツマの属性をコピー
-  var res = copyTatsumaAttribute(newTatsumas);
+  var res = _copyTatsumaAttribute(newTatsumas, targetTatsumas);
 
-  // 読み込んだタツマデータに置き換え
-  tatsumas = newTatsumas;
+  // 対象スロットでなかったタツマと結合して置き換え
+  tatsumas = [...newTatsumas, ...otherTatsumas];
 
-  // 追加された数、削除された数を返す
+  // 追加された、削除された、変更されたタツマのリストを返す
   return res;
 }
 
@@ -368,28 +386,59 @@ void deleteTatsuma(int index)
 
 //----------------------------------------------------------------------------
 // タツマ属性データをコピー
-Map<String,int> copyTatsumaAttribute(List<TatsumaData> newTatsumas)
+Map<String,List<TatsumaData>> _copyTatsumaAttribute(
+  List<TatsumaData> newTatsumas,
+  List<TatsumaData> orgTatsumas)
 {
-  int copyCount = 0;
-  newTatsumas.forEach((newTatsuma){
+  List<TatsumaData> addTatsumaNames = [];
+
+  // 座標をキーにタツマ属性データをコピー
+  // NOTE: 現状総当たりになっているので、どうにかする。
+  for(var newTatsuma in newTatsumas){
+    // とりあえずエリアは未設定にしておく    
     newTatsuma.areaBits = _undefAreaBits;
-    for(int i = 0; i < tatsumas.length; i++){
+    bool found = false;
+    for(int i = 0; i < orgTatsumas.length; i++){
       // 同じタツマかどうかの判定は、座標の一致のみとする。
-      if(newTatsuma.pos == tatsumas[i].pos){
+      found = (newTatsuma.pos == orgTatsumas[i].pos);
+      if(found){
         // 表示フラグ、エリアビットをコピー
         // (名前はGPXから読み込んだものが優先される)
-        newTatsuma.visible = tatsumas[i].visible;
-        newTatsuma.areaBits = tatsumas[i].areaBits;
-        newTatsuma.auxPoint = tatsumas[i].auxPoint;
-        copyCount++;
+        newTatsuma.visible = orgTatsumas[i].visible;
+        newTatsuma.areaBits = orgTatsumas[i].areaBits;
+        newTatsuma.auxPoint = orgTatsumas[i].auxPoint;
+        // 属性をコピーしたタツマはリストから削除
+        orgTatsumas.removeAt(i);
         break;
       }
     }
-  });
+    // 新規追加の場合は名前を記録
+    if(!found){
+      addTatsumaNames.add(newTatsuma);
+    }
+  }
+
+  // 新規追加と削除に同じ名前があれば、座標の変更とみなす
+  List<TatsumaData> modifyTatsumas = [];
+  for(int i = 0; i < addTatsumaNames.length; i++){
+    for(int j = 0; j < orgTatsumas.length; j++){
+      if(addTatsumaNames[i].name == orgTatsumas[j].name){
+        modifyTatsumas.add(orgTatsumas[j]);
+        addTatsumaNames.removeAt(i);
+        orgTatsumas.removeAt(j);
+        i--;  // リストが縮小したのでインデックスを戻す
+        break;
+      }
+    }
+  }
 
   return {
-    "addCount":(newTatsumas.length - copyCount),
-    "removeCount":(tatsumas.length - copyCount)
+    // newTatsumas のうち、属性がコピーされなかったものは新規追加
+    "addTatsumas": addTatsumaNames,
+    // orgTatsumas のうち、属性をコピーしなかったタツマは削除されたものとして
+    "removeTatsumas": orgTatsumas,
+    // modifyTatsumas は座標が変更されたもの
+    "modifyTatsumas": modifyTatsumas,
   };
 }
 
@@ -831,21 +880,24 @@ class TatsumasPageState extends State<TatsumasPage>
     // ファイル読み込み
     final String fileContent = await file.readAsString();
 
+    //!!!! UIから指定できるようにする！
+    final gpxSlot = 0;
     // XMLパース
-    final Map<String,int>? res = readTatsumaFromGPX(fileContent);
+    final Map<String,List<TatsumaData>>? res = readTatsumaFromGPX(fileContent, gpxSlot);
     if(res == null) return false;
-    final int addCount = res["addCount"] ?? 0;
-    final int removeCount = res["removeCount"] ?? 0;
+    final addCount = res["addTatsumas"]?.length ?? 0;
+    final removeCount = res["removeTatsumas"]?.length ?? 0;
+    final modifyCount = res["modifyTatsumas"]?.length ?? 0;
 
     // メッセージを表示
     final String message =
-      "${addCount}個を追加し、${removeCount}個を削除しました。";
+      "$addCount個追加し、$removeCount個削除し、$modifyCount個変更しました。";
     showDialog(
       context: context,
       builder: (_){ return AlertDialog(content: Text(message)); });
 
     // タツマをデータベースへ保存して再描画
-    saveAllTatsumasToDB();
+//!!!!    saveAllTatsumasToDB();
     setState((){
       changeFlag = true;
       updateTatsumaMarkers();
