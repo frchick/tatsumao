@@ -869,19 +869,20 @@ class TatsumasPageState extends State<TatsumasPage>
   // GPXからのタツマ読み込み処理
   Future<bool> readTatsumaFromGPXSub(BuildContext context) async
   {
+    // GPXファイルのスロット選択
+    final int? gpxSlot = await chooseGpxSlotDialog(context);
+    if(gpxSlot == null) return false;
+  
     // .pgx ファイルを選択して開く
-    final XTypeGroup typeGroup = XTypeGroup(
-      label: 'gpx',
-      extensions: ['gpx'],
-    );
-    final XFile? file = await openFile(acceptedTypeGroups: [typeGroup]);
+    final typeGroups = [
+      const XTypeGroup(label: 'gpx', extensions: ['gpx']),
+    ];
+    final XFile? file = await openFile(acceptedTypeGroups: typeGroups);
     if (file == null) return false;
 
     // ファイル読み込み
     final String fileContent = await file.readAsString();
 
-    //!!!! UIから指定できるようにする！
-    final gpxSlot = 0;
     // XMLパース
     final Map<String,List<TatsumaData>>? res = readTatsumaFromGPX(fileContent, gpxSlot);
     if(res == null) return false;
@@ -906,6 +907,41 @@ class TatsumasPageState extends State<TatsumasPage>
     final bool changed = (0 < addCount) || (0 < removeCount);
     return changed;
   }
+}
+
+//----------------------------------------------------------------------------
+// GPXファイルのスロット選択ダイアログ
+Future<int?> chooseGpxSlotDialog(BuildContext context) async
+{
+  List<Widget> slots = [];
+  const slotNames = [ "南足柄", "加増野", "(未定義)", "(未定義)" ];
+  for(int i = 0; i < slotNames.length; i++){
+    slots.add(ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 24.0),
+      leading: const Icon(Icons.folder),
+      horizontalTitleGap: 0,
+      title: Text(slotNames[i]),
+      onTap: (){
+        Navigator.pop(context, i);
+      },
+    ));      
+  }
+
+  return showDialog<int>(
+    context: context,
+    builder: (BuildContext context) {
+      return SimpleDialog(
+        title: const Row(children:[
+          Icon(Icons.map),
+          SizedBox(width: 8),
+          Text("タツマフォルダ"),
+        ]),
+        titlePadding: const EdgeInsets.fromLTRB(16.0, 24.0, 16.0, 16.0),
+        contentPadding: const EdgeInsets.fromLTRB(0.0, 0.0, 0.0, 12.0),
+        children: slots
+      );
+    },
+  );
 }
 
 //----------------------------------------------------------------------------
