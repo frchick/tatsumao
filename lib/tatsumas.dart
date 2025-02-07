@@ -27,6 +27,7 @@ class TatsumaData {
   TatsumaData(
     this.pos,
     this.name,
+    this.shortName,
     this.visible,
     this.areaBits,
     this.auxPoint,
@@ -37,6 +38,7 @@ class TatsumaData {
   TatsumaData.empty() :
     pos = LatLng(0,0),
     name = "",
+    shortName = null,
     visible = false,
     areaBits = 0,
     auxPoint = false,
@@ -47,6 +49,8 @@ class TatsumaData {
   LatLng pos;
   // 名前
   String name;
+  // 簡単な名前
+  String? shortName;
   // 表示/非表示
   bool visible;
   // エリア(ビット和)
@@ -122,6 +126,25 @@ final Image _tatsumaIconGray = Image.asset(
 final Image _tatsumaIconGreen =
   Image.asset("assets/misc/tatsu_pos_icon_green.png",
   width: 32, height: 32);
+
+//----------------------------------------------------------------------------
+
+// タツマ名として「簡単な名前」を表示するか
+bool _showTatsumaShortName = false;
+
+bool get showTatsumaShortName => _showTatsumaShortName;
+
+set showTatsumaShortName(bool value)
+{
+  _showTatsumaShortName = value;
+  window.localStorage["showTatsumaShortName"] = value.toString();
+}
+
+void loadShowTatsumaShortNameSetting()
+{
+  String? value = window.localStorage["showTatsumaShortName"];
+  _showTatsumaShortName = (value != null)? bool.parse(value): false;
+}
 
 //----------------------------------------------------------------------------
 // 座標からタツマデータを参照
@@ -214,6 +237,7 @@ void saveAllTatsumasToDB()
   for(final tatsuma in tatsumas){
     data.add({
       "name": tatsuma.name,
+      if(tatsuma.shortName != null) "shortName": tatsuma.shortName!,
       "latitude": tatsuma.pos.latitude,
       "longitude": tatsuma.pos.longitude,
       "visible": tatsuma.visible,
@@ -280,6 +304,7 @@ void _onChangeTatsumaFromDB(DocumentSnapshot<Map<String, dynamic>> snapshot)
       tatsumas.add(TatsumaData(
         /*pos:*/ LatLng(t["latitude"] as double, t["longitude"] as double),
         /*name:*/ name,
+        /*shortName*/ t["shortName"] as String?,
         /*visible:*/ t["visible"] as bool,
         /*areaBits:*/ t["areaBits"] as int,
         /*auxPoint:*/ t["auxPoint"] as bool,
@@ -336,6 +361,7 @@ Map<String,List<TatsumaData>>? readTatsumaFromGPX(String fileContent, int gpxSlo
       newTatsumas.add(TatsumaData(
         LatLng(double.parse(lat), double.parse(lon)),
         name.text,
+        null, // shortName
         true,     // visible
         0,        // areaBits
         false,    // auxPoint
@@ -400,13 +426,15 @@ Map<String,List<TatsumaData>> _copyTatsumaAttribute(
     bool found = false;
     for(int i = 0; i < orgTatsumas.length; i++){
       // 同じタツマかどうかの判定は、座標の一致のみとする。
-      found = (newTatsuma.pos == orgTatsumas[i].pos);
+      final orgTatsuma = orgTatsumas[i];
+      found = (newTatsuma.pos == orgTatsuma.pos);
       if(found){
         // 表示フラグ、エリアビットをコピー
         // (名前はGPXから読み込んだものが優先される)
-        newTatsuma.visible = orgTatsumas[i].visible;
-        newTatsuma.areaBits = orgTatsumas[i].areaBits;
-        newTatsuma.auxPoint = orgTatsumas[i].auxPoint;
+        newTatsuma.shortName = orgTatsuma.shortName;
+        newTatsuma.visible = orgTatsuma.visible;
+        newTatsuma.areaBits = orgTatsuma.areaBits;
+        newTatsuma.auxPoint = orgTatsuma.auxPoint;
         // 属性をコピーしたタツマはリストから削除
         orgTatsumas.removeAt(i);
         break;
@@ -554,6 +582,13 @@ void updateTatsumaMarkers()
     }
     // マーカーを作成
     if (icon != null) {
+      // 簡単な名前を表示するか？
+      late String name;
+      if(_showTatsumaShortName && (tatsuma.shortName != null) && tatsuma.shortName!.isNotEmpty){
+        name = tatsuma.shortName!;
+      }else{
+        name = tatsuma.name;
+      }
       list.add(Marker(
         point: tatsuma.pos,
         width: 200.0,
@@ -561,13 +596,13 @@ void updateTatsumaMarkers()
         anchorPos: AnchorPos.exactly(Anchor(100, 48)),
         builder: (ctx) => Column(
           // アイコンを中央寄せにするために、上部にダミーの空テキスト(マシな方法ないか？)
+          mainAxisAlignment: MainAxisAlignment.start,
           children: [
             // 十字アイコン
             icon!,
             // タツマ名
-            Text(tatsuma.name, style: ts),
+            Text(name, style: ts),
           ],
-          mainAxisAlignment: MainAxisAlignment.start,
         )));
     }
   }
@@ -768,10 +803,11 @@ class TatsumasPageState extends State<TatsumasPage>
             }else{
               // 変更
               setState((){
-                tatsuma.name     = res["name"];
-                tatsuma.visible  = res["visible"];
-                tatsuma.areaBits = res["areaBits"];
-                tatsuma.auxPoint = res["auxPoint"];
+                tatsuma.name      = res["name"];
+                tatsuma.shortName = res["shortName"].isEmpty? null: res["shortName"];
+                tatsuma.visible   = res["visible"];
+                tatsuma.areaBits  = res["areaBits"];
+                tatsuma.auxPoint  = res["auxPoint"];
               });
             }
           }
@@ -978,13 +1014,16 @@ class TatsumaDialog extends StatefulWidget
   TatsumaDialog({
     super.key,
     required this.name,
+    required this.shortName,
     required this.visible,
     required this.areaBits,
     required this.auxPoint,
-  }){}
+  });
 
   // 名前
   String name;
+  // 簡単な名前
+  String shortName;
   // 表示非表示フラグ
   bool visible;
   // エリアビット
@@ -998,7 +1037,8 @@ class TatsumaDialog extends StatefulWidget
 
 class _TatsumaDialogDialogState extends State<TatsumaDialog>
 {
-  late TextEditingController _dateTextController;
+  late TextEditingController _nameTextController;
+  late TextEditingController _shortNameTextController;
 
   @override 
   void initState()
@@ -1007,7 +1047,8 @@ class _TatsumaDialogDialogState extends State<TatsumaDialog>
 
     // NOTE: 初期値の設定を build() に書くと、他の Widget 由来の再描画があるたびに、
     // NOTE: テキストフィールドが元に戻ってしまう。initState() に書くのが正解。
-    _dateTextController = TextEditingController(text: widget.name);
+    _nameTextController = TextEditingController(text: widget.name);
+    _shortNameTextController = TextEditingController(text: widget.shortName);
   }
 
   @override
@@ -1072,13 +1113,23 @@ class _TatsumaDialogDialogState extends State<TatsumaDialog>
               // 名前エディットボックス
               Expanded(
                 child: TextField(
-                  controller: _dateTextController,
+                  controller: _nameTextController,
                   autofocus: true,
                 ),
-              )
+              ),
             ]
           ),
-
+          Row(
+            children: [
+              const SizedBox(width:20),
+              const Text("よみがな："),
+              Expanded(
+                child: TextField(
+                  controller: _shortNameTextController,
+                ),
+              ),
+            ]
+          ),
           // エリアON/OFFボタン
           const SizedBox(height: 10), makeAreaButtonRow(0, 4, areaNames),
           const SizedBox(height: 5),  makeAreaButtonRow(4, 4, areaNames),
@@ -1096,7 +1147,8 @@ class _TatsumaDialogDialogState extends State<TatsumaDialog>
           child: const Text("OK"),
           onPressed: () {
             Navigator.pop<Map<String,dynamic>>(context, {
-              "name": _dateTextController.text,
+              "name": _nameTextController.text,
+              "shortName": _shortNameTextController.text,
               "visible": widget.visible,
               "areaBits": widget.areaBits,
               "auxPoint": widget.auxPoint });
@@ -1158,6 +1210,7 @@ Future<Map<String,dynamic>?>
     builder: (context) {
       return TatsumaDialog(
         name: tatsuma.name,
+        shortName: tatsuma.shortName ?? "",
         visible: tatsuma.visible,
         areaBits: tatsuma.areaBits,
         auxPoint: tatsuma.auxPoint);

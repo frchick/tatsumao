@@ -129,6 +129,8 @@ class _MapViewState extends State<MapView>
     // アプリの設定を読み込む
     // メンバーマーカーのサイズ
     loadMemberMarkerSizeSelectorSetting();
+    // タツマ名として「簡単な名前」を表示？
+    loadShowTatsumaShortNameSetting();
 
     // 家アイコン作成
     homeIconWidget = HomeIconWidget();
@@ -834,10 +836,11 @@ void tapOnMap(BuildContext context, TapPosition tapPos)
           updateTatsumaMarkers();
         }else{
           // タツマデータに変更を反映
-          tatsuma.name     = res["name"];
-          tatsuma.visible  = res["visible"];
-          tatsuma.areaBits = res["areaBits"];
-          tatsuma.auxPoint = res["auxPoint"];
+          tatsuma.name      = res["name"];
+          tatsuma.shortName = res["shortName"].isEmpty? null: res["shortName"];
+          tatsuma.visible   = res["visible"];
+          tatsuma.areaBits  = res["areaBits"];
+          tatsuma.auxPoint  = res["auxPoint"];
           updateTatsumaMarkers();
         }
         updateMapView();
