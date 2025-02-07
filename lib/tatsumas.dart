@@ -11,14 +11,14 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:async';    // for StreamSubscription<>
 
 import 'package:xml/xml.dart';  // GPXの読み込み
-import 'mydragmarker.dart';
-//!!!! import 'my_list_tile.dart';
+import 'package:flutter/services.dart';   // for クリップボード
 
 import 'onoff_icon_button.dart';
 import 'file_tree.dart';
 import 'text_ballon_widget.dart';
 import 'globals.dart';
 import 'area_filter_dialog.dart';
+import 'text_multiline_dialog.dart';
 
 //----------------------------------------------------------------------------
 //----------------------------------------------------------------------------
@@ -883,28 +883,54 @@ class TatsumasPageState extends State<TatsumasPage>
     // ファイル読み込み
     final String fileContent = await file.readAsString();
 
+    // キャンセルに備えて、リストをコピー
+    final orgTatsumas = [...tatsumas];
+
     // XMLパース
     final Map<String,List<TatsumaData>>? res = readTatsumaFromGPX(fileContent, gpxSlot);
     if(res == null) return false;
-    final addCount = res["addTatsumas"]?.length ?? 0;
-    final removeCount = res["removeTatsumas"]?.length ?? 0;
-    final modifyCount = res["modifyTatsumas"]?.length ?? 0;
 
-    // メッセージを表示
-    final String message =
-      "$addCount個追加し、$removeCount個削除し、$modifyCount個変更しました。";
-    showDialog(
-      context: context,
-      builder: (_){ return AlertDialog(content: Text(message)); });
+    // 結果を表示
+    bool changed = false;
+    String text = "";
+    final addList = res["addTatsumas"];
+    if(addList != null){
+      changed |= addList.isNotEmpty;
+      text += "追加: ${addList.length}個\n";
+      for(final tatsuma in addList){ text += "  ${tatsuma.name}\n"; }
+    }
+    final modifyList = res["modifyTatsumas"];
+    if(modifyList != null){
+      changed |= modifyList.isNotEmpty;
+      text += "変更: ${modifyList.length}個\n";
+      for(final tatsuma in modifyList){ text += "  ${tatsuma.name}\n"; }
+    }
+    final removeList = res["removeTatsumas"];
+    if(removeList != null){
+      changed |= removeList.isNotEmpty;
+      text += "削除: ${removeList.length}個\n";
+      for(final tatsuma in removeList){ text += "  ${tatsuma.name}\n"; }
+    }
+    showMultilineTextDialog(context, "タツマ読み込み結果", text).then((res) async {
+      if(res ?? false){
+        final data = ClipboardData(text: text);
+        await Clipboard.setData(data);    
+        showTextBallonMessage("クリップボードへコピー\n(アップロードはされていません)");
+      }else{
+        // キャンセルの場合は、元に戻す
+        tatsumas = orgTatsumas;
+        changed = false;
+      }
+    });
 
     // タツマをデータベースへ保存して再描画
-//!!!!    saveAllTatsumasToDB();
+//!!!! NOTE: エリア設定のあとに手動で明示的にアップロードする想定で、ここではしない。
+//!!!!    saveAllTatsumasToDB();  
     setState((){
       changeFlag = true;
       updateTatsumaMarkers();
     });
 
-    final bool changed = (0 < addCount) || (0 < removeCount);
     return changed;
   }
 }

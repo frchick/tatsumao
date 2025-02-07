@@ -10,9 +10,7 @@ class TextMultilineDialog extends StatelessWidget
     required this.title,
     required this.text,
     double? width,
-  }) : _width = (width ?? 300)
-  {
-  }
+  }) : _width = (width ?? 300);
 
   // タイトル
   final String title;
@@ -64,11 +62,11 @@ class TextMultilineDialog extends StatelessWidget
       ),
       actions: [
         ElevatedButton(
-          child: Text("キャンセル"),
+          child: const Text("キャンセル"),
           onPressed: () => Navigator.pop(context),
         ),
         ElevatedButton(
-          child: Text("OK"),
+          child: const Text("OK"),
           onPressed: () {
             // 選択された文字列を返す
             Navigator.pop<bool>(context, true);
