@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 import 'dart:async';  // データベースの同期
 import 'package:latlong2/latlong.dart';
-import 'package:flutter_map/plugin_api.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-import 'mydragmarker.dart';
+import 'util/mydragmarkerlayer/myflutter_map_dragmarker.dart';
 import 'globals.dart';
 
 //-----------------------------------------------------------------------------
@@ -82,14 +81,13 @@ class MiscMarker
 
     return MyDragMarker(
       point: position,
-      builder: (cnx) {
+      builder: (cnx, pos, isDragging) {
         _context = cnx;
         return _icons[iconType].image!;
       },
-      width: _iconWidth,
-      height: _iconHeight,
+      size: Size(_iconWidth, _iconHeight),
       offset: Offset(0.0, _iconHeight/2),
-      feedbackOffset: Offset(0.0, _iconHeight/2),
+      dragOffset: Offset(0.0, _iconHeight/2),
       index: index,
       onDragEnd: onMapMarkerDragEnd,
       onTap: (LatLng position, int index){
@@ -100,7 +98,7 @@ class MiscMarker
     );
   }
 
-  LatLng onMapMarkerDragEnd(DragEndDetails detail, LatLng pos, Offset offset, int index, MapState? state)
+  LatLng onMapMarkerDragEnd(DragEndDetails detail, LatLng pos, int index)
   {
     //!!!!
     print(">MiscMarker.onMapMarkerDragEnd($index)");
@@ -181,11 +179,11 @@ class MiscMarkers
 
   //-----------------------------------------------------------------------------
   // FlutterMap のマーカーリストを含むレイヤーデータを取得
-  MyDragMarkerPluginOptions _mapOption = MyDragMarkerPluginOptions(
+  MyDragMarkers _mapOption = MyDragMarkers(
     markers: [],
   );
 
-  MyDragMarkerPluginOptions getMapLayerOptions()
+  MyDragMarkers getMapLayerOptions()
   {
     return _mapOption;
   }

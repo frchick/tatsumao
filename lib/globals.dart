@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
-import 'mydragmarker.dart';   // マップ上のメンバーマーカー
+import 'util/mydragmarkerlayer/myflutter_map_dragmarker.dart';   // マップ上のメンバーマーカー
 import 'distance_circle_layer.dart';
 
 //----------------------------------------------------------------------------
@@ -15,7 +15,7 @@ MapController? mainMapController;
 
 // マップ上のメンバーマーカーの作成オプション
 // ドラッグ許可/禁止を後から変更するために、インスタンスをアクセス可能に定義する
-late MyDragMarkerPluginOptions mainMapDragMarkerPluginOptions;
+late MyDragMarkers mainMapDragMarker;
 
 // 地図上のマーカーの再描画
 void updateMapView()
@@ -25,8 +25,8 @@ void updateMapView()
   // ここからは通常の方法で更新できないので、MapController 経由で地図を微妙に動かして再描画を走らせる。
   // MyDragMarkerPlugin.createLayer() で作成した StreamBuilder が動作する。
   const double jitter = 1.0/4096.0;
-  var center = mainMapController!.center;
-  var zoom = mainMapController!.zoom;
+  var center = mainMapController!.camera.center;
+  var zoom = mainMapController!.camera.zoom;
   mainMapController!.move(center, zoom + jitter);
   mainMapController!.move(center, zoom);
 
@@ -43,7 +43,7 @@ bool lockEditing = false;
 final String appInstKey = UniqueKey().toString();
 
 // 地図上の距離サークル
-DistanceCircleLayerOptions? distanceCircle;
+DistanceCircleLayer? distanceCircle;
 
 //----------------------------------------------------------------------------
 // 画面サイズ関連
@@ -96,7 +96,7 @@ Size getTextLineSize(String text, TextStyle style, double scaleFactor)
 //----------------------------------------------------------------------------
 // BottomSheet
 
-PersistentBottomSheetController<void>? bottomSheetController;
+PersistentBottomSheetController? bottomSheetController;
 
 // BottomSheet を閉じる
 void closeBottomSheet()

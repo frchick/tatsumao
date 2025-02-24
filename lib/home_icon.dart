@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -47,7 +49,7 @@ class HomeIconWidget extends StatelessWidget
     if((screenHeight - menuHeight) < py) return;
   
     // ドラッグ座標からマーカーの緯度経度を計算
-    LatLng? point = mainMapController!.pointToLatLng(CustomPoint(px, py));
+    LatLng? point = mainMapController!.camera.pointToLatLng(Point(px, py));
     if(point == null) return;
 
     // タツママーカーにスナップ

@@ -1,15 +1,16 @@
 import 'dart:async';   // Stream使った再描画、Timer
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';  // DragStartBehavior
 import 'package:latlong2/latlong.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'mypolyline_layer.dart';
+import 'package:tatsumao/util/mypolyline/mypolyline_layer.dart';
 
 //-----------------------------------------------------------------------------
 //-----------------------------------------------------------------------------
 // 手書き図の実装
-late FreehandDrawing freehandDrawing;
+late FreehandDrawingLayer freehandDrawing;
 
 // ペンカラー
 List<Color> _penColorTable = const [
@@ -23,7 +24,77 @@ List<Color> _penColorTable = const [
 //-----------------------------------------------------------------------------
 //-----------------------------------------------------------------------------
 // 手書き図の実装
-class FreehandDrawing
+class FreehandDrawingLayer extends StatefulWidget{
+  final GlobalKey<_FreehandDrawingState> key = GlobalKey<_FreehandDrawingState>();
+
+  FreehandDrawingLayer({Key? key, required this.mapController}) : super(key: key);
+
+  // 画面上の手書きストロークを緯度経度に変換するために参照
+  final MapController mapController;
+
+  @override
+  _FreehandDrawingState createState() => _FreehandDrawingState();
+
+  // NOTE: GlobalKeyを用いたsteteの関数呼び出しは，一度画面に描画してからでないと実行できない
+  // カラー
+  void setColor(Color color){
+    key.currentState?.setColor(color); 
+  }
+  Color? get color => key.currentState?.color;
+
+  // ストローク開始
+  void onStrokeStart(Offset pt){
+    key.currentState?.onStrokeStart(pt);
+  }
+
+  // ストロークの継続
+  void onStrokeUpdate(Offset pt){
+    key.currentState?.onStrokeUpdate(pt);
+  }
+
+  // ストロークの完了
+  void onStrokeEnd()
+  {
+    key.currentState?.onStrokeEnd();
+  }
+
+  // 再描画
+  void redraw()
+  {
+    key.currentState?.redraw();
+  }
+
+  // ピン留め
+  void pushPin(){
+    key.currentState?.pushPin();
+  }
+
+  // 最後にピン留めした、自分で描いた図形を削除
+  void deleteLastOwnPinned()
+  {
+    key.currentState?.deleteLastOwnPinned();
+  }
+
+  // 他のユーザーが描いたものも含めて、全てのピン留め図形を削除
+  void deleteAllPinned()
+  {
+    key.currentState?.deleteAllPinned();
+  }
+
+  // 配置ファイルを開く
+  void open(String fileUID) async
+  {
+    key.currentState?.open(fileUID);
+  }
+
+  // 配置ファイルを閉じる
+  void close()
+  {
+    key.currentState?.close();
+  }
+}
+
+class _FreehandDrawingState extends State<FreehandDrawingLayer>
 {
   // 図形のリスト
   Map<String, Figure> _figures = {};
@@ -34,15 +105,11 @@ class FreehandDrawing
 
   // 描画した図形のポリラインの集合
   List<MyPolyline> _polylines = [];
-  // 描画した図形の再描画
-  var _redrawPolylineStream = StreamController<void>.broadcast();
 
   // 今引いている最中のストローク
   List<MyPolyline> _currentStroke = []; // 配列になっているが、実際には先頭要素のみ
   List<LatLng>? _currnetStrokeLatLng;
   List<Offset>? _currnetStrokePoints;
-  // 今引いている最中のストロークの再描画
-  var _redrawStrokeStream = StreamController<void>.broadcast();
 
   // カラー
   Color _color = _penColorTable[2];
@@ -52,22 +119,23 @@ class FreehandDrawing
   // 自分で描いた、ピン留めしている図形のリスト(ピン留め順)
   List<Figure> _ownPinnedFigures = [];
 
-  //---------------------------------------------------------------------------
-  // FlutterMap のレイヤー(描画した図形)
-  MyPolylineLayerOptions getFiguresLayerOptions()
-  {
-    return MyPolylineLayerOptions(
-      polylines: _polylines,
-      rebuild: _redrawPolylineStream.stream);
+  @override
+  void initState(){
+    _mapController = widget.mapController;
+    super.initState();
   }
 
-  // FlutterMap のレイヤー(今引いている最中のストローク)
-  MyPolylineLayerOptions getCurrentStrokeLayerOptions()
-  {
-    return MyPolylineLayerOptions(
-      polylines: _currentStroke,
-      rebuild: _redrawStrokeStream.stream);
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        MyPolylineLayer(polylines: _polylines),
+        MyPolylineLayer(polylines: _currentStroke)
+      ],
+    );
   }
+
+  //---------------------------------------------------------------------------
 
   // 画面上の手書きストロークを緯度経度に変換するために参照
   MapController ?_mapController;
@@ -83,7 +151,7 @@ class FreehandDrawing
     if(_mapController == null) return;
   
     if(_currnetStrokeLatLng == null){
-      final point = _mapController!.pointToLatLng(CustomPoint(pt.dx, pt.dy));
+      final point = _mapController!.camera.pointToLatLng(Point<num> (pt.dx, pt.dy));
       _currnetStrokePoints = [ pt ];
       _currnetStrokeLatLng = [ point! ];
 
@@ -104,7 +172,7 @@ class FreehandDrawing
     if(_mapController == null) return;
 
     if(_currnetStrokeLatLng != null){
-      final point = _mapController!.pointToLatLng(CustomPoint(pt.dx, pt.dy));
+      final point = _mapController!.camera.pointToLatLng(Point(pt.dx, pt.dy));
       _currnetStrokePoints!.add(pt);
       _currnetStrokeLatLng!.add(point!);
 
@@ -116,7 +184,7 @@ class FreehandDrawing
       
       if(_currentStroke.isEmpty) _currentStroke.add(polyline);
       else _currentStroke[0] = polyline;
-      _redrawStrokeStream.sink.add(null);
+      setState(() { });
     }
   }
 
@@ -137,7 +205,7 @@ class FreehandDrawing
       // LatLng に変換し直してポリラインを作成
       List<LatLng> latlngs = [];
       pts.forEach((pt){
-        final latlng = _mapController!.pointToLatLng(CustomPoint(pt.dx, pt.dy));
+        final latlng = _mapController!.camera.pointToLatLng(Point(pt.dx, pt.dy));
         latlngs.add(latlng!);
       });
       var polyline = MyPolyline(
@@ -160,7 +228,7 @@ class FreehandDrawing
       redraw();
     }
     _currentStroke.clear();
-    _redrawStrokeStream.sink.add(null);
+    setState(() { });
   }
 
   // 図形データを削除
@@ -187,7 +255,7 @@ class FreehandDrawing
     {
       _polylines.addAll(figure.polylines);
     }
-    _redrawPolylineStream.sink.add(null);
+    setState(() { });
   }
 
   // ピン留め
@@ -252,6 +320,9 @@ class FreehandDrawing
     // 配置ファイルのサブコレクションを開く
     final docRef = FirebaseFirestore.instance.collection("assign").doc(fileUID);
     _colRef = docRef.collection("freehand_drawing");
+
+    // データがあるかチェック
+    if(_colRef == null) {print("FREEHAMD_DRAWING : Couldn't get Freehand_Drawing Collection"); return;}
 
     _syncListener = _colRef!.snapshots().listen((QuerySnapshot<Map<String, dynamic>> event) {
       for (var change in event.docChanges) {
@@ -433,7 +504,7 @@ class Figure
 {
   Figure({
     required String key,
-    required FreehandDrawing parent,
+    required _FreehandDrawingState parent,
     bool remote = false }) :
     _key = key,
     _freehandDrawing = parent,
@@ -451,7 +522,7 @@ class Figure
   }
 
   // 親
-  final FreehandDrawing _freehandDrawing;
+  final _FreehandDrawingState _freehandDrawing;
 
   // 状態
   FigureState _state = FigureState.Open;
@@ -918,6 +989,7 @@ class FreehandDrawingOnMapState extends State<FreehandDrawingOnMap>
   @override
   void initState()
   {
+    super.initState();
   }
 
   @override
@@ -928,6 +1000,27 @@ class FreehandDrawingOnMapState extends State<FreehandDrawingOnMap>
 
     return Stack(
       children: [
+        // 手書きジェスチャー
+        if(_dawingActive) GestureDetector(
+          dragStartBehavior: DragStartBehavior.down,
+          behavior: HitTestBehavior.opaque,
+          onPanStart: (details)
+          {
+            print("PanS");
+            freehandDrawing.onStrokeStart(details.localPosition);
+          },
+          onPanUpdate: (details)
+          {
+            print("PanU");
+            freehandDrawing.onStrokeUpdate(details.localPosition);
+            setState(() { });
+          },
+          onPanEnd: (details)
+          {
+            print("PanE");
+            freehandDrawing.onStrokeEnd();
+          },
+        ),
         // 横に展開するカラーパレット
         _makeOffset(_ColorPaletteWidget(
           key: _colorPaletteWidgetKey,
@@ -954,23 +1047,6 @@ class FreehandDrawingOnMapState extends State<FreehandDrawingOnMap>
           ),
           onPressed: () => _onTapDrawingIcon(),
         )),
-        
-        // 手書きジェスチャー
-        if(_dawingActive) GestureDetector(
-          dragStartBehavior: DragStartBehavior.down,
-          onPanStart: (details)
-          {
-            freehandDrawing.onStrokeStart(details.localPosition);
-          },
-          onPanUpdate: (details)
-          {
-            freehandDrawing.onStrokeUpdate(details.localPosition);
-          },
-          onPanEnd: (details)
-          {
-            freehandDrawing.onStrokeEnd();
-          }
-        ),
       ],
     );
   }

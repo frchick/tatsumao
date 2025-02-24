@@ -1,73 +1,63 @@
-import 'dart:async';   // Stream使った再描画
 import 'dart:math';
-import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart'; // Colors
 
 import 'package:flutter/widgets.dart';
 import 'package:flutter_map/flutter_map.dart';
-import 'package:flutter_map/src/map/map.dart';
 import 'package:latlong2/latlong.dart';
 
-class DistanceCircleLayerOptions extends LayerOptions
+class DistanceCircleLayer extends StatefulWidget
 {
-  DistanceCircleLayerOptions({
-    Key? key,
-    required StreamController<void> stream,
-    required this.mapController
-  }) :
-    _stream = stream,
-    super(key: key, rebuild: stream.stream)
-  {}
+  // StatefulWidgetからステートの関数を実行するためのグローバルキー
+  final GlobalKey<_DistanceCircleLayerState> key = GlobalKey<_DistanceCircleLayerState>();
+
+  DistanceCircleLayer({ Key? key, required this.mapController }) : super(key: key);
 
   final MapController mapController;
+
+  @override
+  State<StatefulWidget> createState() => _DistanceCircleLayerState();
   
   // 表示/非表示
   bool show = true;
 
   //----------------------------------------------------------------------------
-  // 再描画用の Stream
-  late StreamController<void> _stream;
   // 再描画
   void redraw()
   {
-    _stream.sink.add(null);
+    key.currentState?.redraw();
   }
 }
 
 // flutter_map のプラグインとしてレイヤーを実装
-class DistanceCircleLayerPlugin implements MapPlugin
+class _DistanceCircleLayerState extends State<DistanceCircleLayer>
 {
   @override
-  bool supportsLayer(LayerOptions options) {
-    return options is DistanceCircleLayerOptions;
+  void initState() {
+    super.initState();
   }
 
   @override
-  Widget createLayer(LayerOptions options, MapState map, Stream<void> stream) {
+  Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints bc) {
         final size = Size(bc.maxWidth, bc.maxHeight);
-        return _build(context, size, options as DistanceCircleLayerOptions, map, stream);
+        return _build(context, size);
       },
     );
   }
 
-  Widget _build(
-    BuildContext context, Size size,
-    DistanceCircleLayerOptions opts, MapState map, Stream<void> stream)
-  {
-    return StreamBuilder<void>(
-      stream: stream, // a Stream<void> or null
-      builder: (BuildContext context, _)
-      {
-        Widget painter = CustomPaint(
-            painter: DistanceCirclePainter(opts:opts),
-            size: size,
-            willChange: true);
+  void redraw(){
+    setState(() { });
+  }
 
-        return painter;
-      },
+  Widget _build(
+    BuildContext context, Size size)
+  {
+    return  CustomPaint(
+        painter: DistanceCirclePainter(opts:widget),
+        size: size,
+        willChange: true
     );
   }
 }
@@ -76,7 +66,7 @@ class DistanceCirclePainter extends CustomPainter
 {
   DistanceCirclePainter({ required this.opts });
 
-  final DistanceCircleLayerOptions opts;
+  final DistanceCircleLayer opts;
 
   @override
   void paint(Canvas canvas, Size size)
@@ -96,13 +86,13 @@ class DistanceCirclePainter extends CustomPainter
     if(heightFit){
       // 高さフィット
       screenWidth = margin * size.height;
-      pos0 = map.pointToLatLng(CustomPoint(halfWidth, 0));
-      pos1 = map.pointToLatLng(CustomPoint(halfWidth, screenWidth));
+      pos0 = map.camera.pointToLatLng(Point(halfWidth, 0));
+      pos1 = map.camera.pointToLatLng(Point(halfWidth, screenWidth));
     }else{
       // 幅フィット
       screenWidth = margin * size.width;
-      pos0 = map.pointToLatLng(CustomPoint(0, halfHeight));
-      pos1 = map.pointToLatLng(CustomPoint(screenWidth, halfHeight));
+      pos0 = map.camera.pointToLatLng(Point(0, halfHeight));
+      pos1 = map.camera.pointToLatLng(Point(screenWidth, halfHeight));
     }
     if((pos0 == null) || (pos1 == null)) return;
     const distance = Distance();
@@ -188,6 +178,7 @@ class DistanceCirclePainter extends CustomPainter
     return selectR;
   }
 
+  //TODO: StatefulWidget化に伴い，下記が本当に必要か調査
   //NOTE: これが true を返さないと、StreamBuilder が走っても再描画されないことがある。
   @override
   bool shouldRepaint(DistanceCirclePainter oldDelegate)

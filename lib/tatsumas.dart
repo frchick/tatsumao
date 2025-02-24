@@ -2,7 +2,6 @@ import 'dart:html';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
-import 'package:flutter_map/plugin_api.dart';
 import 'package:latlong2/latlong.dart';
 
 import 'package:file_selector/file_selector.dart';  // ファイル選択
@@ -181,16 +180,14 @@ int? searchTatsumaByScreenPos(MapController mapController, num x, num y)
     final bool visible = showFilteredIcon || tatsuma.isVisible();
     if(!visible) continue;
  
-    final CustomPoint<num>? pixelPos = mapController.latLngToScreenPoint(tatsuma.pos);
-    if(pixelPos != null){
-      final num dx = (x - pixelPos.x).abs();
-      final num dy = (y - pixelPos.y).abs();
-      if ((dx < 16.0) && (dy < 16.0)) {
-        num d = (dx * dx) + (dy * dy);
-        if(d < minDist){
-          minDist = d;
-          index = i;
-        }
+    final Point<double> pixelPos = mapController.camera.latLngToScreenPoint(tatsuma.pos);
+    final num dx = (x - pixelPos.x).abs();
+    final num dy = (y - pixelPos.y).abs();
+    if ((dx < 16.0) && (dy < 16.0)) {
+      num d = (dx * dx) + (dy * dy);
+      if(d < minDist){
+        minDist = d;
+        index = i;
       }
     }
   }
@@ -202,17 +199,17 @@ int? searchTatsumaByScreenPos(MapController mapController, num x, num y)
 LatLng snapToTatsuma(LatLng point)
 {
   // 画面座標に変換してマーカーとの距離を判定
-  // 指定された座標が画面外なら何もしない
-  final CustomPoint<num>? pixelPos0 = mainMapController!.latLngToScreenPoint(point);
-  if(pixelPos0 == null) return point;
+  // NOTE：~~指定された座標が画面外なら何もしない~~：バージョンアップに伴い，とりあえず保留
+  final Point<double> pixelPos0 = mainMapController!.camera.latLngToScreenPoint(point);
+  // if(pixelPos0 == null) return point;
 
   // マーカーサイズが16x16である前提
   num minDist = (18.0 * 18.0);
-  tatsumas.forEach((tatsuma) {
+  for (TatsumaData tatsuma in tatsumas){
     // 非表示のタツマは除外
-    if(!tatsuma.isVisible()) return;
+    if(!tatsuma.isVisible()) continue;
  
-    final CustomPoint<num>? pixelPos1 = mainMapController!.latLngToScreenPoint(tatsuma.pos);
+    final Point<double> pixelPos1 = mainMapController!.camera.latLngToScreenPoint(tatsuma.pos);
     if(pixelPos1 != null){
       final num dx = (pixelPos0.x - pixelPos1.x).abs();
       final num dy = (pixelPos0.y - pixelPos1.y).abs();
@@ -224,7 +221,8 @@ LatLng snapToTatsuma(LatLng point)
         }
       }
     }
-  });
+  }
+
   return point;
 }
 
@@ -593,15 +591,16 @@ void updateTatsumaMarkers()
         point: tatsuma.pos,
         width: 200.0,
         height: 64.0,
-        anchorPos: AnchorPos.exactly(Anchor(100, 48)),
-        builder: (ctx) => Column(
-          // アイコンを中央寄せにするために、上部にダミーの空テキスト(マシな方法ないか？)
+        
+        child: Column(
           mainAxisAlignment: MainAxisAlignment.start,
           children: [
             // 十字アイコン
-            icon!,
+            icon,
             // タツマ名
             Text(name, style: ts),
+            // 隙間を埋める
+            const Spacer(),
           ],
         )));
     }
@@ -890,7 +889,7 @@ class TatsumasPageState extends State<TatsumasPage>
       case 0:
         // 座標を指定して地図に戻る
         // ある程度のズーム率まで拡大表示する
-        double zoom = mainMapController!.zoom;
+        double zoom = mainMapController!.camera.zoom;
         const double zoomInTarget = 16.25;
         if(zoom < zoomInTarget) zoom = zoomInTarget;
         final TatsumaData tatsuma = tatsumas[index];

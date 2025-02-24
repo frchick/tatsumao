@@ -2,11 +2,54 @@ import 'dart:async';   // Stream使った再描画
 import 'package:flutter/material.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:flutter_map/flutter_map.dart';
-import 'package:flutter_map/plugin_api.dart';
+// NOTE: flutter_map 2.0.0のplugin_api.dartは廃止
+export 'package:flutter_map/src/misc/bounds.dart';
+export 'package:flutter_map/src/misc/center_zoom.dart';
+export 'package:flutter_map/src/map/controller/map_controller_impl.dart';
 import 'package:location/location.dart';
-import 'mypolyline_layer.dart'; // マップ上のカスタムポリライン
 
-class MyLocationMarker
+class MyLocationMarkerLayer extends StatefulWidget{
+  final GlobalKey<_MyLocationMarkerState> key = GlobalKey<_MyLocationMarkerState>();
+
+  MyLocationMarkerLayer({Key? key, required this.mapController}) : super(key: key);
+
+  // 地図へのアクセス
+  final MapController mapController;
+
+  @override
+  _MyLocationMarkerState createState() => _MyLocationMarkerState();
+
+  // GPS位置情報を表示するか
+  bool? get isEnable => key.currentState?.enabled;
+
+  // NOTE: GlobalKeyを用いたsteteの関数呼び出しは，一度画面に描画してからでないと実行できない
+  // GPSを有効化
+  Future<bool>? enable(BuildContext context) {
+    return key.currentState?.enable(context);
+  }
+
+  // GPSを無効化
+  void disable(){
+    key.currentState?.disable();
+  }
+
+  // GPS位置情報を更新
+  void updateLocation(LocationData location){
+    key.currentState?.updateLocation(location);
+  }
+
+  // 地図の表示位置の変更
+  void moveMap(MapController mapController, MapCamera camera){
+    key.currentState?.moveMap(mapController, camera);
+  }
+
+  // GPS位置に地図を移動
+  void moveMapToMyLocation(){
+    key.currentState?.moveMapToMyLocation(); 
+  }
+}
+
+class _MyLocationMarkerState extends State<MyLocationMarkerLayer>
 {
   // GPS位置情報へのアクセス
   Location _location = Location();
@@ -17,8 +60,6 @@ class MyLocationMarker
   // GPS位置情報を表示するか
   bool _enable = false;
   bool get enabled => _enable;
-  // UIの再描画
-  var _updateMyLocationStream = StreamController<void>.broadcast();
   // 最新の座標
   var _myLocation = LocationData.fromMap({
     "latitude": 35.681236,
@@ -31,28 +72,21 @@ class MyLocationMarker
   // 地図上に表示するマーカー
   List<Marker> _markers = [];
   // 地図上に表示するライン
-  List<MyPolyline> _polylines = [];
-  // 地図へのアクセス
-  final MapController _mapController;
+  List<Polyline> _polylines = [];
 
-  MyLocationMarker(this._mapController);
-
-  // Flutter_map のレイヤーオプションを返す
-  MarkerLayerOptions getLayerOptions()
-  {
-    return MarkerLayerOptions(
-      markers: _markers,
-      rebuild: _updateMyLocationStream.stream,  // 再描画のトリガー
-      usePxCache: false,  // NOTE: 無効にしないと、rebuild で再描画されない
-    );
+  // 初期化
+  @override void initState() {
+    super.initState();
   }
 
-  // Flutter_map のレイヤーオプションを返す
-  MyPolylineLayerOptions getLineLayerOptions()
-  {
-    return MyPolylineLayerOptions(
-      polylines: _polylines,
-      rebuild: _updateMyLocationStream.stream,  // 再描画のトリガー
+  // Fluter_mapのレイヤーをかえす
+  @override
+  Widget build(BuildContext context){
+    return Stack(
+      children: [
+        MarkerLayer(markers: _markers),
+        PolylineLayer(polylines: _polylines)
+      ],
     );
   }
 
@@ -60,42 +94,6 @@ class MyLocationMarker
   Future<bool> enable(BuildContext context) async
   {
     if(_enable) return true;
-
-    // GPS機能の有無の確認
-    bool serviceEnabled = await _location.serviceEnabled();
-    if (!serviceEnabled) {
-      serviceEnabled = await _location.requestService();
-      if (!serviceEnabled) {
-        print('>GPSサービスが無効です');
-        showDialog(
-          context: context,
-          builder: (context) {
-            return AlertDialog(
-              content: Text("GPSサービスが無効です"),
-            );
-          },
-        );
-        return false;
-      }
-    }
-
-    // GPSのパーミッションの確認
-    PermissionStatus permissionGranted = await _location.hasPermission();
-    if (permissionGranted == PermissionStatus.denied) {
-      permissionGranted = await _location.requestPermission();
-      if (permissionGranted != PermissionStatus.granted) {
-        print('>GPSのパーミッションが無効です');
-        showDialog(
-          context: context,
-          builder: (context) {
-            return AlertDialog(
-              content: Text("GPSのパーミッションが無効です"),
-            );
-          },
-        );
-        return false;
-      }
-    }
 
     // 有効化
     _enable = true;
@@ -110,7 +108,8 @@ class MyLocationMarker
       }
     });
 
-    return true;
+    //return true;
+    return false;
   }
 
   // GPSを無効化
@@ -126,7 +125,7 @@ class MyLocationMarker
     // マーカーとラインを非表示に
     _markers.clear();
     _polylines.clear();
-    _updateMyLocationStream.sink.add(null);
+    setState(() { });
   }
 
   // GPS位置情報を更新
@@ -141,8 +140,7 @@ class MyLocationMarker
         point: LatLng(location.latitude!, location.longitude!),
         width: 36,
         height: 36,
-        builder: (ctx) =>
-          Transform.rotate(
+        child: Transform.rotate(
             angle: (_heading * pi / 180),
             child: const Icon(Icons.navigation, size: 36, color: Colors.red),
           )
@@ -154,20 +152,20 @@ class MyLocationMarker
       }
 
       // マーカーが画面外なら、地図の中心からのラインをひく
-      _updateLine(_mapController.center);
+      _updateLine(widget.mapController.camera.center);
     
       // 再描画
-      _updateMyLocationStream.sink.add(null);
+      setState(() { });
     }
   }
 
   // 地図の表示位置の変更
-  void moveMap(MapController mapController, MapPosition position)
+  void moveMap(MapController mapController, MapCamera camera)
   {
     // ラインの始点を画面中央に固定
-    _updateLine(position.center!);
+    _updateLine(camera.center);
     // 再描画
-    _updateMyLocationStream.sink.add(null);
+    setState(() { });
   }
 
   // ライン表示の更新
@@ -178,12 +176,12 @@ class MyLocationMarker
     // GPS位置マーカーが画面外なら、ラインを消す
     // NOTE: 非表示なら、始点終点をマーカー位置にする(距離表示のため)
     final myPos = LatLng(_myLocation.latitude!, _myLocation.longitude!);
-    final bounds = _mapController.bounds;
+    final bounds = widget.mapController.camera.visibleBounds;
     final showLine = (bounds != null)? !bounds.contains(myPos) : true;
 
     // マーカーと画面中心の距離を計算
     const distance = Distance();
-    final D = distance(myPos, _mapController.center);
+    final D = distance(myPos, widget.mapController.camera.center);
     late String text;
     if(D < 1000){
       text = D.toStringAsFixed(0) + "m";
@@ -192,21 +190,13 @@ class MyLocationMarker
     }
 
     // 画面中央とGPS位置マーカーを結ぶラインを引く
-    var line = MyPolyline(
+    var line = Polyline(
       points: [
         (showLine? center: myPos),
         myPos,
       ],
-      labelTexts: [ "", text ],
-      labelTextOffset: const Offset(0, 16),
-      labelTextAlign: TextAlign.center,
-      labelTextStyle: const TextStyle(
-        color: Colors.black,
-        fontSize: 16,
-        fontWeight: FontWeight.bold,
-      ),
+      pattern: const StrokePattern.dotted(),
       strokeWidth: 4,
-      isDotted: true,
       color: Colors.red,
     );
     if(_polylines.isEmpty){
@@ -222,6 +212,6 @@ class MyLocationMarker
     if(!_enable) return;
 
     final myPos = LatLng(_myLocation.latitude!, _myLocation.longitude!);
-    _mapController.move(myPos, _mapController.zoom);
+    widget.mapController.move(myPos, widget.mapController.camera.zoom);
   }
 }
