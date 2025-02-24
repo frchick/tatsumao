@@ -1,63 +1,73 @@
+import 'dart:async';   // Stream使った再描画
 import 'dart:math';
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart'; // Colors
 
 import 'package:flutter/widgets.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:flutter_map/src/map/map.dart';
 import 'package:latlong2/latlong.dart';
 
-class DistanceCircleLayer extends StatefulWidget
+class DistanceCircleLayerOptions extends LayerOptions
 {
-  // StatefulWidgetからステートの関数を実行するためのグローバルキー
-  final GlobalKey<_DistanceCircleLayerState> key = GlobalKey<_DistanceCircleLayerState>();
-
-  DistanceCircleLayer({ Key? key, required this.mapController }) : super(key: key);
+  DistanceCircleLayerOptions({
+    Key? key,
+    required StreamController<void> stream,
+    required this.mapController
+  }) :
+    _stream = stream,
+    super(key: key, rebuild: stream.stream)
+  {}
 
   final MapController mapController;
-
-  @override
-  State<StatefulWidget> createState() => _DistanceCircleLayerState();
   
   // 表示/非表示
   bool show = true;
 
   //----------------------------------------------------------------------------
+  // 再描画用の Stream
+  late StreamController<void> _stream;
   // 再描画
   void redraw()
   {
-    key.currentState?.redraw();
+    _stream.sink.add(null);
   }
 }
 
 // flutter_map のプラグインとしてレイヤーを実装
-class _DistanceCircleLayerState extends State<DistanceCircleLayer>
+class DistanceCircleLayerPlugin implements MapPlugin
 {
   @override
-  void initState() {
-    super.initState();
+  bool supportsLayer(LayerOptions options) {
+    return options is DistanceCircleLayerOptions;
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget createLayer(LayerOptions options, MapState map, Stream<void> stream) {
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints bc) {
         final size = Size(bc.maxWidth, bc.maxHeight);
-        return _build(context, size);
+        return _build(context, size, options as DistanceCircleLayerOptions, map, stream);
       },
     );
   }
 
-  void redraw(){
-    setState(() { });
-  }
-
   Widget _build(
-    BuildContext context, Size size)
+    BuildContext context, Size size,
+    DistanceCircleLayerOptions opts, MapState map, Stream<void> stream)
   {
-    return  CustomPaint(
-        painter: DistanceCirclePainter(opts:widget),
-        size: size,
-        willChange: true
+    return StreamBuilder<void>(
+      stream: stream, // a Stream<void> or null
+      builder: (BuildContext context, _)
+      {
+        Widget painter = CustomPaint(
+            painter: DistanceCirclePainter(opts:opts),
+            size: size,
+            willChange: true);
+
+        return painter;
+      },
     );
   }
 }
@@ -66,7 +76,7 @@ class DistanceCirclePainter extends CustomPainter
 {
   DistanceCirclePainter({ required this.opts });
 
-  final DistanceCircleLayer opts;
+  final DistanceCircleLayerOptions opts;
 
   @override
   void paint(Canvas canvas, Size size)
@@ -86,13 +96,13 @@ class DistanceCirclePainter extends CustomPainter
     if(heightFit){
       // 高さフィット
       screenWidth = margin * size.height;
-      pos0 = map.camera.pointToLatLng(Point(halfWidth, 0));
-      pos1 = map.camera.pointToLatLng(Point(halfWidth, screenWidth));
+      pos0 = map.pointToLatLng(CustomPoint(halfWidth, 0));
+      pos1 = map.pointToLatLng(CustomPoint(halfWidth, screenWidth));
     }else{
       // 幅フィット
       screenWidth = margin * size.width;
-      pos0 = map.camera.pointToLatLng(Point(0, halfHeight));
-      pos1 = map.camera.pointToLatLng(Point(screenWidth, halfHeight));
+      pos0 = map.pointToLatLng(CustomPoint(0, halfHeight));
+      pos1 = map.pointToLatLng(CustomPoint(screenWidth, halfHeight));
     }
     if((pos0 == null) || (pos1 == null)) return;
     const distance = Distance();
@@ -178,7 +188,6 @@ class DistanceCirclePainter extends CustomPainter
     return selectR;
   }
 
-  //TODO: StatefulWidget化に伴い，下記が本当に必要か調査
   //NOTE: これが true を返さないと、StreamBuilder が走っても再描画されないことがある。
   @override
   bool shouldRepaint(DistanceCirclePainter oldDelegate)

@@ -3,13 +3,12 @@ import 'dart:math'; // min,max
 import 'dart:html'; // Web Local Storage
 
 import 'package:flutter/material.dart';
-import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:flutter_map/plugin_api.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/services.dart';   // for クリップボード
-import 'package:flutter_map/src/geo/latlng_bounds.dart'; // LatLngBoundsを使うためにインポート
 
-import 'util/mydragmarkerlayer/mydrag_marker.dart';   // マップ上のメンバーマーカー
+import 'mydragmarker.dart';   // マップ上のメンバーマーカー
 import 'text_ballon_widget.dart';
 import 'text_multiline_dialog.dart';
 import 'tatsumas.dart';
@@ -348,13 +347,10 @@ void moveMapToLocationOfMembers()
   if(points.isEmpty) return;
   var bounds = LatLngBounds.fromPoints(points);
 
-  mainMapController!.fitCamera(
-    CameraFit.bounds(
-      bounds: bounds,
+  mainMapController!.fitBounds(bounds,
+    options: const FitBoundsOptions(
       padding: EdgeInsets.all(64),
-      maxZoom: 16,
-    )
-  );
+      maxZoom: 16));
 }
 
 //---------------------------------------------------------------------------
@@ -452,25 +448,26 @@ class MyDragMarker2 extends MyDragMarker
 
   MyDragMarker2({
     required super.point,
-    required super.builder,
-    required super.size,
+    super.builder,
+    super.feedbackBuilder,
+    super.width,
+    super.height,
     super.offset,
-    super.dragOffset,
+    super.feedbackOffset,
     super.onLongPress,
-    super.scrollMapNearEdge = false, // experimental // TODO：updateMapNearEdgeの代替がこれであっているか確認
-    super.scrollNearEdgeRatio = 2.0,
-    super.scrollNearEdgeSpeed = 1.0,
+    super.updateMapNearEdge = false, // experimental
+    super.nearEdgeRatio = 2.0,
+    super.nearEdgeSpeed = 1.0,
     super.rotateMarker = false,
+    AnchorPos? anchorPos,
     required super.index,
-    super.visible = true, 
+    super.visible = true,
   })
   {
-
-    // TODO：キャスト（as void ...）で間に合わせたが，これであっているか確認
-    super.onDragStart = onDragStartFunc as void Function(DragStartDetails details, LatLng latLng, int index)?;
-    super.onDragUpdate = onDragUpdateFunc as void Function(DragUpdateDetails details, LatLng latLng, int index)?;
-    super.onDragEnd = onDragEndFunc as LatLng Function(DragEndDetails details, LatLng latLng, int index)?;
-    super.onTap = onTapFunc as void Function(LatLng latLng, int index)?;
+    super.onDragStart = onDragStartFunc;
+    super.onDragUpdate = onDragUpdateFunc;
+    super.onDragEnd = onDragEndFunc;
+    super.onTap = onTapFunc;
   }
 
   //---------------------------------------------------------------------------
@@ -497,7 +494,7 @@ class MyDragMarker2 extends MyDragMarker
   }
 
   // ドラッグ終了時の処理
-  LatLng onDragEndFunc(DragEndDetails details, LatLng point, int index)
+  LatLng onDragEndFunc(DragEndDetails details, LatLng point, Offset offset, int index, MapState? mapState)
   {
     // ドラッグ中の連続同期のためのタイマーを停止
     if(_draggingTimer != null){
@@ -508,8 +505,8 @@ class MyDragMarker2 extends MyDragMarker
     // 家アイコンに投げ込まれたら削除する
     // 画面右下にサイズ80x80で表示されている前提
     final bool dropToHome = 
-      (0.0 < (details.globalPosition.dx - (getScreenWidth()  - 80))) &&
-      (0.0 < (details.globalPosition.dy - (getScreenHeight() - 80)));
+      (0.0 < (offset.dx - (getScreenWidth()  - 80))) &&
+      (0.0 < (offset.dy - (getScreenHeight() - 80)));
     if(dropToHome){
         // メンバーマーカーを非表示にして再描画
         memberMarkers[index].visible = false;
@@ -570,9 +567,11 @@ void createMemberMarkers()
     memberMarkers.add(
       MyDragMarker2(
         point: member.pos,
-        builder:(context, pos, isDragging) => member.icon0!,
-        size: Size(width, height),
-        dragOffset: Offset(0.0, -height/2),
+        builder: (ctx) => member.icon0!,
+        width: width,
+        height: height,
+        offset: Offset(0.0, -height/2),
+        feedbackOffset: Offset(0.0, -height/2),
         index: memberIndex,
         visible: member.attended,
       )

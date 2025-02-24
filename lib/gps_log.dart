@@ -16,7 +16,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'file_tree.dart';
 import 'text_ballon_widget.dart';
 import 'ok_cancel_dialog.dart';
-import 'util/mypolyline/mypolyline_layer.dart'; // マップ上のカスタムポリライン
+import 'mypolyline_layer.dart'; // マップ上のカスタムポリライン
 import 'misc_marker.dart';  // キルマーカー
 import 'globals.dart';  // 画面解像度
 
@@ -1055,9 +1055,8 @@ class _Route
       points:line,
       color:_deviecParam.color,
       strokeWidth:2.0,
-      // TODO： 実装する
-      // startCapMarker:true,
-      // endCapMarker:true,
+      startCapMarker:true,
+      endCapMarker:true,
       shouldRepaint:true);
   }
 
@@ -1072,9 +1071,8 @@ class _Route
       point: calcPositionAtTime(time),
       width: 42.0,  // メンバーマーカー小と同じサイズ。([64x72]の2/3)
       height: 48.0,
-      // NOTE: バージョンアップに伴い，一時的にコメントアウト
-      // anchorPos: AnchorPos.exactly(Anchor(21, 0)),
-      child: _iconImage!,
+      anchorPos: AnchorPos.exactly(Anchor(21, 0)),
+      builder: (ctx) => _iconImage!,
     );
   }
 }
@@ -1293,7 +1291,7 @@ void _linkGPSLogFunc(BuildContext context) async
 void addKillMarkerFunc(BuildContext context)
 {
   // 現在のマップ表示の中心に
-  miscMarkers.addMarker(MiscMarker(position:mainMapController!.camera.center));
+  miscMarkers.addMarker(MiscMarker(position:mainMapController!.center));
   // 再描画
   updateMapView();
 }

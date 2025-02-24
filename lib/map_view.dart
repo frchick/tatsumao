@@ -14,9 +14,9 @@ void cacheMapTiles(BuildContext context)
 
 Future<void> cacheMapTilesSub(BuildContext context) async
 {
-  final zoom = mainMapController!.camera.zoom;
-  final center = mainMapController!.camera.center;
-  final bounds = mainMapController!.camera.visibleBounds;
+  final zoom = mainMapController!.zoom;
+  final center = mainMapController!.center;
+  final bounds = mainMapController!.bounds!;
   final w = bounds.west;
   final e = bounds.east;
   final n = bounds.north;

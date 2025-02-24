@@ -110,7 +110,7 @@ class AreaFilterDialogState extends State<AreaFilterDialog>
                 onPressed: (index) {
                   setState(() {
                     memberMarkerSizeSelector = index;
-                    mainMapDragMarker.visible
+                    mainMapDragMarkerPluginOptions.visible
                       = isShowMemberMarker();
                   });
                   createMemberMarkers();

@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter_map/flutter_map.dart';
-import 'package:tatsumao/util/mydragmarkerlayer/mydrag_markers_layer.dart';
-import 'util/mypolyline/mypolyline_layer.dart'; // マップ上のカスタムポリライン
+import 'package:flutter_map/plugin_api.dart';
+import 'mypolyline_layer.dart'; // マップ上のカスタムポリライン
 import 'package:latlong2/latlong.dart';
-//import 'package:positioned_tap_detector_2/positioned_tap_detector_2.dart'; // マップのタップ
+import 'package:positioned_tap_detector_2/positioned_tap_detector_2.dart'; // マップのタップ
 import 'package:after_layout/after_layout.dart';  // 起動直後の build の後の処理
 
 import 'package:flutter_localizations/flutter_localizations.dart';  // カレンダー日本語化
@@ -14,7 +14,7 @@ import 'firebase_options.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:async';
 import 'package:google_fonts/google_fonts.dart';  // フォント
-import 'util/mydragmarkerlayer/myflutter_map_dragmarker.dart';   // マップ上のメンバーマーカー
+import 'mydragmarker.dart';   // マップ上のメンバーマーカー
 
 import 'file_tree.dart';
 import 'text_ballon_widget.dart';
@@ -32,7 +32,7 @@ import 'distance_circle_layer.dart';
 import 'area_data.dart';
 import 'globals.dart';
 import 'area_filter_dialog.dart';
-import 'util/mylocation_marker/mylocation_marker.dart';
+import 'mylocation_marker.dart';
 import 'map_view.dart';
 
 //----------------------------------------------------------------------------
@@ -115,7 +115,7 @@ class _MapViewState extends State<MapView>
   final _freehandDrawingOnMapKey = GlobalKey<FreehandDrawingOnMapState>();
 
   // GPS位置情報へのアクセス
-  late MyLocationMarkerLayer _myLocMarker;
+  late MyLocationMarker _myLocMarker;
   // GPS位置情報が無効か？無効なら、スイッチをONにさせない。
   bool _gpsLocationNotAvailable = false;
 
@@ -137,6 +137,10 @@ class _MapViewState extends State<MapView>
 
     // その他の初期化
     miscMarkers.initialize();
+
+    // 手書き図の初期化
+    freehandDrawing = FreehandDrawing();
+    freehandDrawing.setColor(Color.fromARGB(255,0,255,0));
 
     // データベースからもろもろ読み込んで初期状態をセットアップ
     // 非同期処理。完了したら _initializingApp = false にして再描画が呼ばれる。
@@ -269,7 +273,7 @@ class _MapViewState extends State<MapView>
     // 直前の汎用マーカーを閉じる
     miscMarkers.close();
     // 直前の手書き図を削除
-    //freehandDrawing.close();
+    freehandDrawing.close();
     // エリアフィルター(表示/非表示)に従って、タツマのマーカー配列を作成
     updateTatsumaMarkers();
   
@@ -281,7 +285,7 @@ class _MapViewState extends State<MapView>
     miscMarkers.openSync(fileUID);
   
     // 手書き図を読み込み(非同期)
-    //freehandDrawing.open(fileUID);
+    freehandDrawing.open(fileUID);
   
     // GPSログを読み込み(非同期)
     // オフラインキャッシュから読み込まれている場合には、GPSログは読み込まない
@@ -332,7 +336,7 @@ class _MapViewState extends State<MapView>
     // ON/OFFボタンを再描画(ロック(編集不可)でOFF、ロック解除(編集可)でON)
     _lockEditingButton?.changeState(!lock);
     // マップ上のマーカーのドラッグ許可/禁止を更新
-    mainMapDragMarker.draggable = !lockEditing;
+    mainMapDragMarkerPluginOptions.draggable = !lockEditing;
     miscMarkers.getMapLayerOptions().draggable = !lockEditing;
     // これを呼ばないと、変更後にちょっとだけマーカーを動かせてしまう？
     updateMapView();
@@ -440,7 +444,7 @@ class _MapViewState extends State<MapView>
       ),
     ];
 
-    // 右側のタイトル // TODO：左側じゃない？
+    // 右側のタイトル
     List<Widget> titleLine = [
       // ファイル一覧ボタン
       IconButton(
@@ -634,24 +638,23 @@ class _MapViewState extends State<MapView>
     // NOTE: インスタンスがあっても初回 build 以降でないと使用できず、内部 assert を引き起こすため。
     if(mainMapController == null){
       mainMapController = MapController();
+      freehandDrawing.setMapController(mainMapController!);
       // GPS位置情報へのアクセスを初期化
-      _myLocMarker = MyLocationMarkerLayer(mapController: mainMapController!);
+      _myLocMarker = MyLocationMarker(mainMapController!);
     }
-
     // 距離サークルを作成
     if(distanceCircle == null){
-      distanceCircle = DistanceCircleLayer(mapController: mainMapController!);
-      distanceCircle!.show = true;
-      distanceCircle!.redraw();
+      distanceCircle = DistanceCircleLayerOptions(
+        stream: StreamController<void>.broadcast(),
+        mapController: mainMapController!);
     }
   
     // マップ上のメンバーマーカーの作成オプション
     // TODO: MapOption への値の代入を、適切な位置に移動したい
-    mainMapDragMarker = MyDragMarkers(
+    mainMapDragMarkerPluginOptions = MyDragMarkerPluginOptions(
       markers: memberMarkers,
       draggable: !lockEditing,
       visible: isShowMemberMarker(),
-      alignment: Alignment.topCenter,
     );
     miscMarkers.getMapLayerOptions().draggable = !lockEditing;
 
@@ -666,10 +669,6 @@ class _MapViewState extends State<MapView>
         moveMapToLocationOfMembers();
       });
     }
-
-    // 手書き図の初期化
-    freehandDrawing = FreehandDrawingLayer(mapController: mainMapController!);
-    freehandDrawing.setColor(Color.fromARGB(255,0,255,0));    
   
     return Stack(
       children: [
@@ -677,71 +676,72 @@ class _MapViewState extends State<MapView>
         FlutterMap(
           mapController: mainMapController,
           options: MapOptions(
-            // allowPanningOnScrollingParent: false,
-            // interactiveFlags: InteractiveFlag.all & ~InteractiveFlag.rotate,
-          
-            initialCenter: LatLng(35.309934, 139.076056),  // 丸太の森P
-            initialZoom: 16,
+            allowPanningOnScrollingParent: false,
+            interactiveFlags: InteractiveFlag.all & ~InteractiveFlag.rotate,
+            plugins: [
+              DistanceCircleLayerPlugin(),
+              MyDragMarkerPlugin(),
+              MyPolylineLayerPlugin(),
+            ],
+            center: LatLng(35.309934, 139.076056),  // 丸太の森P
+            zoom: 16,
             maxZoom: 18,
             onTap: (TapPosition tapPos, LatLng point) => tapOnMap(context, tapPos),
             // 表示位置の変更に合わせた処理
-            onPositionChanged: (MapCamera camera, bool hasGesture){
-              _myLocMarker.moveMap(mainMapController!, camera);
+            onPositionChanged: (MapPosition position, bool hasGesture){
+              _myLocMarker.moveMap(mainMapController!, position);
             }                
           ),
-          children: [
+          nonRotatedLayers: [
             // 高さ陰影図
-            TileLayer(
+            TileLayerOptions(
               urlTemplate: "https://cyberjapandata.gsi.go.jp/xyz/hillshademap/{z}/{x}/{y}.png",
               maxNativeZoom: 16,
             ),
             // 標準地図
-            TileLayer(
+            TileLayerOptions(
               urlTemplate: "https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png",
-              tileDisplay: const TileDisplay.instantaneous(opacity: 0.64),
+              opacity: 0.64
             ),
             // ポリゴン(禁猟区)
-            PolygonLayer(
+            PolygonLayerOptions(
               polygons: areaData.makePolygons(),
               polygonCulling: true,
             ),
             // 距離同心円
             distanceCircle!,
             // GPSログのライン
-            MyPolylineLayer(
+            MyPolylineLayerOptions(
               polylines: gpsLog.makePolyLines(),
               rebuild: gpsLog.reDrawStream,
-              // polylineCulling: false,
+              polylineCulling: false,
             ),
             // 手書き図形レイヤー
             // NOTE: 各マーカーより上に持っていくと、図形があるときにドラッグできなくなる！？
-            //freehandDrawing.getFiguresLayerOptions(),
-            freehandDrawing,
+            freehandDrawing.getFiguresLayerOptions(),
             // タツママーカー
-            MarkerLayer(
+            MarkerLayerOptions(
               markers: tatsumaMarkers,
               // NOTE: usePxCache=trueだと、非表示グレーマーカーで並び順が変わったときにバグる
-              // usePxCache: false,
-              // マーカの中心を(0, 0)としたときの座標系でオフセットを指示
-              alignment: const Alignment(0, 0.5),
+              usePxCache: false,
             ),
             // GPS現在位置のライン描画
-            _myLocMarker,
+            _myLocMarker.getLineLayerOptions(),
             // メンバーマーカー
-            mainMapDragMarker,
+            mainMapDragMarkerPluginOptions,
             // その他のマーカー
             miscMarkers.getMapLayerOptions(),
             // GPSログの犬マーカー
-            MarkerLayer(
+            MarkerLayerOptions(
               markers: gpsLog.makeDogMarkers(),
-              // rebuild: gpsLog.reDrawStream,
+              rebuild: gpsLog.reDrawStream,
               // NOTE: usePxCache=trueだと、ストリーム経由の再描画で位置が変わらない
-              // usePxCache: false,
+              usePxCache: false,
             ),
             // 手書きの今引いている最中のライン
-            //freehandDrawing.getCurrentStrokeLayerOptions(),
+            freehandDrawing.getCurrentStrokeLayerOptions(),
             // GPSの現在位置
-            //_myLocMarker,
+            _myLocMarker.getLayerOptions(),
           ],
         ),
 
@@ -786,7 +786,7 @@ class _MapViewState extends State<MapView>
       backgroundColor: Colors.white.withOpacity(0.70),
       offIcon: Icon(Icons.gps_off, size:40, color:Colors.grey.shade700),
       offBackgroundColor: Colors.grey.withOpacity(0.70),
-      isOn: _myLocMarker.isEnable ?? false,
+      isOn: _myLocMarker.enabled,
       // タップ
       onChange: (bool onoff, OnOffIconButton2State state) {
         // GPS位置情報が無効なら、以降スイッチをONにさせない。
@@ -794,7 +794,7 @@ class _MapViewState extends State<MapView>
           return false;
         }
         if(onoff){
-          _myLocMarker.enable(context)?.then((res){
+          _myLocMarker.enable(context).then((res){
             // GPSの初期化に失敗したら、スイッチをONにさせない。
             if(!res){
               state.changeState(false);
@@ -809,7 +809,7 @@ class _MapViewState extends State<MapView>
       // 長押し
       onLongPress: () {
         // GPS位置に地図を移動
-        if(_myLocMarker.isEnable!){
+        if(_myLocMarker.enabled){
           _myLocMarker.moveMapToMyLocation();
         }
       },
